@@ -1,5 +1,8 @@
+import re
 import numpy as np
 from collections import Counter
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 from MDAnalysis.analysis.leaflet import LeafletFinder
 from MDAnalysis.lib.distances import capped_distance
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
@@ -35,6 +38,25 @@ VESICLE_CENTER_TOLERANCE = 0.5
 CONTACT_DISTANCE = 8
 # An unassigned lipid joins the leaflet it touches if it has this many times the contacts with the next leaflet
 CONTACT_DOMINANCE = 2
+# Minimum number of carbons bonded only to carbons in a chain to be a lipid tail
+MIN_TAIL_CARBONS = 4
+# Lipids whose tail atoms are closer than this distance (Å) are in the same hydrophobic core
+CG_CORE_CONTACT_DISTANCE = 7
+AA_CORE_CONTACT_DISTANCE = 4.5
+# Minimum fraction of lipids with tail atoms to group them into hydrophobic cores
+MIN_TAIL_FRACTION = 0.9
+# Bead names of coarse grained (Martini) lipid tails (see coarse_grain_lipid_tails)
+# Bead number and chain letter (C1A, D2B, T1A), with the acyl group number in cardiolipins (C1A1)
+CG_TAIL_BEAD = re.compile(r'^([CDT])(\d{1,2})([A-F])(\d?)$')
+# Chain letter and bead number in branched tails of ionizable lipids (CA1, CB3)
+CG_BRANCHED_TAIL_BEAD = re.compile(r'^([CD])([A-D])(\d{1,2})$')
+# Bead number without chain letter in single tail lipids, like fatty acids and detergents (C1, C2, D3)
+CG_SINGLE_TAIL_BEAD = re.compile(r'^([CD])(\d{1,2})$')
+# Head beads of single tail lipids, to tell them from other molecules with C1, C2... beads
+CG_SINGLE_TAIL_HEADS = {'COO', 'COOH', 'NC3', 'NH3', 'SO3', 'SO4', 'TAP', 'PEO1', 'B1'}
+# Sterol ring beads, and sterol head beads: hydroxyl ROH or R0 when esterified or glycosylated
+CG_RING_BEAD = re.compile(r'^R\d{1,2}$')
+CG_STEROL_HEADS = ('ROH', 'R0')
 
 
 def generate_membrane_mapping(
@@ -54,8 +76,8 @@ def generate_membrane_mapping(
         universe: MDAnalysis Universe object containing the structure and topology.
         cg_residues: List of residue indices for coarse-grained residues.
         output_file: Output JSON file to save membrane mapping.
-        input_forced_lipids: Residue names to be treated as lipids in coarse grained systems,
-            in addition to the known ones (all atom forced lipids are already in the lipid references).
+        input_forced_lipids: Residue names to be treated as lipids in coarse grained systems, in addition to the known
+            ones and the ones found by bead names (all atom forced lipids are already in the lipid references).
 
     Returns:
         dict: A dictionary containing the membrane mapping.
@@ -69,22 +91,23 @@ def generate_membrane_mapping(
             - version (str): Version of the membrane mapping format.
 
     Notes:
-        - The function identifies lipid and non-lipid residues based on InChI keys.
-        - It classifies residues and checks for potential misclassifications.
-        - Lipid residues are selected and neighboring lipids are found.
-        - Leaflets are clusters of at least 24 lipid polar atoms found by LeafletFinder.
+        - All atom lipids are the residues with lipid references (from their InChI keys), coarse grained lipids are
+          found by residue and bead names (see coarse_grain_lipids).
+        - Lipids are grouped into hydrophobic cores by tail contacts (see hydrophobic_cores).
+        - Leaflets are clusters of at least 24 lipid polar atoms of a core found by LeafletFinder.
         - Leaflets are classified into aggregates from their shape and lipid orientation (see classify_leaflets).
 
     """
     if not universe: raise RuntimeError('Missing universe')
-    # Select only the lipids from the InChIKeyData
     if len(cg_residues) > 0:
-        headgroup_ag = coarse_grain_headgroups(universe, input_forced_lipids)
-        membrane_map = find_leaflets(universe, headgroup_ag)
+        headgroup_ag, tails = coarse_grain_lipids(universe, cg_residues, input_forced_lipids)
+        membrane_map = find_leaflets(universe, headgroup_ag, tails, CG_CORE_CONTACT_DISTANCE)
     else:
+        # Select only the lipids from the InChIKeyData
         lipid_map = {key: inchikeys[key] for key in lipid_references.keys()}
         headgroup_ag = all_atom_headgroups(lipid_map, universe)
-        membrane_map = find_leaflets(universe, headgroup_ag)
+        tails = all_atom_tails(headgroup_ag.residues.atoms) if headgroup_ag else None
+        membrane_map = find_leaflets(universe, headgroup_ag, tails, AA_CORE_CONTACT_DISTANCE)
 
     if membrane_map['n_mems'] > 0:
         save_json(membrane_map, output_file.path)
@@ -145,7 +168,9 @@ def guess_polar_atom(residue: 'Residue') -> int | None:
 
     Candidates are tried by priority: phosphate P (bonded only to O), N (e.g. amine or ammonium),
     hydroxyl O (bonded to H, e.g. sterols) and finally any O.
-    The first kind with candidates must have exactly one, otherwise the headgroup is ambiguous and None is returned.
+    If the first kind with candidates has several (e.g. the ester and PEG oxygens of PEG-lipids or the two phosphates
+    of cardiolipin) the one closest to the tails is taken (see closest_to_tails). Without bonds the headgroup is
+    ambiguous and None is returned.
     """
     atoms = residue.atoms
     elements = atoms.elements if hasattr(atoms, 'elements') else np.array([name[0] for name in atoms.names])
@@ -166,31 +191,200 @@ def guess_polar_atom(residue: 'Residue') -> int | None:
     for candidates in candidate_groups:
         if len(candidates) == 0: continue
         if len(candidates) == 1: return candidates[0].index
-        return None
+        return closest_to_tails(atoms, candidates) if has_bonds else None
     return None
 
 
-def coarse_grain_headgroups(universe: 'Universe', forced_lipids: Optional[list[str]] = None) -> dict:
-    """Generate membrane mapping for coarse-grained systems using MDAnalysis LeafletFinder with P atoms as headgroups."""
-    # Find all lipid residues in the system
-    lipid_atoms = headgroup_ag = universe.atoms[[]]
-    for resname in set(LIPIDS_RESIDUE_NAMES) | set(forced_lipids or []):
-        lipid = universe.select_atoms(f'resname {resname}')
-        if len(lipid) > 0:
-            lipid_atoms += lipid.atoms
+def closest_to_tails(atoms: 'AtomGroup', candidates: list['Atom']) -> int | None:
+    """Get the candidate atom with the smallest sum of bond distances to the tails of a lipid.
 
-    if len(lipid_atoms) == 0:
+    Distances are counted from the tail atoms (see all_atom_tails) bonded to the rest of the lipid. This is the
+    candidate at the interface between the tails and the headgroup (e.g. a glycerol ester oxygen of PEG-lipids instead
+    of a PEG oxygen far in the solvent). Ties are broken by atom order. None is returned if the lipid has no tails.
+    """
+    tails = all_atom_tails(atoms)
+    if tails is None or len(tails) == 0: return None
+    heavy = atoms[atoms.elements != 'H']
+    positions = {index: i for i, index in enumerate(heavy.indices)}
+    neighbours = [[positions[other.index] for other in atom.bonded_atoms if other.index in positions] for atom in heavy]
+    in_tails = np.isin(heavy.indices, tails.indices)
+    attachments = [i for i in range(len(heavy)) if in_tails[i] and not all(in_tails[j] for j in neighbours[i])]
+    # Sum of bond distances from every tail attachment
+    total = np.zeros(len(heavy))
+    for attachment in attachments:
+        distances = np.full(len(heavy), np.inf)
+        distances[attachment] = 0
+        queue = [attachment]
+        for i in queue:
+            for j in neighbours[i]:
+                if distances[j] == np.inf:
+                    distances[j] = distances[i] + 1
+                    queue.append(j)
+        total += distances
+    best = min(candidates, key=lambda atom: (total[positions[atom.index]], atom.index))
+    return best.index if total[positions[best.index]] < np.inf else None
+
+
+def all_atom_tails(atoms: 'AtomGroup') -> Optional['AtomGroup']:
+    """Get the tail atoms of all atom lipids: chains of at least MIN_TAIL_CARBONS carbons bonded only to carbons
+    (and hydrogens), so carbonyl, glycerol or PEG carbons are not tail atoms. None is returned without bonds or elements.
+    """
+    if not hasattr(atoms, 'bonds') or not hasattr(atoms, 'elements'): return None
+    atoms = atoms.unique
+    indices = atoms.indices
+    # Bonds between the given atoms, as positions in the group
+    bonds = atoms.bonds.indices.reshape(-1, 2)
+    positions = np.searchsorted(indices, bonds).clip(max=len(indices) - 1)
+    bonds = positions[(indices[positions] == bonds).all(axis=1)]
+    carbons = atoms.elements == 'C'
+    heteroatoms = ~carbons & (atoms.elements != 'H')
+    hydrophobic = carbons.copy()
+    hydrophobic[bonds[heteroatoms[bonds[:, 1]], 0]] = False
+    hydrophobic[bonds[heteroatoms[bonds[:, 0]], 1]] = False
+    # Group hydrophobic carbons into chains
+    chain_bonds = bonds[hydrophobic[bonds[:, 0]] & hydrophobic[bonds[:, 1]]]
+    graph = coo_matrix((np.ones(len(chain_bonds)), (chain_bonds[:, 0], chain_bonds[:, 1])), shape=(len(atoms), len(atoms)))
+    _, chains = connected_components(graph, directed=False)
+    chain_sizes = np.bincount(chains[hydrophobic], minlength=len(atoms))
+    return atoms[hydrophobic & (chain_sizes[chains] >= MIN_TAIL_CARBONS)]
+
+
+def coarse_grain_lipids(universe: 'Universe', cg_residues: list[int], forced_lipids: Optional[list[str]] = None
+        ) -> tuple[Optional['AtomGroup'], Optional['AtomGroup']]:
+    """Find coarse grained lipids and get their head beads (one per lipid) and their tail beads.
+
+    Lipids are residues with a known or forced lipid residue name, and coarse grained residues whose bead names follow
+    the Martini lipid conventions (see coarse_grain_lipid_tails), which also give the tail beads.
+    """
+    lipid_names = list(set(LIPIDS_RESIDUE_NAMES) | set(forced_lipids or []))
+    named = np.isin(universe.residues.resnames, lipid_names)
+    coarse_grained = np.zeros(len(universe.residues), dtype=bool)
+    coarse_grained[np.asarray(cg_residues, dtype=int)] = True
+    # Lipids have at least a head and two tail beads
+    n_atoms = np.bincount(universe.atoms.resindices, minlength=len(universe.residues))
+    candidates = np.flatnonzero((named | coarse_grained) & (n_atoms >= 3))
+    # Atom indices of every residue
+    residue_atoms = np.argsort(universe.atoms.resindices, kind='stable')
+    starts = np.concatenate([[0], np.cumsum(n_atoms)[:-1]])
+    atom_names = universe.atoms.names
+    known_tails = {}
+    heads, tails = [], []
+    n_by_beads = 0
+    for resindex in candidates:
+        atoms = residue_atoms[starts[resindex]:starts[resindex] + n_atoms[resindex]]
+        names = tuple(atom_names[atoms])
+        if names not in known_tails: known_tails[names] = coarse_grain_lipid_tails(names)
+        tail_mask = known_tails[names]
+        if not named[resindex]:
+            if tail_mask is None: continue
+            n_by_beads += 1
+        heads.append(atoms[coarse_grain_head(names, tail_mask)])
+        if tail_mask is not None: tails.extend(atoms[tail_mask])
+    if len(heads) == 0:
         print("No coarse-grained lipid atoms found in the structure.")
-        return None
-    print(f"Found {len(lipid_atoms.residues)} lipid residues by name.")
-    # Use the phosphate bead as headgroup or, if there is not a single one (e.g. cholesterol), the first bead
-    # Martini lipid beads are ordered from the head to the tails
-    headgroup_indices = []
-    for residue in lipid_atoms.residues:
-        phosphates = residue.atoms.select_atoms('name P*')
-        headgroup_indices.append(phosphates[0].index if len(phosphates) == 1 else residue.atoms[0].index)
-    headgroup_ag = universe.atoms[headgroup_indices]
-    return headgroup_ag
+        return None, None
+    print(f"Found {len(heads)} lipid residues: {len(heads) - n_by_beads} by residue name and {n_by_beads} by bead names.")
+    return universe.atoms[heads], universe.atoms[tails]
+
+
+def coarse_grain_lipid_tails(names: list[str]) -> Optional[np.ndarray]:
+    """Get the tail beads of a coarse grained lipid from its bead names, as a mask, or None if it is not a lipid.
+
+    Bead names follow the Martini lipid conventions (Martini 2 and 3 lipidomes, insane, TS2CG...):
+    - Fatty lipids have a head or linker bead and tail beads named by number and chain (C1A, D2A... C1B...).
+      A chain A or B must start at bead 1, with at least 3 beads in a chain or 2 beads in at least two chains
+      (C8-C10 tails), but in no more than 3 chains (the pyrrole rings A-D of chlorophyll are not tails).
+    - Sterols have an ROH (or R0) head bead and at least 3 ring beads (R1, R2...). Their tails are the ring and C beads.
+    - Single tail lipids (fatty acids and detergents) have a known head bead and a tail C1, C2, C3... without chain letter.
+    """
+    names = list(names)
+    chains = {}
+    tails = np.zeros(len(names), dtype=bool)
+    for i, name in enumerate(names):
+        match = CG_TAIL_BEAD.match(name)
+        if match: chain, number = match.group(3) + match.group(4), match.group(2)
+        else:
+            match = CG_BRANCHED_TAIL_BEAD.match(name)
+            if not match: continue
+            chain, number = match.group(2), match.group(3)
+        chains.setdefault(chain, set()).add(int(number))
+        tails[i] = True
+    # Only chains starting at bead 1 count, and there must be a chain A or B
+    started = [(chain, len(numbers)) for chain, numbers in chains.items() if 1 in numbers]
+    if not tails.all() and any(chain[0] in 'AB' and length >= 2 for chain, length in started):
+        lengths = sorted((length for _, length in started), reverse=True)
+        if lengths[0] >= 3 or (len(lengths) >= 2 and lengths[1] >= 2 and len(chains) <= 3): return tails
+    rings = np.array([bool(CG_RING_BEAD.match(name)) for name in names])
+    singles = np.array([bool(CG_SINGLE_TAIL_BEAD.match(name)) for name in names])
+    sterol_rings = rings & ~np.isin(names, CG_STEROL_HEADS)
+    if any(head in names for head in CG_STEROL_HEADS) and sterol_rings.sum() >= 3: return sterol_rings | singles
+    numbers = [int(CG_SINGLE_TAIL_BEAD.match(name).group(2)) for name in np.array(names)[singles]]
+    if len(numbers) >= 3 and min(numbers) == 1 and CG_SINGLE_TAIL_HEADS & set(names) and not rings.any() and 'BB' not in names:
+        return singles
+    return None
+
+
+def coarse_grain_head(names: list[str], tails: Optional[np.ndarray]) -> int:
+    """Get the position of the head bead of a coarse grained lipid.
+
+    It is the phosphate bead PO4, the sterol head bead ROH or R0, the only bead named P* (other force fields)
+    or the first bead which is not a tail bead, since Martini lipid beads go from the head to the tails.
+    """
+    names = list(names)
+    if names.count('PO4') == 1: return names.index('PO4')
+    for head in CG_STEROL_HEADS:
+        if head in names: return names.index(head)
+    phosphates = [i for i, name in enumerate(names) if name.startswith('P')]
+    if len(phosphates) == 1: return phosphates[0]
+    if tails is not None and not tails.all(): return int(np.argmin(tails))
+    return 0
+
+
+def lipid_centers(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup']) -> np.ndarray:
+    """Get the center of every lipid by residue index: the centroid of its tail atoms or, without tail atoms, of all
+    its atoms. Tail centroids keep the head to tail vector along the tails when other parts of the lipid are big,
+    like the PEG chain of PEG-lipids which goes to the solvent.
+    """
+    n_residues = len(headgroup_ag.universe.residues)
+
+    def centroid_sums(atoms: 'AtomGroup') -> tuple[np.ndarray, np.ndarray]:
+        sums = np.zeros((n_residues, 3))
+        counts = np.zeros(n_residues)
+        np.add.at(sums, atoms.resindices, atoms.positions)
+        np.add.at(counts, atoms.resindices, 1)
+        return sums, counts
+
+    sums, counts = centroid_sums(headgroup_ag.residues.atoms)
+    if tails is not None and len(tails) > 0:
+        tail_sums, tail_counts = centroid_sums(tails)
+        with_tails = tail_counts > 0
+        sums[with_tails], counts[with_tails] = tail_sums[with_tails], tail_counts[with_tails]
+    return sums / np.maximum(counts, 1)[:, None]
+
+
+def hydrophobic_cores(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup'], distance: float,
+        dimensions: np.ndarray | None) -> tuple[list['AtomGroup'], list[int]]:
+    """Group lipids into hydrophobic cores: lipids whose tail atoms are closer than the given distance, directly or
+    through other lipids.
+
+    Aggregates touching each other only through their headgroups (e.g. a lipid nanoparticle on a bilayer) are in
+    separate cores, while the two leaflets of a bilayer or fused aggregates (e.g. at a fusion stalk) share a core.
+    Returns the polar atoms of every core with at least MIN_LEAFLET_LIPIDS lipids, biggest first, and the residue
+    indices of lipids out of them. All lipids are one core when less than MIN_TAIL_FRACTION of them have tail atoms.
+    """
+    resindices = headgroup_ag.resindices
+    if tails is None or np.isin(resindices, tails.resindices).mean() < MIN_TAIL_FRACTION:
+        return [headgroup_ag], []
+    pairs = capped_distance(tails.positions, tails.positions, distance, box=dimensions, return_distances=False)
+    n_residues = len(headgroup_ag.universe.residues)
+    graph = coo_matrix((np.ones(len(pairs)), (tails.resindices[pairs[:, 0]], tails.resindices[pairs[:, 1]])),
+        shape=(n_residues, n_residues))
+    _, labels = connected_components(graph, directed=False)
+    labels = labels[resindices]
+    sizes = np.bincount(labels)
+    cores = [headgroup_ag[labels == label] for label in np.argsort(-sizes, kind='stable') if sizes[label] >= MIN_LEAFLET_LIPIDS]
+    out_of_cores = resindices[sizes[labels] < MIN_LEAFLET_LIPIDS].tolist()
+    return cores, out_of_cores
 
 
 def split_leaflet_groups(universe: 'Universe', headgroup_ag: 'AtomGroup', cutoff: float, pbc: bool) -> tuple[list, list]:
@@ -226,11 +420,11 @@ def minimum_image(vectors: np.ndarray, box: np.ndarray | None) -> np.ndarray:
     return vectors - box * np.round(vectors / box)
 
 
-def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
+def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None, centers: np.ndarray) -> dict:
     """Get the shape and lipid orientation of a LeafletFinder group of polar atoms.
 
     The group is flat when its thinnest principal axis is much shorter than the longest one.
-    Lipid orientation is the head to tail vector (polar atom to residue center) projected on
+    Lipid orientation is the head to tail vector (polar atom to lipid center, see lipid_centers) projected on
     the leaflet normal when it is flat or on the radial direction from the leaflet center otherwise.
     Lipids in a real leaflet are oriented in the same direction, while a group with many lipids
     oriented in both directions is likely two leaflets merged by LeafletFinder.
@@ -250,8 +444,7 @@ def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
     # Make the normal point to the positive side of its main axis so top and bottom are consistent
     if normal[np.argmax(np.abs(normal))] < 0: normal = -normal
     radii = np.linalg.norm(relative, axis=1)
-    residue_centers = np.array([atom.residue.atoms.positions.mean(axis=0) for atom in leaflet])
-    tails = minimum_image(residue_centers - positions, box)
+    tails = minimum_image(centers[leaflet.resindices] - positions, box)
     tails /= np.maximum(np.linalg.norm(tails, axis=1), 1e-6)[:, None]
     reference = normal if flat else relative / np.maximum(radii, 1e-6)[:, None]
     cosines = (tails * reference).sum(axis=1)
@@ -297,7 +490,7 @@ def facing_separation(first: dict, second: dict, box: np.ndarray | None) -> np.n
     return best
 
 
-def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tuple[str, dict]], list, list]:
+def classify_leaflets(leaflets: list, box: np.ndarray | None, centers: np.ndarray) -> tuple[list[tuple[str, dict]], list, list]:
     """Group leaflets into amphiphilic aggregates: flat bilayers and vesicles.
 
     - Vesicle: a curved leaflet with tails inwards (outer) and a smaller concentric curved leaflet with tails outwards (inner).
@@ -305,9 +498,9 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tupl
 
     Leaflets with an undecided lipid orientation are not classified.
     Returns the aggregates as (type, leaflets by name), the leaflets which could not be classified and the curved
-    leaflets with tails inwards and no partner. These are micelles, unless their partner is found later (see find_leaflets).
+    leaflets with tails inwards and no partner. These are micelles, unless their partner is found later (see classify_core_lipids).
     """
-    descriptions = [describe_leaflet(leaflet, box) for leaflet in leaflets]
+    descriptions = [describe_leaflet(leaflet, box, centers) for leaflet in leaflets]
     coherent = [desc for desc in descriptions if desc['coherent']]
     unclassified = [desc['group'] for desc in descriptions if not desc['coherent']]
     used = set()
@@ -348,15 +541,16 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tupl
     return aggregates, unclassified, lone_curved_in
 
 
-def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs: tuple[float, ...] = (15.0, 12.0, 10.0)) -> dict:
+def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, tails: Optional['AtomGroup'] = None,
+        core_distance: float = CG_CORE_CONTACT_DISTANCE, cutoffs: tuple[float, ...] = (15.0, 12.0, 10.0)) -> dict:
     """Find leaflets using MDAnalysis LeafletFinder and classify them into amphiphilic aggregates.
 
-    When some leaflets can not be classified (e.g. two leaflets too close at a fusion stalk are
-    merged by LeafletFinder) only their lipids are retried with the next smaller cutoff,
-    so aggregates already classified with a larger cutoff are kept.
-    Curved leaflets with tails inwards and no partner are micelles once there is nothing left to retry,
-    since their partner may be found with a smaller cutoff (e.g. the inner leaflet of a vesicle merged
-    with lipids in its lumen).
+    Lipids are first grouped into hydrophobic cores by the contacts of their tail atoms (see hydrophobic_cores),
+    and the lipids of every core are classified separately (see classify_core_lipids), so aggregates touching each
+    other only through their headgroups (e.g. a lipid nanoparticle on a bilayer) are not merged.
+    Lipids out of cores join the leaflet they are in contact with, if any.
+    When too few lipids have tail atoms all lipids are classified together, and lipids without tail atoms point
+    to their residue center.
     """
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': MEMBRANE_MAPPING_VERSION}
     if not headgroup_ag:
@@ -364,27 +558,20 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
         return membrane_map
     box = universe.dimensions[:3].copy() if universe.dimensions is not None else None
     if box is not None and not np.all(box > 0): box = None
+    dimensions = universe.dimensions if box is not None else None
+    centers = lipid_centers(headgroup_ag, tails)
+    cores, out_of_cores = hydrophobic_cores(headgroup_ag, tails, core_distance, dimensions)
+    if len(cores) > 1 or len(out_of_cores) > 0:
+        print(f" Found {len(cores)} hydrophobic cores with {', '.join(str(len(core)) for core in cores)} lipids"
+            f" and {len(out_of_cores)} lipids out of them")
     print(' Running MDAnalysis LeafletFinder')
     aggregates = []
     no_mem_lipids = []
-    lone_curved_in = []
-    pending_headgroups = headgroup_ag
-    for i, cutoff in enumerate(cutoffs):
-        if i > 0:
-            print(f' {len(unclassified)} leaflets could not be classified, retrying their lipids with a {cutoff} Å cutoff')
-        leaflets, small_group_lipids = split_leaflet_groups(universe, pending_headgroups, cutoff, pbc=box is not None)
-        no_mem_lipids.extend(small_group_lipids)
-        found_aggregates, unclassified, lone_curved_in = classify_leaflets(leaflets + lone_curved_in, box)
-        aggregates.extend(found_aggregates)
-        if len(unclassified) == 0: break
-        pending_headgroups = sum(unclassified[1:], unclassified[0])
-    aggregates.extend((MICELLE, {'outer': group}) for group in lone_curved_in)
-    dimensions = universe.dimensions if box is not None else None
-    if len(unclassified) > 0:
-        warn(f"Could not classify {len(unclassified)} leaflet(s) with {', '.join(str(len(group)) for group in unclassified)} lipids, they will be unassigned")
-        for group in unclassified:
-            no_mem_lipids.extend(group.residues.resindices)
-    no_mem_lipids = assign_lipids_by_contact(aggregates, no_mem_lipids, headgroup_ag, dimensions)
+    for core in cores:
+        core_aggregates, core_unassigned = classify_core_lipids(universe, core, box, centers, cutoffs)
+        aggregates.extend(core_aggregates)
+        no_mem_lipids.extend(core_unassigned)
+    no_mem_lipids += assign_lipids_by_contact(aggregates, out_of_cores, headgroup_ag, dimensions)
     aggregates.sort(key=lambda aggregate: AGGREGATE_TYPES.index(aggregate[0]))
     membrane_map['n_mems'] = len(aggregates)
 
@@ -405,6 +592,41 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     membrane_map['no_mem_lipid'] = no_mem_lipids
 
     return membrane_map
+
+
+def classify_core_lipids(universe: 'Universe', headgroup_ag: 'AtomGroup', box: np.ndarray | None, centers: np.ndarray,
+        cutoffs: tuple[float, ...]) -> tuple[list[tuple[str, dict]], list[int]]:
+    """Find the leaflets of a hydrophobic core with LeafletFinder and classify them into amphiphilic aggregates.
+
+    When some leaflets can not be classified (e.g. two leaflets too close at a fusion stalk are
+    merged by LeafletFinder) only their lipids are retried with the next smaller cutoff,
+    so aggregates already classified with a larger cutoff are kept.
+    Curved leaflets with tails inwards and no partner are micelles once there is nothing left to retry,
+    since their partner may be found with a smaller cutoff (e.g. the inner leaflet of a vesicle merged
+    with lipids in its lumen). Unassigned lipids only join leaflets of the same core by contact.
+    Returns the aggregates and the residue indices of the lipids which remain unassigned.
+    """
+    aggregates = []
+    no_mem_lipids = []
+    lone_curved_in = []
+    pending_headgroups = headgroup_ag
+    for i, cutoff in enumerate(cutoffs):
+        if i > 0:
+            print(f' {len(unclassified)} leaflets could not be classified, retrying their lipids with a {cutoff} Å cutoff')
+        leaflets, small_group_lipids = split_leaflet_groups(universe, pending_headgroups, cutoff, pbc=box is not None)
+        no_mem_lipids.extend(small_group_lipids)
+        found_aggregates, unclassified, lone_curved_in = classify_leaflets(leaflets + lone_curved_in, box, centers)
+        aggregates.extend(found_aggregates)
+        if len(unclassified) == 0: break
+        pending_headgroups = sum(unclassified[1:], unclassified[0])
+    aggregates.extend((MICELLE, {'outer': group}) for group in lone_curved_in)
+    if len(unclassified) > 0:
+        warn(f"Could not classify {len(unclassified)} leaflet(s) with {', '.join(str(len(group)) for group in unclassified)} lipids, they will be unassigned")
+        for group in unclassified:
+            no_mem_lipids.extend(group.residues.resindices)
+    dimensions = universe.dimensions if box is not None else None
+    no_mem_lipids = assign_lipids_by_contact(aggregates, no_mem_lipids, headgroup_ag, dimensions)
+    return aggregates, no_mem_lipids
 
 
 def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindices: list[int],
