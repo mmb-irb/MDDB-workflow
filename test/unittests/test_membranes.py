@@ -345,6 +345,48 @@ class TestAggregateClassification:
         assert '@6,7,8' in selections and '@6' in selections
 
 
+class TestLipidOrder:
+    """Lipid order parameters are calculated along the z axis, so only for lipids of flat bilayers."""
+
+    @pytest.fixture(autouse=True)
+    def system(self, monkeypatch):
+        """Set a bilayer and a micelle and record the lipids and selections sent to the order parameter calculations."""
+        import mddb_workflow.analyses.lipid_order as lipid_order
+        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
+        bot = np.column_stack([grid, np.full(len(grid), -80)])
+        top = np.column_stack([grid, np.full(len(grid), -40)])
+        micelle = sphere_points(20) + [0, 0, 60]
+        heads = np.concatenate([bot, top, micelle])
+        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1)), -(micelle - [0, 0, 60])])
+        self.universe, headgroups = build_lipids(heads, directions, [300, 300, 300])
+        self.membrane_map = find_leaflets(self.universe, headgroups)
+        self.bilayer_residues = list(range(2 * len(grid)))
+        self.inchikey_map = [{'generated_inchikey': 'LIPID', 'is_lipid': True, 'residue_indices': list(range(len(heads)))}]
+        self.calls = []
+        monkeypatch.setattr(lipid_order, 'aa_lipid_order', lambda universe, snapshots, frame_step, lipids: self.calls.append(lipids))
+        monkeypatch.setattr(lipid_order, 'cg_lipid_order', lambda universe, topology_file, output_directory, frame_step, lipids, selection:
+            self.calls.append(selection))
+        self.lipid_order = lipid_order.lipid_order
+
+    def test_all_atom_bilayer_lipids(self):
+        assert [mem['type'] for mem in self.membrane_map['mems'].values()] == [BILAYER, MICELLE]
+        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
+        assert len(self.calls) == 1
+        assert [lipid['residue_indices'] for lipid in self.calls[0]] == [self.bilayer_residues]
+
+    def test_coarse_grain_bilayer_lipids(self):
+        import types
+        topology_file = types.SimpleNamespace(format='tpr')
+        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], snapshots=1)
+        # Atom numbers of the bilayer lipids, 3 atoms per lipid
+        assert self.calls == [f'@membrane and atomnum 1-{3 * len(self.bilayer_residues)}']
+
+    def test_no_bilayers(self):
+        del self.membrane_map['mems']['0']
+        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
+        assert self.calls == []
+
+
 # Molecules to test the lipid classification, with their expected LIPID MAPS category
 LIPIDS = {
     'POPC': (r'CCCCCCCCCCCCCCCC(=O)OC[C@H](COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCC/C=C\CCCCCCCC', 'GP'),

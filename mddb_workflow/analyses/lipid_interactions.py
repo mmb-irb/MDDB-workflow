@@ -18,7 +18,9 @@ def lipid_interactions(
     snapshots: int,
     frames_limit: int = 100,
 ):
-    """Lipid-protein interactions analysis."""
+    """Lipid-protein interactions analysis.
+    Contacts do not depend on the membrane shape, so lipids of vesicles and micelles are analysed too.
+    """
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('   No membranes found, skipping lipid interactions analysis')
         return

@@ -2,6 +2,7 @@ from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
 from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names, get_cg_acyl_chains
+from mddb_workflow.tools.membrane_mapping import get_bilayers
 from mddb_workflow.utils.type_hints import *
 import numpy as np
 import MDAnalysis
@@ -27,14 +28,17 @@ def lipid_order(
     where θ is the angle between the C-H bond and the membrane normal (z-axis).
 
     Notes:
+    - Only lipids of flat bilayers are analyzed, since the z-axis is not their normal in vesicles or micelles.
     - For non-cholesterol lipids, analyzes all acyl chains separately.
     - For cholesterol, uses carbon atoms bonded to hydrogen.
     - The order parameter is calculated for each carbon atom in the chains.
 
     """
-    if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> No membranes found, skipping lipid order analysis')
+    bilayers = get_bilayers(membrane_map)
+    if len(bilayers) == 0:
+        print('-> No bilayers found, skipping lipid order analysis')
         return
+    bilayer_atoms = np.unique([atom for mem in bilayers for atoms in mem['leaflets'].values() for atom in atoms])
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     # Choose the method according to the type of lipids present
     if len(cg_residues) > 0:
@@ -50,12 +54,19 @@ def lipid_order(
                 lipids.append(lipid_ag.residues[0])
         # Heuristic: if the residues have more than 40 atoms, assume United Atom.
         is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids)
+        # gorder atom numbers start at 1
+        selection = f'@membrane and atomnum {atom_number_ranges(bilayer_atoms + 1)}'
         if is_united_atom:
-            order_parameters_dict = ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids)
+            order_parameters_dict = ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids, selection)
         else:
-            order_parameters_dict = cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids)
+            order_parameters_dict = cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids, selection)
     else:
-        lipids = [ref for ref in inchikey_map if ref['is_lipid']]
+        bilayer_residues = set(universe.atoms[bilayer_atoms].resindices.tolist())
+        lipids = []
+        for ref in inchikey_map:
+            if not ref['is_lipid']: continue
+            residue_indices = [index for index in ref['residue_indices'] if index in bilayer_residues]
+            if len(residue_indices) > 0: lipids.append({**ref, 'residue_indices': residue_indices})
         order_parameters_dict = aa_lipid_order(universe, snapshots, frame_step, lipids)
     # Output can be empty due to hardcoded lipid residue names for CG/UA
     if not order_parameters_dict:
@@ -67,6 +78,14 @@ def lipid_order(
     data = {'data': order_parameters_dict, 'version': LIPID_ORDER_ANALYSIS_VERSION}
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
     save_json(data, output_analysis_filepath)
+
+
+def atom_number_ranges(atom_numbers: np.ndarray) -> str:
+    """Write sorted atom numbers as ranges for the groan selection language (e.g. '1-3 7-9')."""
+    breaks = np.where(np.diff(atom_numbers) > 1)[0]
+    starts = np.concatenate([atom_numbers[:1], atom_numbers[breaks + 1]])
+    ends = np.concatenate([atom_numbers[breaks], atom_numbers[-1:]])
+    return ' '.join(f'{start}-{end}' for start, end in zip(starts, ends))
 
 
 def aa_lipid_order(universe, snapshots, frame_step, lipids):
@@ -115,10 +134,10 @@ def aa_lipid_order(universe, snapshots, frame_step, lipids):
     return order_parameters_dict
 
 
-def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids):
+def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids, selection='@membrane'):
     """Calculate lipid order parameters for coarse-grain simulations using gorder.
 
-    Runs gorder's CGOrder analysis on the universe trajectory, then parses the
+    Runs gorder's CGOrder analysis of the selected beads on the universe trajectory, then parses the
     YAML output into the same format as the all-atom lipid_order output:
         { inchikey: { "0": { atoms: [...], avg: [...], std: [...] }, ... } }
 
@@ -129,7 +148,7 @@ def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     analysis = gorder.Analysis(
         structure=topology_file.absolute_path,
         trajectory=universe.trajectory.filename,
-        analysis_type=gorder.analysis_types.CGOrder('@membrane'),
+        analysis_type=gorder.analysis_types.CGOrder(selection),
         estimate_error=gorder.estimate_error.EstimateError(),
         step=frame_step,
         output_yaml=yaml_out,
@@ -191,10 +210,10 @@ def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     return order_parameters_dict
 
 
-def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids):
+def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids, selection='@membrane'):
     """Calculate lipid order parameters for united-atom simulations using gorder.
 
-    Runs gorder's UAOrder analysis on the universe trajectory, then parses the
+    Runs gorder's UAOrder analysis of the selected atoms on the universe trajectory, then parses the
     YAML output into the same format as the other lipid_order outputs:
         { resname: { "0": { atoms: [...], avg: [...], std: [...] } } }
 
@@ -205,7 +224,7 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     analysis = gorder.Analysis(
         structure=topology_file.absolute_path,
         trajectory=universe.trajectory.filename,
-        analysis_type=gorder.analysis_types.UAOrder('@membrane'),
+        analysis_type=gorder.analysis_types.UAOrder(selection),
         estimate_error=gorder.estimate_error.EstimateError(),
         step=frame_step,
         output_yaml=yaml_out,
