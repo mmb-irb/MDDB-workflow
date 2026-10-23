@@ -148,6 +148,17 @@ def shift_and_wrap(universe: 'mda.Universe', shift: list[float]):
 class TestAggregateClassification:
     """Classification of amphiphilic aggregates on synthetic systems."""
 
+    def test_headgroups_by_charge(self):
+        """Headgroups of all atom lipids are their atoms with the largest absolute charge."""
+        from mddb_workflow.tools.membrane_mapping import all_atom_headgroups
+        heads = sphere_points(20)
+        universe, _ = build_lipids(heads, -heads, [150, 150, 150])
+        # The middle atom of each lipid is the most charged one, with a negative charge
+        universe.add_TopologyAttr('charges', np.tile([0.5, -0.9, 0.1], len(heads)))
+        lipid_map = {'LIPID': InChIKeyData(inchi='', resindices=list(range(len(heads))))}
+        headgroups = all_atom_headgroups(lipid_map, universe)
+        assert headgroups.indices.tolist() == list(range(1, 3 * len(heads), 3))
+
     def test_micelle(self):
         heads = sphere_points(20)
         universe, headgroups = build_lipids(heads, -heads, [150, 150, 150])

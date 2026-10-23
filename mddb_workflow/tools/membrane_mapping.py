@@ -128,7 +128,7 @@ def all_atom_headgroups(
             warn(f"Could not find a unique polar atom for some lipids, they will not be used for leaflet assignment: {dict(skipped)}")
     else:
         print("Using atom charges to find polar atoms for leaflet assignment.")
-        charges = abs(np.array([atom.charge for atom in universe.atoms]))
+        charges = np.abs(universe.atoms.charges)
         polar_atoms = []
         for ridx in all_lipids.residues.resindices:  # take only one per fragment
             res = universe.residues[ridx]
