@@ -344,7 +344,8 @@ def main():
             end=args.end,
             step=args.step,
             frames=args.frames,
-            selection=args.selection
+            selection=args.selection,
+            all_frames=args.all
         )
 
     # In case the chainer tool was called
@@ -434,7 +435,8 @@ def main():
                 end=args.end,
                 step=args.step,
                 frames=args.frames,
-                selection=args.selection
+                selection=args.selection,
+                all_frames=args.all
             )
         elif args.dataset_subcommand == 'show':
             if args.summary:
@@ -877,7 +879,7 @@ for flags, kwargs in subset_parser_args:
 # The view command
 view_parser = subparsers.add_parser("view",
     help="Open VMD with the most processed structure and trajectory of the current project\n" +
-        "Only the first 10 frames are loaded unless other frames are specified",
+        "If no frames are specified then all frames are loaded for trajectories under 500 MB and only the first 10 frames otherwise",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
 view_parser_args = [
@@ -890,6 +892,7 @@ view_shared_args = [
     (["-end", "--end"], {'type': int, 'default': None, 'help': "End frame (0-based, not included). The last frame by default if start or step are passed"}),
     (["-step", "--step"], {'type': int, 'default': None, 'help': "Frame step"}),
     (["-fr", "--frames"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be loaded (0-based). Other arguments are ignored."}),
+    (["-a", "--all"], {'action': 'store_true', 'help': "Load all frames. Other frame arguments are ignored."}),
     (["-sel", "--selection"], {'default': None, 'help': "Atom selection (VMD syntax) to focus the view on. It is also shown in CPK over the default representation."}),
 ]
 for flags, kwargs in view_parser_args + view_shared_args:

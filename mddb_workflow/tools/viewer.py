@@ -35,8 +35,11 @@ CONVERTIBLE_TOPOLOGY_FORMATS = {'tpr'}
 # Minimum size in Angstroms of the focused region, to avoid zooming too much on a few atoms
 MIN_FOCUS_SIZE = 10
 
-# Number of frames to be loaded when no frames are specified
+# Number of frames to be loaded when no frames are specified and the trajectory is big
 DEFAULT_FRAMES_COUNT = 10
+
+# Trajectories smaller than this size (in bytes) are fully loaded when no frames are specified
+FULL_LOAD_SIZE_LIMIT = 500 * 1024 * 1024
 
 # Directory where intermediate files are written while input files are processed
 INPRO_DIRECTORY = INCOMPLETE_PREFIX + 'inpro'
@@ -210,13 +213,15 @@ def view_project(
     step: int | None = None,
     frames: list[int] = [],
     selection: str | None = None,
+    all_frames: bool = False,
 ):
     """Open VMD with a structure and some frames of a trajectory.
 
     Input files are the structure and the trajectory, in any order.
     If no file is passed then the most processed structure and trajectory in the project directory are used.
     If only the structure is passed then it is loaded alone.
-    If no frames are specified then the first 10 frames are loaded.
+    If all frames are requested then the whole trajectory is loaded and other frame options are ignored.
+    If no frames are specified then the whole trajectory is loaded if it is small, or only the first 10 frames otherwise.
     If only some of start/end/step are specified then the end is the last frame.
     The end frame is not included, as in the subset command.
     If a selection is passed then the view is focused on it and it is also shown in CPK.
@@ -256,12 +261,17 @@ def view_project(
         commands.append('animate delete all')
         trajectory_vmd_format = VMD_FORMAT[trajectory_file.format]
         load_command = f'mol addfile {{{trajectory_file.path}}} type {trajectory_vmd_format}'
-        if frames:
+        if all_frames:
+            commands.append(f'{load_command} waitfor all')
+        elif frames:
             for frame in sorted(frames):
                 commands.append(f'{load_command} first {frame} last {frame} waitfor all')
         else:
             no_frame_options = start is None and end is None and step is None
-            if no_frame_options: end = DEFAULT_FRAMES_COUNT
+            if no_frame_options and trajectory_file.size >= FULL_LOAD_SIZE_LIMIT:
+                print(f'The trajectory is bigger than {FULL_LOAD_SIZE_LIMIT // (1024 * 1024)} MB. '
+                    f'Only the first {DEFAULT_FRAMES_COUNT} frames are loaded. Use --all to load all frames')
+                end = DEFAULT_FRAMES_COUNT
             if start is None: start = 0
             if step is None: step = 1
             if end is not None and end <= start:
