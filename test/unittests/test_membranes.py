@@ -247,6 +247,21 @@ class TestAggregateClassification:
         assert membrane['type'] == BILAYER
         assert set(membrane['polar_atoms']['top']) == set(headgroups[len(grid):].indices)
 
+    def test_vesicle_with_lumen_micelle(self):
+        """The inner leaflet of a vesicle merges at 15 Å with a micelle in its lumen and they are split at 12 Å.
+        The outer leaflet must wait for the inner leaflet instead of becoming a micelle.
+        """
+        outer, inner, lumen = sphere_points(75), sphere_points(35), sphere_points(22)
+        heads = np.concatenate([outer, inner, lumen])
+        universe, headgroups = build_lipids(heads, np.concatenate([-outer, inner, -lumen]), [250, 250, 250])
+        membrane_map = find_leaflets(universe, headgroups)
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [VESICLE, MICELLE]
+        vesicle, micelle = membrane_map['mems']['0'], membrane_map['mems']['1']
+        assert len(vesicle['polar_atoms']['outer']) == len(outer)
+        assert len(vesicle['polar_atoms']['inner']) == len(inner)
+        assert len(micelle['polar_atoms']['outer']) == len(lumen)
+        assert membrane_map['no_mem_lipid'] == []
+
 # Molecules to test the lipid classification, with their expected LIPID MAPS category
 LIPIDS = {
     'POPC': (r'CCCCCCCCCCCCCCCC(=O)OC[C@H](COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCC/C=C\CCCCCCCC', 'GP'),

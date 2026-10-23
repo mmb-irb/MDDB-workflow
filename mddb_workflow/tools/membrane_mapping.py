@@ -287,14 +287,14 @@ def facing_separation(first: dict, second: dict, box: np.ndarray | None) -> np.n
     return best
 
 
-def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tuple[str, dict]], list]:
-    """Group leaflets into amphiphilic aggregates: flat bilayers, vesicles and micelles.
+def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tuple[str, dict]], list, list]:
+    """Group leaflets into amphiphilic aggregates: flat bilayers and vesicles.
 
     - Vesicle: a curved leaflet with tails inwards (outer) and a smaller concentric curved leaflet with tails outwards (inner).
     - Bilayer: two flat leaflets with parallel normals whose tails face each other.
-    - Micelle: a single curved leaflet with tails inwards.
 
-    Returns the aggregates as (type, leaflets by name) and the leaflets which could not be classified.
+    Returns the aggregates as (type, leaflets by name), the leaflets which could not be classified and the curved
+    leaflets with tails inwards and no partner. These are micelles, unless their partner is found later (see find_leaflets).
     """
     descriptions = [describe_leaflet(leaflet, box) for leaflet in leaflets]
     coherent = [desc for desc in descriptions if desc['coherent']]
@@ -331,13 +331,10 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tupl
         top, bot = (best, first) if np.dot(best_separation, first['normal']) > 0 else (first, best)
         aggregates.append((BILAYER, {'top': top['group'], 'bot': bot['group']}))
 
-    for desc in curved_in:
-        if id(desc) in used: continue
-        used.add(id(desc))
-        aggregates.append((MICELLE, {'outer': desc['group']}))
-
+    lone_curved_in = [desc['group'] for desc in curved_in if id(desc) not in used]
+    used.update(id(desc) for desc in curved_in)
     unclassified += [desc['group'] for desc in coherent if id(desc) not in used]
-    return aggregates, unclassified
+    return aggregates, unclassified, lone_curved_in
 
 
 def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs: tuple[float, ...] = (15.0, 12.0, 10.0)) -> dict:
@@ -346,6 +343,9 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     When some leaflets can not be classified (e.g. two leaflets too close at a fusion stalk are
     merged by LeafletFinder) only their lipids are retried with the next smaller cutoff,
     so aggregates already classified with a larger cutoff are kept.
+    Curved leaflets with tails inwards and no partner are micelles once there is nothing left to retry,
+    since their partner may be found with a smaller cutoff (e.g. the inner leaflet of a vesicle merged
+    with lipids in its lumen).
     """
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': MEMBRANE_MAPPING_VERSION}
     if not headgroup_ag:
@@ -356,16 +356,18 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     print(' Running MDAnalysis LeafletFinder')
     aggregates = []
     no_mem_lipids = []
+    lone_curved_in = []
     pending_headgroups = headgroup_ag
     for i, cutoff in enumerate(cutoffs):
         if i > 0:
             print(f' {len(unclassified)} leaflets could not be classified, retrying their lipids with a {cutoff} Å cutoff')
         leaflets, small_group_lipids = split_leaflet_groups(universe, pending_headgroups, cutoff)
         no_mem_lipids.extend(small_group_lipids)
-        found_aggregates, unclassified = classify_leaflets(leaflets, box)
+        found_aggregates, unclassified, lone_curved_in = classify_leaflets(leaflets + lone_curved_in, box)
         aggregates.extend(found_aggregates)
         if len(unclassified) == 0: break
         pending_headgroups = sum(unclassified[1:], unclassified[0])
+    aggregates.extend((MICELLE, {'outer': group}) for group in lone_curved_in)
     dimensions = universe.dimensions if box is not None else None
     if len(unclassified) > 0:
         warn(f"Could not classify {len(unclassified)} leaflet(s) with {', '.join(str(len(group)) for group in unclassified)} lipids, they will be unassigned")
