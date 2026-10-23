@@ -1115,7 +1115,7 @@ class MD:
                 atom_indices = []
                 for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
                     for atom_index, atom in enumerate(reference_structure.atoms):
-                        if re.match(dummy_name, atom.name):
+                        if re.fullmatch(dummy_name, atom.name):
                             atom_indices.append(atom_index)
                 dummy_atoms_count = len(atom_indices)
                 if verbose:
