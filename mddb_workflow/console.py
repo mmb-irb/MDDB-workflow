@@ -1029,7 +1029,8 @@ upref_parser.add_argument("-ld", "--loader", type=str,
         "If the loader is available then the new references will be automatically uploaded in batches. "
         "Note that using the loader makes the process more memory efficient and faster.")
 upref_parser.add_argument("-f", "--force", default=False, action='store_true',
-    help="Remake all references, also those already generated with the latest version.")
+    help="Remake all references, also those already generated with the latest version. "
+        "References already remade in a previous run are remade too and their output file is saved apart.")
 
 
 # The update projects command
