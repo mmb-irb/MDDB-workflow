@@ -666,3 +666,47 @@ class TestInChIKeys:
         inchikeys = self.generate_inchikeys(universe, structure, cg_selection, parallel=True)
         assert len(inchikeys) == 2
         assert self.processes == [2]
+
+
+class TestUpdateReferences:
+    """Remaking database references with mwf upref, with the database and the reference maker monkeypatched."""
+
+    @pytest.fixture(autouse=True)
+    def database(self, monkeypatch, tmp_path):
+        """Set a database with two InChI references at the latest version and record the remade references."""
+        import mddb_workflow.tools.update_references as update_references
+        from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION
+        self.update_references = update_references
+        self.remade = []
+
+        class FakeDatabase:
+            def __init__(self, url_or_alias): pass
+
+            def get_all_refences_data(self, reference_type):
+                return [{'inchi': inchi, 'version': INCHI_REFERENCE_VERSION} for inchi in ['A', 'B']]
+
+        def get_inchi_reference(inchi, cache):
+            self.remade.append(inchi)
+            return {'inchi': inchi, 'remade': True}
+
+        monkeypatch.setattr(update_references, 'Database', FakeDatabase)
+        monkeypatch.setattr(update_references, 'get_inchi_reference', get_inchi_reference)
+        monkeypatch.chdir(tmp_path)
+        # A reference already remade in a previous run (e.g. a dry run without loader)
+        self.output = tmp_path / 'mddb.test' / 'inchikey_references.json'
+        self.output.parent.mkdir()
+        save_json([{'inchi': 'A', 'remade': False}], str(self.output))
+
+    def test_update_skips_latest_and_locally_remade(self, capsys):
+        self.update_references.update_references('https://mddb.test/api/', 'inchi')
+        assert self.remade == []
+        assert load_json(str(self.output)) == [{'inchi': 'A', 'remade': False}]
+        assert 'WARNING' not in capsys.readouterr().out
+
+    def test_forced_update_warns_about_locally_remade(self, capsys):
+        """Forced updates also resume from the local output file, so they warn that its references are not remade."""
+        self.update_references.update_references('https://mddb.test/api/', 'inchi', force=True)
+        assert self.remade == ['B']
+        assert load_json(str(self.output)) == [{'inchi': 'A', 'remade': False}, {'inchi': 'B', 'remade': True}]
+        output = capsys.readouterr().out
+        assert 'WARNING' in output and 'The 1 references already updated' in output

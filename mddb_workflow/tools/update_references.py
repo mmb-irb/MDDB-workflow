@@ -141,6 +141,10 @@ def update_references (
         updated_references = load_json(output_references_filepath)
         already_updated_references_count = len(updated_references)
         print(f'  There are {already_updated_references_count} already updated references in {output_references_filepath}')
+        # Forced updates also resume from this file, which may be unexpected (e.g. after a dry run with older code)
+        if force:
+            warn(f'The {already_updated_references_count} references already updated in {output_references_filepath} '
+                'are not remade although the update is forced. Move this file elsewhere to remake them.')
 
     # Set a function to upload the already updated references
     def load_batch():
