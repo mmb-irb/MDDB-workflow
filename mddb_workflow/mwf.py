@@ -204,14 +204,8 @@ class MD:
         self._trajectory_integrity = MISSING_VALUE
         self._cross_periodic_contacts = MISSING_VALUE
 
-        # Set a new MD specific register
-        # In case the directory is the project directory itself, use the project register
-        register_filepath = self.pathify(REGISTER_FILENAME)
-        register_file = File(register_filepath)
-        if register_file.path == self.project.register.file.path:
-            self.register = self.project.register
-        else:
-            self.register = Register(register_file)
+        # The register is set the first time it is used (see get_register)
+        self._register = None
 
         # Set a new MD specific cache
         # In case the directory is the project directory itself, use the project cache
@@ -1426,6 +1420,22 @@ class MD:
         return self.register.warnings
     warnings = property(get_warnings, None, None, "MD warnings to be written in metadata")
 
+    def get_register(self) -> 'Register':
+        """Get the MD register.
+
+        It is not created on init since creating it writes a new entry in the register file.
+        This way commands which only read the project (e.g. 'mwf ds view') do not leave a trace.
+        """
+        if self._register is not None: return self._register
+        # In case the directory is the project directory itself, use the project register
+        register_file = File(self.pathify(REGISTER_FILENAME))
+        if register_file.path == self.project.register.file.path:
+            self._register = self.project.register
+        else:
+            self._register = Register(register_file)
+        return self._register
+    register = property(get_register, None, None, "Tracks MD workflow runs, test results and warnings")
+
 
 class Project:
     """Class for the main project of an MDDB accession.
@@ -1804,7 +1814,8 @@ class Project:
         self.resorted_charges_file = File(self.pathify(RESORTED_CHARGES_FILENAME))
 
         # Register: useful to track previous workflow runs and problems
-        self.register = Register(File(self.pathify(REGISTER_FILENAME)))
+        # It is set the first time it is used (see get_register)
+        self._register = None
         self.cache = Cache(File(self.pathify(CACHE_FILENAME)))
 
         # Set tasks whose output is to be overwritten
@@ -2442,6 +2453,17 @@ class Project:
         return self.register.warnings
     warnings = property(get_warnings, None, None, "Project warnings to be written in metadata")
 
+    def get_register(self) -> 'Register':
+        """Get the project register.
+
+        It is not created on init since creating it writes a new entry in the register file.
+        This way commands which only read the project (e.g. 'mwf ds view') do not leave a trace.
+        """
+        if self._register is None:
+            self._register = Register(File(self.pathify(REGISTER_FILENAME)))
+        return self._register
+    register = property(get_register, None, None, "Tracks project workflow runs, test results and warnings")
+
 
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------
 
@@ -2771,6 +2793,10 @@ def workflow(
         project.overwritables = tasker.get_project_overwritables()
         for md in project.mds:
             md.overwritables = tasker.get_md_overwritables()
+        # Create the registers now so every run is recorded, even if no task uses them
+        project.register
+        for md in project.mds:
+            if md != REMOVED_MD: md.register
 
     # Run the project tasks and MD tasks as per the task resolver.
     t0 = time.time()
