@@ -667,7 +667,7 @@ skip_frames:
 
 # Set which checkings are allowed to fail without killing the process.
 # Set 'true' to allow all checkings to fail.
-# Available checkings: stabonds, cohbonds, intrajrity, pbcontacts, elements, refseq, interact, ligands, chains, largeaa
+# Available checkings: stabonds, cohbonds, intrajrity, pbcontacts, elements, refseq, interact, ligands, lipids, chains, largeaa
 # Equivalent to the "-m" ("--mercy") command line argument.
 #
 # Example:
