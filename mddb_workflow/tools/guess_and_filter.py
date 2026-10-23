@@ -60,7 +60,8 @@ def guess_and_filter_topology (
     elif input_topology_file.format == 'tpr':
         # We will not rely in Gromacs automatic atom selections
         # Instead we will make our own index file with our custom selections
-        index_filepath = f'{input_topology_file.basepath}/.auxiliar.ndx'
+        # The index file is written next to the output so input directories are not touched
+        index_filepath = f'{output_topology_file.basepath}/.auxiliar.ndx'
         index_file = File(index_filepath)
         # Read and parse the TPR file
         early_structure = Structure.from_tpr_file(input_topology_file.path)
