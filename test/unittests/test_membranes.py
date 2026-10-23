@@ -366,3 +366,33 @@ class TestLipidReferences:
         assert references[oca_key]['forced'] is True
         assert references[oca_key]['category'] is None
         assert self.requests == set()
+
+    def test_inchikey_references_lipid_data(self, tmp_path):
+        """InChI key references tell lipids, with their category, from other molecules, also without database references."""
+        from mddb_workflow.tools.get_lipids import generate_lipid_references
+        from mddb_workflow.tools.get_inchi_keys import generate_inchi_references
+        inchikeys = dict([
+            inchikey_data(LIPIDS['POPC'][0], 'POPC', 'fatty', n_molecules=100),
+            inchikey_data(LIPIDS['MC3H'][0], 'MC3H', 'fatty', n_molecules=100),
+            inchikey_data(NON_LIPIDS['octanoic acid'], 'OCA', 'fatty', n_molecules=30),
+            inchikey_data(NON_LIPIDS['ibuprofen'], 'IBU', 'other'),
+        ])
+        popc_key, mc3h_key, oca_key, ibuprofen_key = inchikeys
+        lipid_references = generate_lipid_references(inchikeys, cache=None, input_forced_lipids=['OCA'])
+        output_file = File(str(tmp_path / 'inchikey_references.json'))
+        generate_inchi_references(inchikeys, lipid_references, {}, {'no_mem_lipid': []}, None, output_file)
+        references = {reference['inchikey']: reference for reference in load_json(output_file.path)}
+        assert references[popc_key]['lipid'] == {'category': 'GP', 'forced': False}
+        assert references[mc3h_key]['lipid'] == {'category': 'FA', 'forced': False}
+        assert references[mc3h_key]['swisslipids'] is None and references[mc3h_key]['lipidmaps'] is None
+        assert references[oca_key]['lipid'] == {'category': None, 'forced': True}
+        assert references[ibuprofen_key]['lipid'] is None
+
+    def test_remade_inchi_reference_lipid_data(self, monkeypatch):
+        """InChI references remade by mwf upref also have the lipid data."""
+        import mddb_workflow.tools.update_references as update_references
+        monkeypatch.setattr(update_references, 'generate_ligand_references', lambda *args, **kwargs: {})
+        reference = update_references.get_inchi_reference(smiles_to_inchi(LIPIDS['MC3H'][0]), cache=None)
+        assert reference['lipid'] == {'category': 'FA', 'forced': False}
+        reference = update_references.get_inchi_reference(smiles_to_inchi(NON_LIPIDS['ibuprofen']), cache=None)
+        assert reference['lipid'] is None

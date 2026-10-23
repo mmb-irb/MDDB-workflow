@@ -300,11 +300,19 @@ def make_inchikey_reference(
     lipid_reference: Optional[dict],
     ligand_reference: Optional[dict],
 ) -> dict:
-    """Make the database reference of an InChI key from its lipid and ligand references."""
+    """Make the database reference of an InChI key from its lipid and ligand references.
+
+    Lipids have their LIPID MAPS category and whether they were forced by the user, so lipids missing
+    in the lipid databases (e.g. synthetic ionizable lipids) can be told apart from other molecules.
+    """
+    lipid = None
+    if lipid_reference:
+        lipid = {'category': lipid_reference.get('category'), 'forced': lipid_reference.get('forced', False)}
     lipid_reference = lipid_reference or {}
     reference = {
         'inchikey': inchikey,
         'inchi': inchi,
+        'lipid': lipid,
         'swisslipids': lipid_reference.get('swisslipids'),
         'lipidmaps': lipid_reference.get('lipidmaps'),
         'ligand': ligand_reference,
