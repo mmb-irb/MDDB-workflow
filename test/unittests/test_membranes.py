@@ -247,6 +247,18 @@ class TestAggregateClassification:
         assert membrane['type'] == BILAYER
         assert set(membrane['polar_atoms']['top']) == set(headgroups[len(grid):].indices)
 
+    def test_vesicle_across_box_boundary(self):
+        """A vesicle split by the box boundary is a single vesicle."""
+        outer, inner = sphere_points(75), sphere_points(35)
+        universe, headgroups = build_lipids(np.concatenate([outer, inner]), np.concatenate([-outer, inner]), [250, 250, 250])
+        shift_and_wrap(universe, [125, 0, 0])
+        membrane_map = find_leaflets(universe, headgroups)
+        assert membrane_map['n_mems'] == 1
+        membrane = membrane_map['mems']['0']
+        assert membrane['type'] == VESICLE
+        assert len(membrane['polar_atoms']['outer']) == len(outer)
+        assert len(membrane['polar_atoms']['inner']) == len(inner)
+
     def test_vesicle_with_lumen_micelle(self):
         """The inner leaflet of a vesicle merges at 15 Å with a micelle in its lumen and they are split at 12 Å.
         The outer leaflet must wait for the inner leaflet instead of becoming a micelle.

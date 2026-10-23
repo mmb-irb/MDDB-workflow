@@ -189,9 +189,11 @@ def coarse_grain_headgroups(universe: 'Universe', forced_lipids: Optional[list[s
     return headgroup_ag
 
 
-def split_leaflet_groups(universe: 'Universe', headgroup_ag: 'AtomGroup', cutoff: float) -> tuple[list, list]:
-    """Run LeafletFinder and split its groups into leaflets and residue indices of unassigned lipids."""
-    L = LeafletFinder(universe, headgroup_ag, cutoff=cutoff)
+def split_leaflet_groups(universe: 'Universe', headgroup_ag: 'AtomGroup', cutoff: float, pbc: bool) -> tuple[list, list]:
+    """Run LeafletFinder and split its groups into leaflets and residue indices of unassigned lipids.
+    With periodic boundary conditions leaflets crossing the box boundary (e.g. vesicles) are not split.
+    """
+    L = LeafletFinder(universe, headgroup_ag, cutoff=cutoff, pbc=pbc)
     leaflets = []
     no_mem_lipids = []
     for group in L.groups():
@@ -361,7 +363,7 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     for i, cutoff in enumerate(cutoffs):
         if i > 0:
             print(f' {len(unclassified)} leaflets could not be classified, retrying their lipids with a {cutoff} Å cutoff')
-        leaflets, small_group_lipids = split_leaflet_groups(universe, pending_headgroups, cutoff)
+        leaflets, small_group_lipids = split_leaflet_groups(universe, pending_headgroups, cutoff, pbc=box is not None)
         no_mem_lipids.extend(small_group_lipids)
         found_aggregates, unclassified, lone_curved_in = classify_leaflets(leaflets + lone_curved_in, box)
         aggregates.extend(found_aggregates)
