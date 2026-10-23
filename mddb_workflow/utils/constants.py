@@ -627,6 +627,8 @@ PROTEIN_REFERENCE_VERSION = '0.0.1'
 LIPID_REFERENCE_VERSION = '0.1.0'
 LIGAND_REFERENCE_VERSION = '0.0.1'
 INCHI_REFERENCE_VERSION = _add_versions(LIPID_REFERENCE_VERSION, LIGAND_REFERENCE_VERSION)
+# Version of references made while a remote service they need was not available, so they are remade later
+INCOMPLETE_REFERENCE_VERSION = '0.0.0'
 PDB_REFERENCE_VERSION = '0.0.6'
 
 # Project metadata version

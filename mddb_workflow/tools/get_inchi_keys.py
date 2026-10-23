@@ -2,7 +2,7 @@ import MDAnalysis
 import traceback
 import multiprocessing
 from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout, DatabaseUnavailableError
-from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION
+from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCOMPLETE_REFERENCE_VERSION
 from mddb_workflow.core.dataclass import InChIKeyData
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.pubchem import pubchem_standardization
@@ -304,10 +304,15 @@ def make_inchikey_reference(
 
     Lipids have their LIPID MAPS category and whether they were forced by the user, so lipids missing
     in the lipid databases (e.g. synthetic ionizable lipids) can be told apart from other molecules.
+    References of lipids made while the lipid databases were not available get an incomplete version,
+    so they are not reused from the MDDB database and they are remade later.
     """
     lipid = None
+    version = INCHI_REFERENCE_VERSION
     if lipid_reference:
         lipid = {'category': lipid_reference.get('category'), 'forced': lipid_reference.get('forced', False)}
+        if lipid_reference.get('version') == INCOMPLETE_REFERENCE_VERSION:
+            version = INCOMPLETE_REFERENCE_VERSION
     lipid_reference = lipid_reference or {}
     reference = {
         'inchikey': inchikey,
@@ -316,7 +321,7 @@ def make_inchikey_reference(
         'swisslipids': lipid_reference.get('swisslipids'),
         'lipidmaps': lipid_reference.get('lipidmaps'),
         'ligand': ligand_reference,
-        'version': INCHI_REFERENCE_VERSION
+        'version': version
     }
     # Sort dictionary entries for consistency when uploading to database
     return {k: dict(sorted(v.items())) if type(v) is dict else v for k, v in reference.items()}

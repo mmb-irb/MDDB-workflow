@@ -7,7 +7,7 @@ from rdkit import Chem
 
 from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError, RemoteServiceError
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, PROTEIN_REFERENCES_FILENAME
-from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHIKEY_REFERENCES_FILENAME
+from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHIKEY_REFERENCES_FILENAME, INCOMPLETE_REFERENCE_VERSION
 from mddb_workflow.utils.constants import PDB_REFERENCE_VERSION, PDB_REFERENCES_FILENAME
 from mddb_workflow.utils.constants import CACHE_FILENAME, LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG
 from mddb_workflow.utils.cache import Cache
@@ -19,7 +19,7 @@ from mddb_workflow.core.dataclass import InChIKeyData
 from mddb_workflow.tools.generate_map import get_uniprot_reference
 from mddb_workflow.tools.generate_pdb_references import get_pdb_reference
 from mddb_workflow.tools.get_inchi_keys import make_inchikey_reference
-from mddb_workflow.tools.get_lipids import generate_lipid_references, is_swisslipids_available
+from mddb_workflow.tools.get_lipids import generate_lipid_references
 from mddb_workflow.tools.get_ligands import generate_ligand_references
 
 
@@ -31,7 +31,7 @@ def get_inchi_reference(inchi: str, cache: 'Cache') -> dict:
     inchikeys = {inchikey: InChIKeyData(inchi=inchi)}
     lipid_references = generate_lipid_references(inchikeys, cache)
     # Lipids get no lipid database references if SwissLipids is not available, so fail instead
-    if inchikey in lipid_references and not is_swisslipids_available():
+    if lipid_references.get(inchikey, {}).get('version') == INCOMPLETE_REFERENCE_VERSION:
         raise RemoteServiceError('SwissLipids is not available')
     ligand_references = generate_ligand_references(None, cache, None, [], inchikeys,
         mercy=[LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG])

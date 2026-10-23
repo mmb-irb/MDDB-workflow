@@ -297,13 +297,16 @@ class TestLipidReferences:
     @pytest.fixture(autouse=True)
     def databases(self, monkeypatch):
         """Make every residue missing in the MDDB database and record the SwissLipids and LIPID MAPS requests.
-        Only POPC is found in SwissLipids.
+        Only POPC is found in SwissLipids. SwissLipids fails while swisslipids_down is set.
         """
         import mddb_workflow.tools.get_lipids as get_lipids
+        from mddb_workflow.utils.auxiliar import RequestError
         self.popc_key, _ = inchikey_data(LIPIDS['POPC'][0], 'POPC', 'fatty')
         self.requests = set()
+        self.swisslipids_down = False
 
         def is_in_swisslipids(inchikey, only_first_layer=False):
+            if self.swisslipids_down: raise RequestError('SwissLipids is down')
             self.requests.add(inchikey)
             return {'entity_id': 'SLM:000000001'} if inchikey == self.popc_key else None
 
@@ -314,10 +317,6 @@ class TestLipidReferences:
         monkeypatch.setattr(get_lipids, 'get_database_inchikey_reference', lambda *args: None)
         monkeypatch.setattr(get_lipids, 'is_in_swisslipids', is_in_swisslipids)
         monkeypatch.setattr(get_lipids, 'is_in_LIPID_MAPS', is_in_LIPID_MAPS)
-        # The SwissLipids status is checked once per session, so check it again with the monkeypatched requests
-        get_lipids.is_swisslipids_available.cache_clear()
-        yield
-        get_lipids.is_swisslipids_available.cache_clear()
 
     def test_lipid_references(self):
         """Lipids are recognised from the structure and the databases are only requested for them."""
@@ -396,3 +395,39 @@ class TestLipidReferences:
         assert reference['lipid'] == {'category': 'FA', 'forced': False}
         reference = update_references.get_inchi_reference(smiles_to_inchi(NON_LIPIDS['ibuprofen']), cache=None)
         assert reference['lipid'] is None
+
+    def test_references_without_lipid_databases(self):
+        """Lipid references made while SwissLipids is down are outdated, so they are not reused from the database.
+        SwissLipids is checked again for the next lipids, since it may be a transient failure.
+        """
+        from mddb_workflow.tools.get_lipids import generate_lipid_references
+        from mddb_workflow.tools.get_inchi_keys import make_inchikey_reference
+        from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION, INCHI_REFERENCE_VERSION
+        from packaging.version import Version
+        inchikeys = dict([inchikey_data(LIPIDS['POPC'][0], 'POPC', 'fatty', n_molecules=100)])
+        self.swisslipids_down = True
+        lipid_reference = generate_lipid_references(inchikeys, cache=None)[self.popc_key]
+        assert lipid_reference['swisslipids'] is None
+        assert Version(lipid_reference['version']) < Version(LIPID_REFERENCE_VERSION)
+        reference = make_inchikey_reference(self.popc_key, inchikeys[self.popc_key].inchi, lipid_reference, None)
+        assert Version(reference['version']) < Version(INCHI_REFERENCE_VERSION)
+        # SwissLipids answers again
+        self.swisslipids_down = False
+        lipid_reference = generate_lipid_references(inchikeys, cache=None)[self.popc_key]
+        assert lipid_reference['swisslipids'] == {'entity_id': 'SLM:000000001'}
+        assert lipid_reference['version'] == LIPID_REFERENCE_VERSION
+        reference = make_inchikey_reference(self.popc_key, inchikeys[self.popc_key].inchi, lipid_reference, None)
+        assert reference['version'] == INCHI_REFERENCE_VERSION
+
+    def test_remade_inchi_reference_without_lipid_databases(self, monkeypatch):
+        """mwf upref fails to remake lipid references while SwissLipids is down and it succeeds once it answers again."""
+        import mddb_workflow.tools.update_references as update_references
+        from mddb_workflow.utils.auxiliar import RemoteServiceError
+        monkeypatch.setattr(update_references, 'generate_ligand_references', lambda *args, **kwargs: {})
+        popc_inchi = smiles_to_inchi(LIPIDS['POPC'][0])
+        self.swisslipids_down = True
+        with pytest.raises(RemoteServiceError):
+            update_references.get_inchi_reference(popc_inchi, cache=None)
+        self.swisslipids_down = False
+        reference = update_references.get_inchi_reference(popc_inchi, cache=None)
+        assert reference['swisslipids'] == {'entity_id': 'SLM:000000001'}

@@ -1,7 +1,7 @@
 import requests
 from functools import lru_cache
 from mddb_workflow.utils.auxiliar import warn, retry_request, RequestError, RateLimitError, get_retry_after, InputError
-from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION, LIPIDS_MATCH_FLAG
+from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION, INCOMPLETE_REFERENCE_VERSION, LIPIDS_MATCH_FLAG
 from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
 from mddb_workflow.tools.lipid_classification import classify_lipid, LIPID_CATEGORIES
 from mddb_workflow.tools.membrane_mapping import MIN_LEAFLET_LIPIDS
@@ -22,6 +22,8 @@ def generate_lipid_references(
     Then SwissLipids and LIPID MAPS are queried only for these lipids to get their references.
     Lipids which are not in these databases (e.g. synthetic ionizable lipids) have no references.
     InChI keys already in the MDDB database reuse its lipid data instead.
+    When SwissLipids is not available lipids have no references either, but they get an incomplete
+    reference version so their InChI key references are not reused from the MDDB database and they are remade later.
 
     Residues with names in the forced lipids are treated as lipids although their structure is not recognised.
     Residues classified as fatty whose structure is not recognised as a lipid are not lipids.
@@ -72,6 +74,7 @@ def generate_lipid_references(
         # Check if the lipid data is already in the MDDB database
         database_reference = get_database_inchikey_reference(inchikey, cache, database)
         SL_data = LM_data = None
+        version = LIPID_REFERENCE_VERSION
         if database_reference:
             SL_data = database_reference.get('swisslipids')
             LM_data = database_reference.get('lipidmaps')
@@ -80,11 +83,13 @@ def generate_lipid_references(
             # If we dont find it, we try without stereochemistry (only connection layer)
             SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
             LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
+        else:
+            version = INCOMPLETE_REFERENCE_VERSION
         lipid_references[inchikey] = {
             'category': category,
             'swisslipids': SL_data or None,
             'lipidmaps': LM_data or None,
-            'version': LIPID_REFERENCE_VERSION
+            'version': version
         }
 
         # QUALITY CHECKS
@@ -169,10 +174,10 @@ def get_swisslipids_info(entity_id) -> dict:
     return response.json()
 
 
-@lru_cache(maxsize=None)
 def is_swisslipids_available() -> bool:
     """Check if SwissLipids answers.
-    This is checked only once per session so we do not request SwissLipids again for every lipid.
+    Once it answers the test request is cached, so we do not request SwissLipids again for every lipid.
+    Failures are not cached, since they may be transient (e.g. during a long references update).
     """
     try:
         is_in_swisslipids('test')
