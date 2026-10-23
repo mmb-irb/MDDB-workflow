@@ -65,9 +65,10 @@ def guess_and_filter_topology (
         # Read and parse the TPR file
         early_structure = Structure.from_tpr_file(input_topology_file.path)
         # Set the dry selections
-        water_selection = early_structure.select_water()
+        # Water is found by residue name only, since atom elements are not known for coarse grained atoms yet
+        water_selection = early_structure.select_water_by_residue_name()
         dry_selection = early_structure.invert_selection(water_selection)
-        water_and_ion_selection = early_structure.select_water_and_counter_ions()
+        water_and_ion_selection = water_selection + early_structure.select_counter_ions()
         drier_selection = early_structure.invert_selection(water_and_ion_selection)
         # Write the index file
         with open(index_file.path, 'w') as file:

@@ -2107,6 +2107,16 @@ class Structure:
         """
         return self.select_by_classification('solvent')
 
+    def select_water_by_residue_name(self) -> 'Selection':
+        """Select water atoms by residue name only.
+        Use this when atom elements are not known yet (e.g. coarse grained atoms are not flagged yet).
+        """
+        atom_indices = []
+        for residue in self.residues:
+            if residue.name in STANDARD_SOLVENT_RESIDUE_NAMES:
+                atom_indices += residue.atom_indices
+        return Selection(atom_indices)
+
     def select_ions(self) -> 'Selection':
         """Select ions."""
         return self.select_by_classification('ion')
