@@ -179,12 +179,13 @@ def generate_inchikeys(
         tasks.append((resatoms, resindices))
 
     results = []
-    if parallel:
+    # Starting workers is slow, so a single residue is processed directly
+    if parallel and len(tasks) > 1:
         # Execute tasks in parallel
         # Use 'spawn' context to avoid fork-safety issues with threading (RDKit?)
         # https://pythonspeed.com/articles/python-multiprocessing/
         ctx = multiprocessing.get_context('spawn')
-        with ctx.Pool() as pool:
+        with ctx.Pool(processes=min(len(tasks), multiprocessing.cpu_count())) as pool:
             try:
                 print(f'Processing {len(tasks)} residues to get InChI keys (parallel mode)...')
                 async_results = pool.map_async(residue_to_inchi, tasks)

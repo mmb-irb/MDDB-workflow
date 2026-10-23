@@ -618,6 +618,45 @@ class TestLipidReferences:
         assert is_ligand == {mc3_key: False, popc_key: True}
 
 
+class TestInChIKeys:
+    """InChI keys of residues, with the worker pool monkeypatched to record its number of processes."""
+
+    @pytest.fixture(autouse=True)
+    def pool(self, monkeypatch):
+        import types
+        import mddb_workflow.tools.get_inchi_keys as get_inchi_keys
+        requested = self.processes = []
+
+        class Pool:
+            def __init__(self, processes=None): requested.append(processes)
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def map_async(self, function, tasks): return types.SimpleNamespace(get=lambda timeout: [function(task) for task in tasks])
+
+        monkeypatch.setattr(get_inchi_keys.multiprocessing, 'get_context', lambda method: types.SimpleNamespace(Pool=Pool))
+        self.generate_inchikeys = get_inchi_keys.generate_inchikeys
+
+    def molecules(self, smiles: list[str]) -> tuple:
+        """Get a universe with one residue per molecule, a structure with their names and classifications and no CG."""
+        import types
+        from mddb_workflow.utils.selections import Selection
+        universe = mda.Merge(*[mda.Universe.from_smiles(molecule).atoms for molecule in smiles])
+        residues = [types.SimpleNamespace(name=f'M{index}', classification='other') for index in range(len(smiles))]
+        return universe, types.SimpleNamespace(residues=residues), Selection([])
+
+    def test_single_residue_without_pool(self):
+        universe, structure, cg_selection = self.molecules(['CCO'])
+        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, parallel=True)
+        assert list(inchikeys) == ['LFQSCWFLJHTTHZ-UHFFFAOYSA-N']
+        assert self.processes == []
+
+    def test_pool_processes_capped(self):
+        universe, structure, cg_selection = self.molecules(['CCO', 'CC(=O)O'])
+        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, parallel=True)
+        assert len(inchikeys) == 2
+        assert self.processes == [2]
+
+
 class TestUpdateReferences:
     """Remaking database references with mwf upref, with the database and the reference maker monkeypatched."""
 
