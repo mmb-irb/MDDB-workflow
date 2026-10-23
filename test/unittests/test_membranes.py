@@ -312,6 +312,39 @@ class TestAggregateClassification:
         membrane_map = find_leaflets(universe, headgroups)
         assert all(mem['type'] != MICELLE for mem in membrane_map['mems'].values())
 
+    def test_bilayers_first(self):
+        """Bilayers are the first membranes, since clients expect the first membrane to have top and bottom leaflets."""
+        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
+        bot = np.column_stack([grid, np.full(len(grid), -120)])
+        top = np.column_stack([grid, np.full(len(grid), -80)])
+        outer, inner = sphere_points(75) + [0, 0, 60], sphere_points(35) + [0, 0, 60]
+        heads = np.concatenate([bot, top, outer, inner])
+        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1)),
+            -(outer - [0, 0, 60]), inner - [0, 0, 60]])
+        universe, headgroups = build_lipids(heads, directions, [300, 300, 300])
+        membrane_map = find_leaflets(universe, headgroups)
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [BILAYER, VESICLE]
+
+    def test_display_vesicle_midplane(self, monkeypatch, tmp_path):
+        """All leaflets of the membrane are displayed, also the vesicle midplane."""
+        import sys, types
+        from mddb_workflow.tools.membrane_mapping import display_membrane_mapping
+        selections = []
+
+        class View:
+            def clear(self, *args): pass
+            def add_point(self, selection, **kwargs): selections.append(selection)
+            def add_ball_and_stick(self, selection, **kwargs): selections.append(selection)
+
+        monkeypatch.setitem(sys.modules, 'nglview', types.SimpleNamespace(show_file=lambda pdb: View()))
+        leaflets = {'outer': [0, 1, 2], 'inner': [3, 4, 5], MIDPLANE: [6, 7, 8]}
+        membrane = {'type': VESICLE, 'leaflets': leaflets, 'polar_atoms': {name: atoms[:1] for name, atoms in leaflets.items()}}
+        mapping_file = str(tmp_path / 'membrane_mapping.json')
+        save_json({'n_mems': 1, 'mems': {'0': membrane}, 'no_mem_lipid': [9]}, mapping_file)
+        display_membrane_mapping(mapping_file, 'structure.pdb')
+        assert '@6,7,8' in selections and '@6' in selections
+
+
 # Molecules to test the lipid classification, with their expected LIPID MAPS category
 LIPIDS = {
     'POPC': (r'CCCCCCCCCCCCCCCC(=O)OC[C@H](COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCC/C=C\CCCCCCCC', 'GP'),

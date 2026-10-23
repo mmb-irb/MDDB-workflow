@@ -11,6 +11,8 @@ MEMBRANE_MAPPING_VERSION = '0.3.0'
 BILAYER = 'bilayer'
 VESICLE = 'vesicle'
 MICELLE = 'micelle'
+# Order of the aggregate types in the membrane mapping, bilayers first since clients expect top and bottom leaflets
+AGGREGATE_TYPES = [BILAYER, VESICLE, MICELLE]
 # Leaflet of vesicles for lipids between the outer and the inner leaflets
 MIDPLANE = 'midplane'
 # Minimum number of lipids in a leaflet, 24 lipids like in FATSLiM
@@ -58,7 +60,7 @@ def generate_membrane_mapping(
     Returns:
         dict: A dictionary containing the membrane mapping.
             - n_mems (int): Number of amphiphilic aggregates (membranes) detected.
-            - mems (dict): Dictionary where each key is a membrane index (str) and value contains:
+            - mems (dict): Dictionary where each key is a membrane index (str), bilayers first, and value contains:
               - type (str): Aggregate type: 'bilayer' (flat), 'vesicle' or 'micelle'.
               - leaflets (dict): Atom indices of each leaflet. Leaflet names are 'top' and 'bot' for bilayers,
                 'outer', 'inner' and 'midplane' (lipids between both) for vesicles and 'outer' for micelles.
@@ -383,6 +385,7 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
         for group in unclassified:
             no_mem_lipids.extend(group.residues.resindices)
     no_mem_lipids = assign_lipids_by_contact(aggregates, no_mem_lipids, headgroup_ag, dimensions)
+    aggregates.sort(key=lambda aggregate: AGGREGATE_TYPES.index(aggregate[0]))
     membrane_map['n_mems'] = len(aggregates)
 
     for i, (aggregate_type, groups) in enumerate(aggregates):
@@ -472,7 +475,7 @@ def get_bilayers(membrane_map: dict | None) -> list[dict]:
 
 
 def display_membrane_mapping(mem_map: str, pdb: str, mem: str = '0'):
-    """Display the leaflets of a membrane from the membrane mapping using nglview."""
+    """Display the leaflets of a membrane from the membrane mapping using nglview, including the vesicle midplane."""
     try:
         import nglview as nv  # type: ignore
     except ImportError:
@@ -485,8 +488,9 @@ def display_membrane_mapping(mem_map: str, pdb: str, mem: str = '0'):
     view = nv.show_file(pdb)
     view.clear(0)
     view.add_point(selection='not protein', color='green', scale=1.5)
-    leaflet_colors = [('blue', 'cyan'), ('yellow', 'orange')]
+    leaflet_colors = [('blue', 'cyan'), ('yellow', 'orange'), ('purple', 'magenta')]
     for (name, atoms), (color, polar_color) in zip(membrane['leaflets'].items(), leaflet_colors):
+        if len(atoms) == 0: continue
         view.add_point(selection=f"@{','.join(map(str, atoms))}", color=color)
         polar = f"@{','.join(map(str, membrane['polar_atoms'][name]))}"
         view.add_ball_and_stick(selection=polar, color=polar_color, aspectRatio=4)
