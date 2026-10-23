@@ -137,11 +137,6 @@ def update_references (
     print(f'  Results will be saved to {output_references_filepath}')
     updated_references = []
     already_updated_references_count = 0
-    # If forced then already updated references are remade too, so save them apart in a timestamped file
-    if force and exists(output_references_filepath):
-        previous_output_references_filepath = f'{directory}/replaced_time{round(time())}_{output_references_filename}'
-        replace(output_references_filepath, previous_output_references_filepath)
-        print(f'  Forced update: already updated references are moved to {previous_output_references_filepath}')
     if exists(output_references_filepath):
         updated_references = load_json(output_references_filepath)
         already_updated_references_count = len(updated_references)
