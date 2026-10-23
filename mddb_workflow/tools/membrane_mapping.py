@@ -417,51 +417,52 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
     """
     if len(aggregates) == 0 or len(lipid_resindices) == 0: return lipid_resindices
     universe = headgroup_ag.universe
-    polar_atom_by_resindex = {atom.resindex: atom.index for atom in headgroup_ag}
-    remaining = [resindex for resindex in lipid_resindices if resindex in polar_atom_by_resindex]
+    # Unassigned lipids come from LeafletFinder groups, so all of them have a polar atom
+    polar_atoms = np.full(len(universe.residues), -1)
+    polar_atoms[headgroup_ag.resindices] = headgroup_ag.indices
+    remaining = np.array(lipid_resindices, dtype=int)
     leaflets = [(groups, name) for _, groups in aggregates for name in groups]
-    while len(remaining) > 0:
-        owners = np.full(len(universe.atoms), -1)
-        for leaflet_index, (groups, name) in enumerate(leaflets):
-            owners[groups[name].residues.atoms.indices] = leaflet_index
-        leaflet_atoms = universe.atoms[np.where(owners >= 0)[0]]
+    # Leaflet index of every atom, -1 for atoms out of leaflets
+    owners = np.full(len(universe.atoms), -1)
+    for leaflet_index, (groups, name) in enumerate(leaflets):
+        owners[groups[name].residues.atoms.indices] = leaflet_index
+    # Midplane leaflet index of the aggregate of every leaflet, -1 for aggregates without midplane
+    midplane_indices = {id(groups): index for index, (groups, name) in enumerate(leaflets) if name == MIDPLANE}
+    midplanes = np.array([midplane_indices.get(id(groups), -1) for groups, _ in leaflets] + [-1])
+    # Atom contacts of every remaining lipid with every leaflet, with an extra empty leaflet to rank at least two
+    contacts = np.zeros((len(remaining), len(leaflets) + 1), dtype=int)
+    rows = np.full(len(universe.residues), -1)
+    # Contacts are counted only once: in the first round with all leaflet atoms, then with the atoms of the added lipids
+    new_atoms = np.where(owners >= 0)[0]
+    while len(remaining) > 0 and len(new_atoms) > 0:
+        rows[remaining] = np.arange(len(remaining))
         unassigned_atoms = universe.residues[remaining].atoms
-        pairs = capped_distance(unassigned_atoms.positions, leaflet_atoms.positions, CONTACT_DISTANCE,
+        pairs = capped_distance(unassigned_atoms.positions, universe.atoms[new_atoms].positions, CONTACT_DISTANCE,
             box=dimensions, return_distances=False)
-        # Count atom contacts of every unassigned lipid with every leaflet
-        contacts = {}
-        for unassigned_index, leaflet_atom_index in pairs:
-            resindex = unassigned_atoms[unassigned_index].resindex
-            leaflet_index = owners[leaflet_atoms[leaflet_atom_index].index]
-            counts = contacts.setdefault(resindex, {})
-            counts[leaflet_index] = counts.get(leaflet_index, 0) + 1
-        # Polar atoms to add to each leaflet, as (leaflet groups, leaflet name) -> polar atom indices
-        additions = {}
-        still_remaining = []
-        for resindex in remaining:
-            ranking = sorted(contacts.get(resindex, {}).items(), key=lambda item: -item[1])
-            if len(ranking) == 0:
-                still_remaining.append(resindex)
-                continue
-            groups, name = leaflets[ranking[0][0]]
-            dominant = len(ranking) == 1 or ranking[0][1] >= CONTACT_DOMINANCE * ranking[1][1]
-            if not dominant:
-                # Lipids touching two leaflets of the same vesicle alike are in its midplane
-                second_groups, _ = leaflets[ranking[1][0]]
-                if second_groups is not groups or MIDPLANE not in groups:
-                    still_remaining.append(resindex)
-                    continue
-                name = MIDPLANE
-            additions.setdefault((id(groups), name), (groups, name, []))[2].append(polar_atom_by_resindex[resindex])
-        if len(additions) == 0: break
-        for groups, name, polar_atoms in additions.values():
-            merged = groups[name] + universe.atoms[polar_atoms]
+        np.add.at(contacts, (rows[unassigned_atoms.resindices[pairs[:, 0]]], owners[new_atoms[pairs[:, 1]]]), 1)
+        # Rank the leaflets of every lipid by contacts
+        ranking = np.argsort(-contacts, axis=1, kind='stable')
+        first, second = ranking[:, 0], ranking[:, 1]
+        first_contacts = np.take_along_axis(contacts, ranking[:, :1], axis=1)[:, 0]
+        second_contacts = np.take_along_axis(contacts, ranking[:, 1:2], axis=1)[:, 0]
+        dominant = first_contacts >= CONTACT_DOMINANCE * second_contacts
+        # Lipids touching two leaflets of the same vesicle alike are in its midplane
+        same_vesicle = (midplanes[first] == midplanes[second]) & (midplanes[first] >= 0)
+        targets = np.where(dominant, first, np.where(same_vesicle, midplanes[first], -1))
+        targets[first_contacts == 0] = -1
+        added = targets >= 0
+        for leaflet_index in np.unique(targets[added]):
+            groups, name = leaflets[leaflet_index]
+            resindices = remaining[targets == leaflet_index]
+            merged = groups[name] + universe.atoms[polar_atoms[resindices]]
             groups[name] = merged[np.argsort(merged.indices)]
-        remaining = still_remaining
+            owners[universe.residues[resindices].atoms.indices] = leaflet_index
+        new_atoms = universe.residues[remaining[added]].atoms.indices
+        remaining, contacts = remaining[~added], contacts[~added]
     n_assigned = len(lipid_resindices) - len(remaining)
     if n_assigned > 0:
         print(f' Assigned {n_assigned} unassigned lipids to the leaflets they are in contact with')
-    return remaining + [resindex for resindex in lipid_resindices if resindex not in polar_atom_by_resindex]
+    return remaining.tolist()
 
 
 def get_bilayers(membrane_map: dict | None) -> list[dict]:

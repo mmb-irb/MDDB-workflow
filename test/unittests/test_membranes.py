@@ -168,6 +168,31 @@ class TestAggregateClassification:
         assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(heads)
         assert membrane_map['no_mem_lipid'] == []
 
+    def test_contact_rounds_query_added_lipids(self, monkeypatch):
+        """A column of lipids out of a micelle, where only the first one touches it, joins it in successive rounds.
+        After the first round only the lipids added in the previous round are queried for new contacts.
+        """
+        import mddb_workflow.tools.membrane_mapping as membrane_mapping
+        shell = sphere_points(20, spacing=6)
+        # Lipids pointing their tails to the micelle with heads 21 Å apart, so they are not LeafletFinder neighbours
+        column = np.array([[41, 0, 0], [62, 0, 0], [83, 0, 0]], dtype=float)
+        heads = np.concatenate([shell, column])
+        directions = np.concatenate([-shell, np.tile([-1, 0, 0], (len(column), 1))])
+        universe, headgroups = build_lipids(heads, directions, [250, 250, 250])
+        queried_atoms = []
+
+        def capped_distance(reference, configuration, *args, **kwargs):
+            queried_atoms.append(len(configuration))
+            return membrane_mapping.capped_distance.__wrapped__(reference, configuration, *args, **kwargs)
+
+        capped_distance.__wrapped__ = membrane_mapping.capped_distance
+        monkeypatch.setattr(membrane_mapping, 'capped_distance', capped_distance)
+        membrane_map = find_leaflets(universe, headgroups)
+        assert membrane_map['n_mems'] == 1
+        assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(heads)
+        assert membrane_map['no_mem_lipid'] == []
+        assert queried_atoms == [3 * len(shell), 3, 3]
+
     def test_midplane_lipid_stays_unassigned(self):
         """A lipid in the bilayer midplane touching both leaflets alike is not assigned to any of them."""
         grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
