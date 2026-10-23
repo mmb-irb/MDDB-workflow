@@ -199,6 +199,7 @@ class MD:
         self._cg_selection = MISSING_VALUE
         self._cg_residues = MISSING_VALUE
         self._ua_selection = MISSING_VALUE
+        self._qm_selection = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
 
@@ -910,6 +911,7 @@ class MD:
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
     input_ua_selection = property(input_getter('ua_selection'), None, None, "Selection of atoms in united atom residues, whose carbons have their hydrogens absorbed (read only)")
+    input_qm_selection = property(input_getter('qm_selection'), None, None, "Selection of atoms which are treated with quantum mechanics (read only)")
     input_dummy_selection = property(input_getter('dummy_selection'), None, None, "Selection of atoms which are not real atoms but dummy atoms (read only)")
     input_forced_class_selections = property(input_getter('forced_class_selections'), None, None, "Custom forced selections for molecular classification (read only)")
 
@@ -1096,6 +1098,23 @@ class MD:
         """Get indices of residues in united atom."""
         return self.structure.get_selection_residue_indices(self.ua_selection)
     ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
+
+    def get_qm_selection(self) -> 'Selection':
+        """Get the quantum mechanics atom selection."""
+        # If we already have a stored value then return it
+        if self._qm_selection is not MISSING_VALUE:
+            return self._qm_selection
+        print('Setting Quantum Mechanics (QM) atoms selection')
+        selection_string = self.input_qm_selection
+        if not selection_string:
+            print(' Empty selection -> There is no QM at all')
+            self._qm_selection = Selection()
+        else:
+            print(f' Selecting QM atoms "{selection_string}"')
+            self._qm_selection = self.structure.select(selection_string)
+        print(f' QM selection has {len(self._qm_selection)} atoms')
+        return self._qm_selection
+    qm_selection = property(get_qm_selection, None, None, "Quantum mechanics atom selection (read only)")
 
     # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
     # This function may be called for the first time while in the 'inpro' task
@@ -1520,6 +1539,7 @@ class Project:
         pbc_selection: Optional[str] = None,
         cg_selection: Optional[str] = None,
         ua_selection: Optional[str] = None,
+        qm_selection: Optional[str] = None,
         dummy_selection: Optional[str] = None,
         forced_class_selections: Optional[dict] = None,
         image: bool = False,
@@ -1601,6 +1621,9 @@ class Project:
             ua_selection (Optional[str]):
                 Selection of atoms in united atom residues, whose carbons have their hydrogens absorbed.
                 Use 'auto' to guess them.
+                Selection passed through console overrides the one in inputs file.
+            qm_selection (Optional[str]):
+                Selection of atoms which are treated with quantum mechanics in QM/MM simulations.
                 Selection passed through console overrides the one in inputs file.
             dummy_selection (Optional[str]):
                 Selection of atoms which are not real atoms but dummy atoms.
@@ -1782,6 +1805,7 @@ class Project:
         self._cg_selection = MISSING_VALUE
         self._cg_residues = MISSING_VALUE
         self._ua_selection = MISSING_VALUE
+        self._qm_selection = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
         self._topology_reader = MISSING_VALUE
@@ -1798,6 +1822,7 @@ class Project:
             'pbc_selection': pbc_selection,
             'cg_selection': cg_selection,
             'ua_selection': ua_selection,
+            'qm_selection': qm_selection,
             'dummy_selection': dummy_selection,
             'forced_class_selections': forced_class_selections,
         }
@@ -2070,6 +2095,7 @@ class Project:
         final_pbc_selection = self.pbc_selection.to_vmd() if self.pbc_selection else None
         final_cg_selection = self.cg_selection.to_vmd() if self.cg_selection else None
         final_ua_selection = self.ua_selection.to_vmd() if self.ua_selection else None
+        final_qm_selection = self.qm_selection.to_vmd() if self.qm_selection else None
         final_dummy_selection = self.dummy_selection.to_vmd() if self.dummy_selection else None
         # Now start the actual autofilling process
         print('Automatically filling inputs file')
@@ -2083,6 +2109,7 @@ class Project:
             'pbc_selection': final_pbc_selection,
             'cg_selection': final_cg_selection,
             'ua_selection': final_ua_selection,
+            'qm_selection': final_qm_selection,
             'dummy_selection': final_dummy_selection,
         })
         # Fill the PBC selection
@@ -2097,6 +2124,10 @@ class Project:
         if input_updates['ua_selection']:
             # Update the value in tasks caches only if there was an actual update
             self.update_cache_inputs('input_ua_selection', final_ua_selection)
+        # Fill the QM selection
+        if input_updates['qm_selection']:
+            # Update the value in tasks caches only if there was an actual update
+            self.update_cache_inputs('input_qm_selection', final_qm_selection)
         # Fill the dummy atoms selection
         if input_updates['dummy_selection']:
             # Update the value in tasks caches only if there was an actual update
@@ -2144,6 +2175,7 @@ class Project:
     input_pbc_selection = inputs_property('pbc_selection', "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = inputs_property('cg_selection', "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
     input_ua_selection = inputs_property('ua_selection', "Selection of atoms in united atom residues, whose carbons have their hydrogens absorbed (read only)")
+    input_qm_selection = inputs_property('qm_selection', "Selection of atoms which are treated with quantum mechanics (read only)")
     input_dummy_selection = inputs_property('dummy_selection', "The original user input dummy atoms selection (read only)")
     input_forced_class_selections = inputs_property('forced_class_selections', "The original input custom forced selections for molecular classification (read only)")
     input_chainer = inputs_property('chainer', "Chain letters to be forced in the processed structure as letter: selection pairs (read only)")
@@ -2210,6 +2242,19 @@ class Project:
         """Get indices of residues in united atom."""
         return self.structure.get_selection_residue_indices(self.ua_selection)
     ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
+
+    def get_qm_selection(self) -> 'Selection':
+        """Get the quantum mechanics atom selection. Make sure it is coherent among all MDs."""
+        # If we already have a stored value then return it
+        if self._qm_selection is not MISSING_VALUE:
+            return self._qm_selection
+        # Make sure it is coherent among all MDs
+        unique_md_selections = set([md.qm_selection for md in self.mds if md is not REMOVED_MD])
+        if len(unique_md_selections) > 1:
+            raise InputError('Quantum mechanics selection is not coherent among MDs. Please change the input value.')
+        self._qm_selection = self.reference_md.qm_selection
+        return self._qm_selection
+    qm_selection = property(get_qm_selection, None, None, "Quantum mechanics atom selection (read only)")
 
     def get_pbc_selection(self) -> 'Selection':
         """Get the periodic boundary conditions atom selection. Make sure it is coherent among all MDs."""

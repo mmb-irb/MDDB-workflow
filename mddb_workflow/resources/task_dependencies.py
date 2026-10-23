@@ -143,6 +143,7 @@ DERIVED_DEPENDENCIES = {
         'cg_selection': ('structure', 'input_cg_selection'),
         'cg_residues': ('structure', 'cg_selection'),
         'ua_selection': ('structure', 'trajectory_file', 'cg_selection', 'input_ua_selection'),
+        'qm_selection': ('structure', 'input_qm_selection'),
         'dummy_selection': ('structure', 'input_dummy_selection'),
         'forced_class_selections': (
             'structure',
@@ -158,6 +159,7 @@ DERIVED_DEPENDENCIES = {
         'cg_selection': ('structure', 'input_cg_selection'),
         'cg_residues': ('structure', 'cg_selection'),
         'ua_selection': ('structure', 'trajectory_file', 'cg_selection', 'input_ua_selection'),
+        'qm_selection': ('structure', 'input_qm_selection'),
         'dummy_selection': ('structure', 'input_dummy_selection'),
         'topology_reader': ('topology_file',),
         'dihedrals': ('topology_reader',),

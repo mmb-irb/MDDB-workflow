@@ -161,6 +161,7 @@ class WorkflowInputs(InputsBaseModel):
     pbc_selection: Optional[str] = None
     cg_selection: Optional[str] = None
     ua_selection: Optional[str] = None
+    qm_selection: Optional[str] = None
     dummy_selection: Optional[str] = None
     forced_class_selections: Optional[dict[str, str]] = None
 

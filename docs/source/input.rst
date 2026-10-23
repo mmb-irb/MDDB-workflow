@@ -502,6 +502,14 @@ Use ``auto`` to guess them by looking for carbons with missing hydrogens.
 .. warning::
  EXPERIMENTAL INPUT
 
+``qm_selection``
+~~~~~~~~~~~~~~~~
+
+Set those atoms which are treated with quantum mechanics (QM) in QM/MM simulations.
+
+.. warning::
+ EXPERIMENTAL INPUT
+
 
 
 ``dummy_selection``
