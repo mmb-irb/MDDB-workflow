@@ -432,6 +432,29 @@ class TestLipidReferences:
         reference = update_references.get_inchi_reference(popc_inchi, cache=None)
         assert reference['swisslipids'] == {'entity_id': 'SLM:000000001'}
 
+    def test_membrane_lipids_are_not_ligands(self, tmp_path):
+        """Lipids with ligand references are ligands only when most of them are out of membranes."""
+        from mddb_workflow.tools.get_inchi_keys import generate_inchi_references
+        from mddb_workflow.utils.selections import Selection
+
+        class Structure:
+            """Structure with 3 atoms per residue."""
+            def select_residue_indices(self, residue_indices):
+                return Selection([3 * index + atom for index in residue_indices for atom in range(3)])
+
+        # A few MC3 lipids in a membrane and many POPC lipids out of membranes
+        mc3_key, mc3_data = inchikey_data(LIPIDS['MC3'][0], 'MC3', 'fatty', n_molecules=2)
+        popc_key, popc_data = inchikey_data(LIPIDS['POPC'][0], 'POPC', 'fatty', n_molecules=10)
+        popc_data.resindices = list(range(2, 12))
+        inchikeys = {mc3_key: mc3_data, popc_key: popc_data}
+        lipid_references = {key: {'category': 'GP', 'version': '0.1.0'} for key in inchikeys}
+        ligand_references = {key: {'formula': 'C42H82NO8P'} for key in inchikeys}
+        membrane_map = {'no_mem_lipid': Structure().select_residue_indices(popc_data.resindices).atom_indices}
+        inchikey_map = generate_inchi_references(inchikeys, lipid_references, ligand_references, membrane_map,
+            Structure(), File(str(tmp_path / 'inchikey_references.json')))
+        is_ligand = {data['inchikey']: data['is_ligand'] for data in inchikey_map}
+        assert is_ligand == {mc3_key: False, popc_key: True}
+
 
 class TestUpdateReferences:
     """Remaking database references with mwf upref, with the database and the reference maker monkeypatched."""

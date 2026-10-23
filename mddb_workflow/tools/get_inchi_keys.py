@@ -375,7 +375,7 @@ def generate_inchi_references(
         if inchikey_data['is_lipid']:
             ligand_selection = structure.select_residue_indices(inchikey_data['residue_indices'])
             # Take only the lipids that are not part of a membrane (fatty-like ligands)
-            no_mem_ligand_selection = ligand_selection and no_mem_lipid
+            no_mem_ligand_selection = ligand_selection & no_mem_lipid
             # If most of the lipid is in a membrane, we do not mark it as a ligand
             if len(no_mem_ligand_selection) / len(ligand_selection) < 0.5:
                 continue
