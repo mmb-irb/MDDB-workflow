@@ -148,6 +148,15 @@ def build_lipids(heads: np.ndarray, tail_directions: np.ndarray, box: list[float
     return universe, universe.select_atoms('name P')
 
 
+def flat_bilayer(bot_z: float, top_z: float, half_width: float = 56) -> tuple[np.ndarray, np.ndarray]:
+    """Get the heads of a flat bilayer on a grid with 8 Å spacing, bottom leaflet first, and their tail directions."""
+    axis = np.arange(-half_width, half_width + 8, 8)
+    grid = np.array([[x, y] for x in axis for y in axis], dtype=float)
+    heads = np.concatenate([np.column_stack([grid, np.full(len(grid), z)]) for z in (bot_z, top_z)])
+    directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1))])
+    return heads, directions
+
+
 # Martini bead names of lipids and their head beads
 CG_LIPIDS = {
     'POPC': ('NC3 PO4 GL1 GL2 C1A D2A C3A C4A C1B C2B C3B C4B', 'PO4'),
@@ -360,18 +369,17 @@ class TestAggregateClassification:
 
     def test_bilayer_midplane(self):
         """A lipid in the bilayer midplane touching both leaflets alike is added to its midplane leaflet."""
-        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
-        bot = np.column_stack([grid, np.full(len(grid), -19)])
-        top = np.column_stack([grid, np.full(len(grid), 19)])
+        heads, directions = flat_bilayer(-19, 19)
+        n_leaflet = len(heads) // 2
         midplane = np.array([[4, 4, 0]], dtype=float)
-        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1)), [[1, 0, 0]]])
-        universe, headgroups = build_lipids(np.concatenate([bot, top, midplane]), directions, [120, 120, 100])
+        universe, headgroups = build_lipids(np.concatenate([heads, midplane]), np.concatenate([directions, [[1, 0, 0]]]),
+            [120, 120, 100])
         membrane_map = find_leaflets(universe, headgroups)
         assert membrane_map['n_mems'] == 1
         membrane = membrane_map['mems']['0']
         assert membrane['type'] == BILAYER
         assert membrane['polar_atoms'][MIDPLANE] == headgroups[-1:].indices.tolist()
-        assert [len(membrane['polar_atoms'][name]) for name in ['top', 'bot']] == [len(grid), len(grid)]
+        assert [len(membrane['polar_atoms'][name]) for name in ['top', 'bot']] == [n_leaflet, n_leaflet]
         assert membrane_map['no_mem_lipid'] == []
 
     def test_vesicle_midplane(self):
@@ -400,11 +408,7 @@ class TestAggregateClassification:
         assert len(membrane['polar_atoms']['inner']) == len(inner)
 
     def test_bilayer(self):
-        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
-        bot = np.column_stack([grid, np.full(len(grid), -20)])
-        top = np.column_stack([grid, np.full(len(grid), 20)])
-        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1))])
-        universe, headgroups = build_lipids(np.concatenate([bot, top]), directions, [120, 120, 100])
+        universe, headgroups = build_lipids(*flat_bilayer(-20, 20), [120, 120, 100])
         membrane_map = find_leaflets(universe, headgroups)
         assert membrane_map['n_mems'] == 1
         membrane = membrane_map['mems']['0']
@@ -428,17 +432,13 @@ class TestAggregateClassification:
         """Leaflets 40 Å apart in a 70 Å high box are 30 Å apart back to back through the box boundary.
         The leaflets facing each other must be paired, also when the bilayer crosses the box boundary.
         """
-        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
-        bot = np.column_stack([grid, np.full(len(grid), -20)])
-        top = np.column_stack([grid, np.full(len(grid), 20)])
-        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1))])
-        universe, headgroups = build_lipids(np.concatenate([bot, top]), directions, [120, 120, 70])
+        universe, headgroups = build_lipids(*flat_bilayer(-20, 20), [120, 120, 70])
         shift_and_wrap(universe, [0, 0, shift])
         membrane_map = find_leaflets(universe, headgroups)
         assert membrane_map['n_mems'] == 1
         membrane = membrane_map['mems']['0']
         assert membrane['type'] == BILAYER
-        assert set(membrane['polar_atoms']['top']) == set(headgroups[len(grid):].indices)
+        assert set(membrane['polar_atoms']['top']) == set(headgroups[len(headgroups) // 2:].indices)
 
     def test_vesicle_across_box_boundary(self):
         """A vesicle split by the box boundary is a single vesicle."""
@@ -511,21 +511,20 @@ class TestAggregateClassification:
         """A micelle touching a bilayer with its headgroups (e.g. a lipid nanoparticle) is not merged into the bilayer,
         since their tails are in different hydrophobic cores, even if their polar atoms are neighbours.
         """
-        grid = np.array([[x, y] for x in np.arange(-96, 100, 8) for y in np.arange(-96, 100, 8)], dtype=float)
-        bot = np.column_stack([grid, np.full(len(grid), -17)])
-        top = np.column_stack([grid, np.full(len(grid), 17)])
+        bilayer_heads, bilayer_directions = flat_bilayer(-17, 17, half_width=96)
+        n_leaflet = len(bilayer_heads) // 2
         # The micelle polar atoms are 6 Å away from the top leaflet ones
         center = np.array([0, 0, 17 + 6 + 20])
         micelle = sphere_points(20)
-        heads = np.concatenate([bot, top, micelle + center])
-        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1)), -micelle])
+        heads = np.concatenate([bilayer_heads, micelle + center])
+        directions = np.concatenate([bilayer_directions, -micelle])
         universe, headgroups = build_lipids(heads, directions, [200, 200, 200])
         tails = universe.select_atoms('name C1 C2')
         # Tail beads of a leaflet are 8 Å apart and the ones of both leaflets 6 Å apart
         membrane_map = find_leaflets(universe, headgroups, tails, core_distance=10)
         assert [mem['type'] for mem in membrane_map['mems'].values()] == [BILAYER, MICELLE]
         bilayer, micelle_map = membrane_map['mems']['0'], membrane_map['mems']['1']
-        assert [len(bilayer['polar_atoms'][name]) for name in ['top', 'bot']] == [len(grid), len(grid)]
+        assert [len(bilayer['polar_atoms'][name]) for name in ['top', 'bot']] == [n_leaflet, n_leaflet]
         assert len(micelle_map['polar_atoms']['outer']) == len(micelle)
         assert membrane_map['no_mem_lipid'] == []
 
@@ -549,13 +548,10 @@ class TestAggregateClassification:
 
     def test_bilayers_first(self):
         """Bilayers are the first membranes, since clients expect the first membrane to have top and bottom leaflets."""
-        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
-        bot = np.column_stack([grid, np.full(len(grid), -120)])
-        top = np.column_stack([grid, np.full(len(grid), -80)])
+        bilayer_heads, bilayer_directions = flat_bilayer(-120, -80)
         outer, inner = sphere_points(75) + [0, 0, 60], sphere_points(45) + [0, 0, 60]
-        heads = np.concatenate([bot, top, outer, inner])
-        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1)),
-            -(outer - [0, 0, 60]), inner - [0, 0, 60]])
+        heads = np.concatenate([bilayer_heads, outer, inner])
+        directions = np.concatenate([bilayer_directions, -(outer - [0, 0, 60]), inner - [0, 0, 60]])
         universe, headgroups = build_lipids(heads, directions, [300, 300, 300])
         membrane_map = find_leaflets(universe, headgroups)
         assert [mem['type'] for mem in membrane_map['mems'].values()] == [BILAYER, VESICLE]
@@ -587,15 +583,13 @@ class TestLipidOrder:
     def system(self, monkeypatch):
         """Set a bilayer and a micelle and record the lipids and selections sent to the order parameter calculations."""
         import mddb_workflow.analyses.lipid_order as lipid_order
-        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
-        bot = np.column_stack([grid, np.full(len(grid), -80)])
-        top = np.column_stack([grid, np.full(len(grid), -40)])
+        bilayer_heads, bilayer_directions = flat_bilayer(-80, -40)
         micelle = sphere_points(20) + [0, 0, 60]
-        heads = np.concatenate([bot, top, micelle])
-        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1)), -(micelle - [0, 0, 60])])
+        heads = np.concatenate([bilayer_heads, micelle])
+        directions = np.concatenate([bilayer_directions, -(micelle - [0, 0, 60])])
         self.universe, headgroups = build_lipids(heads, directions, [300, 300, 300])
         self.membrane_map = find_leaflets(self.universe, headgroups)
-        self.bilayer_residues = list(range(2 * len(grid)))
+        self.bilayer_residues = list(range(len(bilayer_heads)))
         self.inchikey_map = [{'generated_inchikey': 'LIPID', 'is_lipid': True, 'residue_indices': list(range(len(heads)))}]
         self.calls = []
         self.cg_lipids = []
