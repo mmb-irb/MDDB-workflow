@@ -122,6 +122,7 @@ class TestCoarseGrainClassification:
             ('M', 'BENZ', 'R1 R2 R3'),
             ('M', 'W', 'W'),
             # Nucleic residue names used for both DNA and RNA, in chains with RNA, DNA and no other names
+            # The last one stays nucleic since the structure has both DNA and RNA names
             ('R', 'A', 'BB BB1 BB2 SC1 SC2 SC3 SC4'),
             ('R', 'U', 'BB BB1 BB2 SC1 SC2 SC3'),
             ('D', 'DT', 'BB1 BB2 BB3 SC1 SC2 SC3 SC4'),
@@ -132,6 +133,19 @@ class TestCoarseGrainClassification:
     def test_classification(self, structure: 'Structure'):
         assert [residue.classification for residue in structure.residues] == \
             ['fatty', 'steroid', 'unknown', 'solvent', 'rna', 'rna', 'dna', 'dna', 'nucleic']
+
+    @pytest.mark.parametrize('specific_name, classification', [('U', 'rna'), ('DT', 'dna')])
+    def test_nucleic_classification_by_structure(self, specific_name: str, classification: str):
+        """Nucleic residue names used for both DNA and RNA, in chains split from their strand with no other names,
+        are classified by the names of the whole structure (e.g. coarse grained siRNA strands whose chains were assigned again).
+        """
+        structure = cg_structure([
+            ('A', specific_name, 'BB BB1 BB2 SC1 SC2 SC3'),
+            ('B', 'C', 'BB BB1 BB2 SC1 SC2 SC3'),
+            ('C', 'G', 'BB BB1 BB2 SC1 SC2 SC3 SC4'),
+            ('C', 'A', 'BB BB1 BB2 SC1 SC2 SC3 SC4'),
+        ])
+        assert [residue.classification for residue in structure.residues] == [classification] * 4
 
     def test_lipids(self, structure: 'Structure'):
         assert [structure.residues[index].name for index in structure.get_selection_residue_indices(structure.select_lipids())] == \

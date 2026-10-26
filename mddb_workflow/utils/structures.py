@@ -788,7 +788,7 @@ class Residue:
         if self.name in RNA_RESIDUE_NAME_LETTERS:
             return 'rna'
         if self.name in NUCLEIC_RESIDUE_NAME_LETTERS:
-            return self.get_nucleic_classification_by_chain()
+            return self.get_nucleic_classification()
         if self.name in FATTY_RESIDUE_NAMES:
             return 'fatty'
         if self.name in STEROID_RESIDUE_NAMES:
@@ -803,17 +803,19 @@ class Residue:
         # If we do not know what it is
         return 'unknown'
 
-    def get_nucleic_classification_by_chain(self) -> str:
+    def get_nucleic_classification(self) -> str:
         """Classify a nucleic residue whose name is used for both DNA and RNA (e.g. A, C, G) by the names of the other
-        residues in its chain: it is DNA or RNA if they have only DNA or only RNA names, and 'nucleic' otherwise.
+        residues in its chain: it is DNA or RNA if they have only DNA or only RNA names.
+        Strands may be split in several chains, some of them with no DNA or RNA names (e.g. coarse grained strands
+        whose chains were assigned again), so then the residue is classified by the names of the whole structure.
+        It is 'nucleic' if they have both DNA and RNA names or none.
         """
-        chain = self.chain
-        if not chain: return 'nucleic'
-        names = set(residue.name for residue in chain.residues)
-        has_dna = any(name in DNA_RESIDUE_NAME_LETTERS for name in names)
-        has_rna = any(name in RNA_RESIDUE_NAME_LETTERS for name in names)
-        if has_dna == has_rna: return 'nucleic'
-        return 'dna' if has_dna else 'rna'
+        if self.chain:
+            classification = get_nucleic_classification_by_names(set(residue.name for residue in self.chain.residues))
+            if classification != 'nucleic': return classification
+        if self.structure:
+            return get_nucleic_classification_by_names(set(residue.name for residue in self.structure.residues))
+        return 'nucleic'
 
     # The residue biochemistry classification (read only)
     classification = property(get_classification, None, None)
@@ -3430,6 +3432,14 @@ def get_next_letter(letter: str) -> Optional[str]:
     if letter == 'z' or letter == 'Z': return None
     next_letter = chr(ord(letter) + 1)
     return next_letter
+
+
+def get_nucleic_classification_by_names(residue_names: set[str]) -> str:
+    """Get 'dna' or 'rna' if the residue names include only DNA or only RNA names, and 'nucleic' otherwise."""
+    has_dna = any(name in DNA_RESIDUE_NAME_LETTERS for name in residue_names)
+    has_rna = any(name in RNA_RESIDUE_NAME_LETTERS for name in residue_names)
+    if has_dna == has_rna: return 'nucleic'
+    return 'dna' if has_dna else 'rna'
 
 
 def first_cap_only(name: str) -> str:
