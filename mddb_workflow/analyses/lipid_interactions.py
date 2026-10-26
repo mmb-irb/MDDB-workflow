@@ -1,7 +1,8 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
 from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPID_INTERACTIONS_ANALYSIS_VERSION
-from mddb_workflow.utils.mda_spells import get_head_tail_split, get_cg_head_tail_split, get_all_acyl_chains
+from mddb_workflow.utils.mda_spells import get_head_tail_split, get_all_acyl_chains
+from mddb_workflow.tools.cg_lipids import coarse_grain_head_tail_split
 from mddb_workflow.utils.type_hints import *
 import numpy as np
 import multiprocessing
@@ -241,7 +242,7 @@ def cg_lipid_interactions(universe, lipid_group, iterator):
     tail_indices = {}  # lipid_residx -> frozenset of acyl-chain atom indices
     lipid_resindex_to_resname = {}
     for residue in lipid_group.residues:
-        head_ag, tail_ag = get_cg_head_tail_split(residue)
+        head_ag, tail_ag = coarse_grain_head_tail_split(residue)
         head_indices[residue.resindex] = frozenset(head_ag.indices.tolist())
         tail_indices[residue.resindex] = frozenset(tail_ag.indices.tolist())
         lipid_resindex_to_resname[residue.resindex] = residue.resname

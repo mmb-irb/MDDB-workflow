@@ -1,7 +1,8 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
 from mddb_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
-from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names, get_cg_acyl_chains
+from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names
+from mddb_workflow.tools.cg_lipids import coarse_grain_tail_chains
 from mddb_workflow.tools.membrane_mapping import get_bilayers, MIDPLANE
 from mddb_workflow.utils.type_hints import *
 import numpy as np
@@ -140,8 +141,8 @@ def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     YAML output into the same format as the all-atom lipid_order output:
         { inchikey: { "0": { atoms: [...], avg: [...], std: [...] }, ... } }
 
-    Each chain is identified by the trailing letter of the CG bead name
-    (e.g. C1A, C2A → chain 'A'; C1B, C2B → chain 'B').
+    Chains are the tail beads of every chain by the CG bead name conventions (see coarse_grain_tail_chains),
+    e.g. C1A, C2A → chain 'A'; C1B, C2B → chain 'B'.
     """
     yaml_out = os.path.join(output_directory, 'lorder.yaml')
     analysis = gorder.Analysis(
@@ -164,7 +165,7 @@ def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     # Build tails from universe: resname -> list of ordered bead-name lists (one per chain)
     tails: dict[str, list[list[str]]] = {}
     for residue in lipids:
-        tails[residue.resname] = get_cg_acyl_chains(residue)
+        tails[residue.resname] = coarse_grain_tail_chains(residue.atoms.names)
 
     # Pattern for extracting bead name from gorder bond labels
     _tail_bond_re = re.compile(r'^[A-Z0-9]+\s+\w+\s+\(\d+\)\s+-\s+[A-Z0-9]+\s+(C\d+[A-Z])\s+\(\d+\)')

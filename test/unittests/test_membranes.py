@@ -254,7 +254,7 @@ class TestAggregateClassification:
     @pytest.mark.parametrize('resname', CG_LIPIDS)
     def test_coarse_grain_lipid(self, resname):
         """Martini lipids are recognised by their bead names, and their head bead is not a tail bead."""
-        from mddb_workflow.tools.membrane_mapping import coarse_grain_lipid_tails, coarse_grain_head
+        from mddb_workflow.tools.cg_lipids import coarse_grain_lipid_tails, coarse_grain_head
         beads, head = CG_LIPIDS[resname]
         names = beads.split()
         tails = coarse_grain_lipid_tails(names)
@@ -265,12 +265,12 @@ class TestAggregateClassification:
     @pytest.mark.parametrize('resname', CG_NOT_LIPIDS)
     def test_coarse_grain_not_lipid(self, resname):
         """Martini molecules which are not lipids, some with tail-like bead names."""
-        from mddb_workflow.tools.membrane_mapping import coarse_grain_lipid_tails
+        from mddb_workflow.tools.cg_lipids import coarse_grain_lipid_tails
         assert coarse_grain_lipid_tails(CG_NOT_LIPIDS[resname].split()) is None
 
     def test_coarse_grain_lipids_by_bead_names(self):
         """Coarse grained lipids with unknown residue names are found by their bead names, other residues are not."""
-        from mddb_workflow.tools.membrane_mapping import coarse_grain_lipids
+        from mddb_workflow.tools.cg_lipids import coarse_grain_lipids
         residues = [('XPC', CG_LIPIDS['POPC'][0]), ('XPC', CG_LIPIDS['POPC'][0]), ('A', CG_NOT_LIPIDS['A'])]
         names = [name for _, beads in residues for name in beads.split()]
         resindices = [i for i, (_, beads) in enumerate(residues) for _ in beads.split()]
@@ -281,6 +281,36 @@ class TestAggregateClassification:
         assert headgroups.names.tolist() == ['PO4', 'PO4']
         assert headgroups.resindices.tolist() == [0, 1]
         assert len(tails) == 16
+
+    @pytest.mark.parametrize('resname, chains', [
+        ('POPC', [['C1A', 'D2A', 'C3A', 'C4A'], ['C1B', 'C2B', 'C3B', 'C4B']]),
+        # Cardiolipin: the two chains of each acyl group
+        ('TOCL', [['C1A1', 'D2A1', 'C3A1', 'C4A1'], ['C1A2', 'D2A2', 'C3A2', 'C4A2'],
+                  ['C1B1', 'D2B1', 'C3B1', 'C4B1'], ['C1B2', 'D2B2', 'C3B2', 'C4B2']]),
+        # Sterol rings are not chains
+        ('CHOL', []),
+    ])
+    def test_coarse_grain_tail_chains(self, resname, chains):
+        """Tail beads of coarse grained lipids by chain, for the lipid order."""
+        from mddb_workflow.tools.cg_lipids import coarse_grain_tail_chains
+        assert coarse_grain_tail_chains(CG_LIPIDS[resname][0].split()) == chains
+
+    @pytest.mark.parametrize('beads, tails', [
+        # Beads of unsaturated tails (D2A) are tail beads too
+        (CG_LIPIDS['POPC'][0], 'C1A D2A C3A C4A C1B C2B C3B C4B'),
+        (CG_LIPIDS['CHOL'][0], 'R1 R2 R3 R4 R5 R6 C1 C2'),
+        # Lyso-PC with a single tail bead, a lipid only by its residue name
+        ('NC3 PO4 GL1 GL2 C1B', 'C1B'),
+    ])
+    def test_coarse_grain_head_tail_split(self, beads, tails):
+        """Head and tail beads of coarse grained lipids, for the lipid interactions."""
+        from mddb_workflow.tools.cg_lipids import coarse_grain_head_tail_split
+        names = beads.split()
+        universe = mda.Universe.empty(len(names), n_residues=1, atom_resindex=[0] * len(names), trajectory=True)
+        universe.add_TopologyAttr('names', names)
+        head, tail = coarse_grain_head_tail_split(universe.residues[0])
+        assert tail.names.tolist() == tails.split()
+        assert len(head) + len(tail) == len(names)
 
     def test_micelle(self):
         heads = sphere_points(20)
