@@ -329,8 +329,8 @@ class TestAggregateClassification:
         # Contact queries come after the neighbour searches of polar atoms
         assert queried_atoms[-3:] == [3 * len(shell), 3, 3]
 
-    def test_midplane_lipid_stays_unassigned(self):
-        """A lipid in the bilayer midplane touching both leaflets alike is not assigned to any of them."""
+    def test_bilayer_midplane(self):
+        """A lipid in the bilayer midplane touching both leaflets alike is added to its midplane leaflet."""
         grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
         bot = np.column_stack([grid, np.full(len(grid), -19)])
         top = np.column_stack([grid, np.full(len(grid), 19)])
@@ -339,8 +339,11 @@ class TestAggregateClassification:
         universe, headgroups = build_lipids(np.concatenate([bot, top, midplane]), directions, [120, 120, 100])
         membrane_map = find_leaflets(universe, headgroups)
         assert membrane_map['n_mems'] == 1
-        assert membrane_map['mems']['0']['type'] == BILAYER
-        assert len(membrane_map['no_mem_lipid']) == 3  # The 3 beads of the midplane lipid
+        membrane = membrane_map['mems']['0']
+        assert membrane['type'] == BILAYER
+        assert membrane['polar_atoms'][MIDPLANE] == headgroups[-1:].indices.tolist()
+        assert [len(membrane['polar_atoms'][name]) for name in ['top', 'bot']] == [len(grid), len(grid)]
+        assert membrane_map['no_mem_lipid'] == []
 
     def test_vesicle_midplane(self):
         """A lipid between both leaflets of a vesicle touching them alike is added to its midplane leaflet."""
@@ -577,6 +580,15 @@ class TestLipidOrder:
         self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
         assert len(self.calls) == 1
         assert [lipid['residue_indices'] for lipid in self.calls[0]] == [self.bilayer_residues]
+
+    def test_midplane_lipids_skipped(self):
+        """Lipids of the bilayer midplane are not oriented along the bilayer normal, so they are not analyzed."""
+        bilayer = self.membrane_map['mems']['0']
+        midplane_residue = self.universe.atoms[bilayer['leaflets']['top']].residues[0]
+        bilayer['leaflets']['top'] = [atom for atom in bilayer['leaflets']['top'] if atom not in midplane_residue.atoms.indices]
+        bilayer['leaflets'][MIDPLANE] = midplane_residue.atoms.indices.tolist()
+        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
+        assert [lipid['residue_indices'] for lipid in self.calls[0]] == [[r for r in self.bilayer_residues if r != midplane_residue.resindex]]
 
     def test_coarse_grain_bilayer_lipids(self):
         import types

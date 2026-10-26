@@ -15,7 +15,7 @@ VESICLE = 'vesicle'
 MICELLE = 'micelle'
 # Order of the aggregate types in the membrane mapping, bilayers first since clients expect top and bottom leaflets
 AGGREGATE_TYPES = [BILAYER, VESICLE, MICELLE]
-# Leaflet of vesicles for lipids between the outer and the inner leaflets
+# Leaflet of bilayers and vesicles for lipids between both leaflets (e.g. flip-flopping cholesterol)
 MIDPLANE = 'midplane'
 # Minimum number of lipids in a leaflet, 24 lipids like in FATSLiM
 MIN_LEAFLET_LIPIDS = 24
@@ -82,9 +82,9 @@ def generate_membrane_mapping(
         dict: A dictionary containing the membrane mapping.
             - n_mems (int): Number of amphiphilic aggregates (membranes) detected.
             - mems (dict): Dictionary where each key is a membrane index (str), bilayers first, and value contains:
-              - type (str): Aggregate type: 'bilayer' (flat), 'vesicle' or 'micelle'.
-              - leaflets (dict): Atom indices of each leaflet. Leaflet names are 'top' and 'bot' for bilayers,
-                'outer', 'inner' and 'midplane' (lipids between both) for vesicles and 'outer' for micelles.
+              - type (str): Aggregate type: 'bilayer' (flat or undulating), 'vesicle' or 'micelle'.
+              - leaflets (dict): Atom indices of each leaflet. Leaflet names are 'top', 'bot' and 'midplane' (lipids
+                between both) for bilayers, 'outer', 'inner' and 'midplane' for vesicles and 'outer' for micelles.
               - polar_atoms (dict): Polar atom indices (one per lipid) of each leaflet, with the same names.
             - no_mem_lipid (list): List of atom indices for lipids not assigned to any membrane.
             - version (str): Version of the membrane mapping format.
@@ -530,7 +530,8 @@ def classify_leaflets(descriptions: list[dict], box: np.ndarray | None) -> tuple
         used.update([id(first), id(best)])
         # The top leaflet is the one further along the normal
         top, bot = (best, first) if np.dot(best_separation, first['normal']) > 0 else (first, best)
-        aggregates.append((BILAYER, {'top': top['group'], 'bot': bot['group']}))
+        empty = top['group'].universe.atoms[[]]
+        aggregates.append((BILAYER, {'top': top['group'], 'bot': bot['group'], MIDPLANE: empty}))
 
     return aggregates, [desc for desc in descriptions if id(desc) not in used]
 
@@ -638,8 +639,8 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
     Lipids out of leaflets (e.g. lipids at the edge of a fusion stalk) are added to a leaflet
     when they have clearly more atom contacts with it than with any other leaflet. It is repeated until no more
     lipids are added, so lipids only touching other added lipids (e.g. sterol clusters) are also added.
-    Lipids in contact with both leaflets of a vesicle alike (e.g. cholesterol between leaflets) are added to its
-    midplane leaflet. Lipids in contact with several leaflets of different aggregates or with none remain unassigned.
+    Lipids in contact with both leaflets of a bilayer or vesicle alike (e.g. cholesterol between leaflets) are added to
+    its midplane leaflet. Lipids in contact with several leaflets of different aggregates or with none remain unassigned.
     Leaflet groups are updated in place and the residue indices of lipids which remain unassigned are returned.
     """
     if len(aggregates) == 0 or len(lipid_resindices) == 0: return lipid_resindices
@@ -673,9 +674,9 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
         first_contacts = np.take_along_axis(contacts, ranking[:, :1], axis=1)[:, 0]
         second_contacts = np.take_along_axis(contacts, ranking[:, 1:2], axis=1)[:, 0]
         dominant = first_contacts >= CONTACT_DOMINANCE * second_contacts
-        # Lipids touching two leaflets of the same vesicle alike are in its midplane
-        same_vesicle = (midplanes[first] == midplanes[second]) & (midplanes[first] >= 0)
-        targets = np.where(dominant, first, np.where(same_vesicle, midplanes[first], -1))
+        # Lipids touching two leaflets of the same bilayer or vesicle alike are in its midplane
+        same_aggregate = (midplanes[first] == midplanes[second]) & (midplanes[first] >= 0)
+        targets = np.where(dominant, first, np.where(same_aggregate, midplanes[first], -1))
         targets[first_contacts == 0] = -1
         added = targets >= 0
         for leaflet_index in np.unique(targets[added]):
@@ -699,7 +700,7 @@ def get_bilayers(membrane_map: dict | None) -> list[dict]:
 
 
 def display_membrane_mapping(mem_map: str, pdb: str, mem: str = '0'):
-    """Display the leaflets of a membrane from the membrane mapping using nglview, including the vesicle midplane."""
+    """Display the leaflets of a membrane from the membrane mapping using nglview, including the midplane."""
     try:
         import nglview as nv  # type: ignore
     except ImportError:

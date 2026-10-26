@@ -2,7 +2,7 @@ from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
 from mddb_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names, get_cg_acyl_chains
-from mddb_workflow.tools.membrane_mapping import get_bilayers
+from mddb_workflow.tools.membrane_mapping import get_bilayers, MIDPLANE
 from mddb_workflow.utils.type_hints import *
 import numpy as np
 import MDAnalysis
@@ -29,6 +29,7 @@ def lipid_order(
 
     Notes:
     - Only lipids of flat bilayers are analyzed, since the z-axis is not their normal in vesicles or micelles.
+    - Lipids of the bilayer midplane (e.g. flip-flopping cholesterol) are not analyzed.
     - For non-cholesterol lipids, analyzes all acyl chains separately.
     - For cholesterol, uses carbon atoms bonded to hydrogen.
     - The order parameter is calculated for each carbon atom in the chains.
@@ -38,7 +39,8 @@ def lipid_order(
     if len(bilayers) == 0:
         print('-> No bilayers found, skipping lipid order analysis')
         return
-    bilayer_atoms = np.unique([atom for mem in bilayers for atoms in mem['leaflets'].values() for atom in atoms])
+    # Lipids of the midplane (e.g. flip-flopping cholesterol) are not oriented along the bilayer normal
+    bilayer_atoms = np.unique([atom for mem in bilayers for name, atoms in mem['leaflets'].items() if name != MIDPLANE for atom in atoms])
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     # Choose the method according to the type of lipids present
     if len(cg_residues) > 0:
