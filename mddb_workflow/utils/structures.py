@@ -24,6 +24,7 @@ from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_
 from mddb_workflow.utils.constants import DNA_RESIDUE_NAME_LETTERS, RNA_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import FATTY_RESIDUE_NAMES, STEROID_RESIDUE_NAMES
 from mddb_workflow.utils.constants import AVAILABLE_CAPS, AVAILABLE_LOWS, AVAILABLE_LETTERS
+from mddb_workflow.tools.cg_lipids import coarse_grain_lipid_classification
 from mddb_workflow.utils.type_hints import *
 
 
@@ -778,6 +779,7 @@ class Residue:
         This is useful for corase grain residues whose atoms may not reflect the real atoms.
         WARNING: This logic is very limited and will return "unknown" most of the times.
         WARNING: This logic relies mostly in atom names, which may be not standard.
+        Coarse grained lipids with unknown residue names are recognised by their bead names (see cg_lipids).
         """
         if self.name in PROTEIN_RESIDUE_NAME_LETTERS:
             return 'protein'
@@ -795,6 +797,9 @@ class Residue:
             return 'ion'
         if self.name in STANDARD_SOLVENT_RESIDUE_NAMES:
             return 'solvent'
+        if self.is_cg():
+            lipid_classification = coarse_grain_lipid_classification(tuple(atom.name for atom in self.atoms))
+            if lipid_classification: return lipid_classification
         # If we do not know what it is
         return 'unknown'
 

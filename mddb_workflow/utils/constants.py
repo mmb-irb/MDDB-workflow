@@ -585,7 +585,9 @@ STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4', 'W'
 STANDARD_COUNTER_CATION_ATOM_NAMES = {'K', 'NA', 'SOD', 'POT'}
 STANDARD_COUNTER_ANION_ATOM_NAMES = {'CL', 'CLA'}
 STANDARD_COUNTER_ION_ATOM_NAMES = STANDARD_COUNTER_CATION_ATOM_NAMES.union(STANDARD_COUNTER_ANION_ATOM_NAMES)
-STANDARD_DUMMY_ATOM_NAMES = {'MW', 'LP1', 'DM*', 'EPW'}
+# Regular expressions matched at the start of atom names (re.match), so 'DM' matches DM1, DM2...
+# WARNING: 'DM*' would match any name starting with D (e.g. the D2A beads of Martini unsaturated tails)
+STANDARD_DUMMY_ATOM_NAMES = {'MW', 'LP1', 'DM', 'EPW'}
 DUMMY_ATOM_ELEMENT = 'Dm'
 CG_ATOM_ELEMENT = 'Cg'
 

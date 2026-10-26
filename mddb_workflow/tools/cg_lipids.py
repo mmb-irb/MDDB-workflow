@@ -6,6 +6,7 @@ force fields in test/benchmarks/cg_lipid_naming.
 """
 import re
 import numpy as np
+from functools import lru_cache
 from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
 from mddb_workflow.utils.type_hints import *
 
@@ -99,6 +100,17 @@ def coarse_grain_lipid_tails(names: list[str]) -> Optional[np.ndarray]:
     if len(numbers) >= 3 and min(numbers) == 1 and CG_SINGLE_TAIL_HEADS & set(names) and not rings.any() and 'BB' not in names:
         return singles
     return None
+
+
+@lru_cache(maxsize=None)
+def coarse_grain_lipid_classification(names: tuple[str]) -> Optional[str]:
+    """Get the residue classification of a coarse grained lipid from its bead names (see coarse_grain_lipid_tails):
+    'steroid' for sterols (with an ROH or R0 head bead and ring beads), 'fatty' for other lipids, or None if it is not
+    a lipid. Bead names must be a tuple, since results are cached.
+    """
+    if coarse_grain_lipid_tails(names) is None: return None
+    rings = sum(1 for name in names if CG_RING_BEAD.match(name) and name not in CG_STEROL_HEADS)
+    return 'steroid' if any(head in names for head in CG_STEROL_HEADS) and rings >= 3 else 'fatty'
 
 
 def coarse_grain_head(names: list[str], tails: Optional[np.ndarray]) -> int:

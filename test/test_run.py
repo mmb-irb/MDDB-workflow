@@ -33,10 +33,10 @@ class TestRunAll(TestBase):
     - A01IP: for membrane analyses
     - A025N: for only ligand
     - A02F9: only lipids
-
+    - A05T5: coarse-grained system
     """
 
-    @pytest.fixture(scope='class', params=['A0001', 'A01IP', 'A025N', 'A02F9'])
+    @pytest.fixture(scope='class', params=['A0001', 'A01IP', 'A025N', 'A02F9', 'A05T5'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -65,7 +65,8 @@ class TestRunAll(TestBase):
                 'A0001': ['protein', 'protein only', 'monomer', 'all-atom (aa)'],
                 'A01IP': ['protein', 'ligand', 'lipid', 'carbohydrate', 'membrane', 'dimer', 'heterodimer', 'all-atom (aa)'],
                 'A025N': ['ligand', 'ligand only', 'all-atom (aa)'],
-                'A02F9': ['lipid', 'solvent', 'lipid only', 'membrane', 'all-atom (aa)']
+                'A02F9': ['lipid', 'solvent', 'lipid only', 'membrane', 'all-atom (aa)'],
+                'A05T5': ['rna', 'lipid', 'other', 'membrane', 'coarse grained (cg)']
             }
             assert metadata['SYSKEYS'] == syskeys[project.accession]
 
