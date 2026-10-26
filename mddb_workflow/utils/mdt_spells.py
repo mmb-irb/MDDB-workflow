@@ -453,12 +453,13 @@ def iterate_xtc_frames(xtc_filename : str):
     """Iterate the frames in a xtc file as (positions, box vectors), both in nm.
     Boxes are read as they are in the file, since MDtraj rebuilds box vectors with the first vector along the x axis.
     This would be wrong for fitted trajectories, where boxes are rotated (see image_and_fit).
+    Trajectories with no box give a box full of zeros, which means there are no periodic boundaries.
     """
     with mdt.formats.XTCTrajectoryFile(xtc_filename) as reader:
         while True:
             xyz, _, _, box = reader.read(n_frames=1)
             if len(xyz) == 0: return
-            yield xyz[0], box[0]
+            yield xyz[0], box[0] if box is not None else np.zeros((3, 3), dtype=np.float32)
 
 
 # Maximum value (nm) of box vector components which must be zero in a not rotated box
