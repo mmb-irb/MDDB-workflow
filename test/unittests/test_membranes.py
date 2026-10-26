@@ -645,6 +645,22 @@ class TestLipidOrder:
         assert self.calls == []
 
 
+def test_coarse_grain_order_parameters():
+    """Every tail bead gets the order parameter of the bond from the previous bead, unsaturated (D) beads too."""
+    from mddb_workflow.analyses.lipid_order import cg_order_parameters
+    bonds = ['NC3 (1) - POPC PO4 (2)', 'GL2 (4) - POPC C1A (5)', 'C1A (5) - POPC D2A (6)', 'D2A (6) - POPC C3A (7)',
+             'GL2 (4) - POPC C1B (9)', 'C1B (9) - POPC C2B (10)']
+    gorder_data = {
+        'average order': {'total': {'mean': 0.3}},
+        'POPC': {'order parameters': {f'POPC {bond}': {'total': {'mean': i / 10, 'error': 0.01}} for i, bond in enumerate(bonds)}},
+    }
+    tails = {'POPC': [['C1A', 'D2A', 'C3A', 'C4A'], ['C1B', 'C2B', 'C3B', 'C4B']]}
+    assert cg_order_parameters(gorder_data, tails) == {'POPC': {
+        '0': {'atoms': ['C1A', 'D2A', 'C3A'], 'avg': [0.1, 0.2, 0.3], 'std': [0.01] * 3},
+        '1': {'atoms': ['C1B', 'C2B'], 'avg': [0.4, 0.5], 'std': [0.01] * 2},
+    }}
+
+
 class TestLipidInteractions:
 
     def test_coarse_grain_lipids_from_membrane_map(self, monkeypatch):

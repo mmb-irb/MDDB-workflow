@@ -166,9 +166,17 @@ def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     tails: dict[str, list[list[str]]] = {}
     for residue in lipids:
         tails[residue.resname] = coarse_grain_tail_chains(residue.atoms.names)
+    return cg_order_parameters(gorder_data, tails)
 
-    # Pattern for extracting bead name from gorder bond labels
-    _tail_bond_re = re.compile(r'^[A-Z0-9]+\s+\w+\s+\(\d+\)\s+-\s+[A-Z0-9]+\s+(C\d+[A-Z])\s+\(\d+\)')
+
+def cg_order_parameters(gorder_data: dict, tails: dict[str, list[list[str]]]) -> dict:
+    """Get the order parameters of the tail beads of every chain from the gorder output of a coarse grained analysis.
+
+    The order parameter of a bead is the one of the bond from the previous bead, so the bead is the second one
+    in gorder bond labels (e.g. 'POPC C1A (5) - POPC D2A (6)'). Tails are the bead names of every chain by residue name.
+    """
+    # Pattern for extracting the second bead name from gorder bond labels
+    _tail_bond_re = re.compile(r'^\S+\s+\S+\s+\(\d+\)\s+-\s+\S+\s+(\S+)\s+\(\d+\)')
     order_parameters_dict = {}
     for resname, res_data in gorder_data.items():
         if resname in ('average order',):
