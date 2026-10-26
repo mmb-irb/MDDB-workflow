@@ -380,15 +380,36 @@ interactions:
 pbc_selection: auto
 
 # Set those atoms which are not actual "atoms" but coarse grained (CG) beads.
+# Atom selections are defined using `VMD selection language <https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html>`_.
+# Use the flag 'auto' to guess them from the force fields, atom names, atoms per residue and bond lengths.
 # IMPORTANT: EXPERIMENTAL INPUT
 
-cg_selection:
+cg_selection: auto
+
+# Set those atoms which belong to united atom (UA) residues, where carbons have their hydrogens absorbed (e.g. GROMOS, Berger lipids).
+# Note that polar hydrogens may be still present.
+# These residues are skipped where explicit hydrogens are needed (e.g. InChI keys).
+# Atom selections are defined using `VMD selection language <https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html>`_.
+# Use the flag 'auto' to guess them by looking for carbons with missing hydrogens.
+# IMPORTANT: EXPERIMENTAL INPUT
+
+ua_selection: auto
 
 # Set those atoms which are not real atoms but dummy atoms thus representing other entities.
 # These dummy atoms are used in some methodologies such as alchemical bonds
+# Atom selections are defined using `VMD selection language <https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html>`_.
+# Use the flag 'auto' to guess them by their atom names (e.g. MW, LP1, EPW and those starting with DM).
+# NEVER FORGET: We already tried to guess dummy atoms by looking at atoms with mass = 0
+# NEVER FORGET: However there are many exceptions where both hydrogens and heavy atoms have mass 0 and are not dummy.
 # IMPORTANT: EXPERIMENTAL INPUT
 
 dummy_selection: auto
+
+# Set those atoms which are treated with quantum mechanics (QM) in QM/MM simulations.
+# Atom selections are defined using `VMD selection language <https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html>`_.
+# IMPORTANT: This inputs is not yet implemented
+
+qm_selection:
 
 # Set forced molecule classifications (e.g. protein, nucleic, etc.)
 # This fields is particularly useful when dealing with systems where not even standard residue names are respected

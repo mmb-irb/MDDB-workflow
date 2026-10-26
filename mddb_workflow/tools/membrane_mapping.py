@@ -50,6 +50,7 @@ def generate_membrane_mapping(
     lipid_references: dict[str, dict],
     universe: 'Universe',
     cg_residues: list[int],
+    ua_residues: list[int],
     output_file: 'File',
     input_forced_lipids: Optional[list[str]] = None,
 ) -> dict:
@@ -61,6 +62,7 @@ def generate_membrane_mapping(
         structure_file: File object representing the structure file (e.g., PDB, GRO).
         universe: MDAnalysis Universe object containing the structure and topology.
         cg_residues: List of residue indices for coarse-grained residues.
+        ua_residues: List of residue indices for united atom residues.
         output_file: Output JSON file to save membrane mapping.
         input_forced_lipids: Residue names to be treated as lipids in coarse grained systems, in addition to the known
             ones and the ones found by bead names (all atom forced lipids are already in the lipid references).
@@ -85,8 +87,10 @@ def generate_membrane_mapping(
 
     """
     if not universe: raise RuntimeError('Missing universe')
-    if len(cg_residues) > 0:
-        headgroup_ag, tails = coarse_grain_lipids(universe, cg_residues, input_forced_lipids)
+    # Coarse grain and united atom residues have no InChI keys so lipids are found by their residue and bead names
+    if len(cg_residues) > 0 or len(ua_residues) > 0:
+        no_inchikey_residues = list(cg_residues) + list(ua_residues)
+        headgroup_ag, tails = coarse_grain_lipids(universe, no_inchikey_residues, input_forced_lipids)
         membrane_map = find_leaflets(universe, headgroup_ag, tails, CG_CORE_CONTACT_DISTANCE)
     else:
         # Select only the lipids from the InChIKeyData

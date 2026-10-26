@@ -16,7 +16,7 @@ from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
 from mddb_workflow.core.inputs import ProjectInputs
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE
+from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import warn, load_json
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import get_git_version, download_file
@@ -38,6 +38,7 @@ from mddb_workflow.utils.type_hints import *
 # Import local tools
 from mddb_workflow.tools.get_first_frame import get_first_frame
 from mddb_workflow.tools.get_bonds import find_safe_bonds, get_bonds_reference_frame
+from mddb_workflow.tools.guess_cg_selection import guess_cg_selection, guess_ua_selection
 from mddb_workflow.tools.process_interactions import process_interactions
 from mddb_workflow.tools.generate_metadata import prepare_project_metadata, generate_md_metadata
 from mddb_workflow.tools.chains import prepare_chain_references
@@ -197,6 +198,8 @@ class MD:
         self._pbc_residues = MISSING_VALUE
         self._cg_selection = MISSING_VALUE
         self._cg_residues = MISSING_VALUE
+        self._ua_selection = MISSING_VALUE
+        self._qm_selection = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
 
@@ -204,14 +207,8 @@ class MD:
         self._trajectory_integrity = MISSING_VALUE
         self._cross_periodic_contacts = MISSING_VALUE
 
-        # Set a new MD specific register
-        # In case the directory is the project directory itself, use the project register
-        register_filepath = self.pathify(REGISTER_FILENAME)
-        register_file = File(register_filepath)
-        if register_file.path == self.project.register.file.path:
-            self.register = self.project.register
-        else:
-            self.register = Register(register_file)
+        # The register is set the first time it is used (see get_register)
+        self._register = None
 
         # Set a new MD specific cache
         # In case the directory is the project directory itself, use the project cache
@@ -913,6 +910,8 @@ class MD:
     # However there would be no technical problem if they were different between MDs
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
+    input_ua_selection = property(input_getter('ua_selection'), None, None, "Selection of atoms in united atom residues, whose carbons have their hydrogens absorbed (read only)")
+    input_qm_selection = property(input_getter('qm_selection'), None, None, "Selection of atoms which are treated with quantum mechanics (read only)")
     input_dummy_selection = property(input_getter('dummy_selection'), None, None, "Selection of atoms which are not real atoms but dummy atoms (read only)")
     input_forced_class_selections = property(input_getter('forced_class_selections'), None, None, "Custom forced selections for molecular classification (read only)")
 
@@ -996,10 +995,11 @@ class MD:
         return self._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    # DANI: Esto algún día habría que tratar de automatizarlo
     # RUBEN: Mover a structure?
-    def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
-        """Set the coarse grain selection."""
+    def _set_cg_selection(self, reference_structure: 'Structure', trajectory_file: 'File', topology_file: Union['File', Exception], verbose: bool = False) -> 'Selection':
+        """Set the coarse grain selection.
+        Trajectory and topology files must match the reference structure, since they may be used to guess CG atoms.
+        """
         def parse_cg_selection() -> 'Selection':
             if verbose: print('Setting Coarse Grained (CG) atoms selection')
             # Get the input selection string
@@ -1008,6 +1008,13 @@ class MD:
             if not selection_string:
                 if verbose: print(' Empty selection -> There is no CG at all')
                 return Selection()
+            # If the input CG selection is the automatic flag then guess it
+            if selection_string == AUTOMATIC_FLAG:
+                if verbose: print(' Guessing CG atoms')
+                parsed_selection = guess_cg_selection(reference_structure, trajectory_file, topology_file,
+                    self.project.input_force_fields, verbose=verbose)
+                if verbose: print(f' Guessed CG selection has {len(parsed_selection)} atoms')
+                return parsed_selection
             # Otherwise, process it
             # If we have a valid input value then use it
             elif selection_string:
@@ -1046,7 +1053,7 @@ class MD:
         if self._cg_selection is not MISSING_VALUE:
             return self._cg_selection
         # Otherwise we must set the CG selection
-        self._set_cg_selection(self.structure)
+        self._set_cg_selection(self.structure, self.trajectory_file, self.topology_file)
         return self._cg_selection
     cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
@@ -1067,6 +1074,48 @@ class MD:
         return self._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
+    def get_ua_selection(self) -> 'Selection':
+        """Get the united atom selection."""
+        # If we already have a stored value then return it
+        if self._ua_selection is not MISSING_VALUE:
+            return self._ua_selection
+        print('Setting United Atom (UA) atoms selection')
+        selection_string = self.input_ua_selection
+        if not selection_string:
+            print(' Empty selection -> There is no UA at all')
+            self._ua_selection = Selection()
+        elif selection_string == AUTOMATIC_FLAG:
+            print(' Guessing UA atoms')
+            self._ua_selection = guess_ua_selection(self.structure, self.trajectory_file, self.cg_selection, verbose=True)
+        else:
+            print(f' Selecting UA atoms "{selection_string}"')
+            self._ua_selection = self.structure.select(selection_string)
+        print(f' UA selection has {len(self._ua_selection)} atoms')
+        return self._ua_selection
+    ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
+
+    def get_ua_residues(self) -> list[int]:
+        """Get indices of residues in united atom."""
+        return self.structure.get_selection_residue_indices(self.ua_selection)
+    ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
+
+    def get_qm_selection(self) -> 'Selection':
+        """Get the quantum mechanics atom selection."""
+        # If we already have a stored value then return it
+        if self._qm_selection is not MISSING_VALUE:
+            return self._qm_selection
+        print('Setting Quantum Mechanics (QM) atoms selection')
+        selection_string = self.input_qm_selection
+        if not selection_string:
+            print(' Empty selection -> There is no QM at all')
+            self._qm_selection = Selection()
+        else:
+            print(f' Selecting QM atoms "{selection_string}"')
+            self._qm_selection = self.structure.select(selection_string)
+        print(f' QM selection has {len(self._qm_selection)} atoms')
+        return self._qm_selection
+    qm_selection = property(get_qm_selection, None, None, "Quantum mechanics atom selection (read only)")
+
     # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
     # This function may be called for the first time while in the 'inpro' task
     # Thus this function is called when we still have no structure, but we us a provisional structure
@@ -1085,7 +1134,7 @@ class MD:
                 atom_indices = []
                 for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
                     for atom_index, atom in enumerate(reference_structure.atoms):
-                        if re.match(dummy_name, atom.name):
+                        if re.fullmatch(dummy_name, atom.name):
                             atom_indices.append(atom_index)
                 dummy_atoms_count = len(atom_indices)
                 if verbose:
@@ -1274,6 +1323,7 @@ class MD:
         self._trajectory_integrity = check_trajectory_integrity(
             input_structure_filename=self.structure_file.path,
             input_trajectory_filename=self.trajectory_file.path,
+            view_script_filename=self.pathify(TRAJECTORY_INTEGRITY_VIEW_FILENAME),
             structure=self.structure,
             pbc_selection=self.pbc_selection,
             mercy=self.project.mercy,
@@ -1295,7 +1345,9 @@ class MD:
             return self._cross_periodic_contacts
         # Otherwise we must find the value
         self._cross_periodic_contacts = check_cross_periodic_contacts(
+            input_structure_filename=self.structure_file.path,
             input_trajectory_filename=self.trajectory_file.path,
+            view_script_filename=self.pathify(CROSS_PBC_VIEW_FILENAME),
             structure=self.structure,
             pbc_selection=self.pbc_selection,
             mercy=self.project.mercy,
@@ -1423,6 +1475,22 @@ class MD:
         return self.register.warnings
     warnings = property(get_warnings, None, None, "MD warnings to be written in metadata")
 
+    def get_register(self) -> 'Register':
+        """Get the MD register.
+
+        It is not created on init since creating it writes a new entry in the register file.
+        This way commands which only read the project (e.g. 'mwf ds view') do not leave a trace.
+        """
+        if self._register is not None: return self._register
+        # In case the directory is the project directory itself, use the project register
+        register_file = File(self.pathify(REGISTER_FILENAME))
+        if register_file.path == self.project.register.file.path:
+            self._register = self.project.register
+        else:
+            self._register = Register(register_file)
+        return self._register
+    register = property(get_register, None, None, "Tracks MD workflow runs, test results and warnings")
+
 
 class Project:
     """Class for the main project of an MDDB accession.
@@ -1470,6 +1538,8 @@ class Project:
         filter_selection: bool | str = False,
         pbc_selection: Optional[str] = None,
         cg_selection: Optional[str] = None,
+        ua_selection: Optional[str] = None,
+        qm_selection: Optional[str] = None,
         dummy_selection: Optional[str] = None,
         forced_class_selections: Optional[dict] = None,
         image: bool = False,
@@ -1546,11 +1616,21 @@ class Project:
                 Selection passed through console overrides the one in inputs file.
             cg_selection (Optional[str]):
                 Selection of atoms which are not actual atoms but Coarse Grained beads.
+                Use 'auto' to guess them.
+                Selection passed through console overrides the one in inputs file.
+            ua_selection (Optional[str]):
+                Selection of atoms in united atom residues, whose carbons have their hydrogens absorbed.
+                Use 'auto' to guess them.
+                Selection passed through console overrides the one in inputs file.
+            qm_selection (Optional[str]):
+                Selection of atoms which are treated with quantum mechanics in QM/MM simulations.
                 Selection passed through console overrides the one in inputs file.
             dummy_selection (Optional[str]):
                 Selection of atoms which are not real atoms but dummy atoms.
+                Selection passed through console overrides the one in inputs file.
             forced_class_selections:
                 Custom forced selections for molecular classification.
+                Value passed through arguments overrides the one in inputs file.
             image (bool):
                 Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
                 Value passed through console overrides the one in inputs file.
@@ -1707,11 +1787,6 @@ class Project:
         self._topology_filepath = MISSING_VALUE
 
         # Set the rest of inputs
-        # PBC selection may come from the console or from the inputs
-        self._input_pbc_selection = pbc_selection
-        self._input_cg_selection = cg_selection
-        self._input_dummy_selection = dummy_selection
-        self._input_forced_class_selections = forced_class_selections
         self.pca_analysis_selection = pca_analysis_selection
         self.pca_fit_selection = pca_fit_selection
         self.rmsd_cutoff = rmsd_cutoff
@@ -1729,6 +1804,8 @@ class Project:
         self._pbc_residues = MISSING_VALUE
         self._cg_selection = MISSING_VALUE
         self._cg_residues = MISSING_VALUE
+        self._ua_selection = MISSING_VALUE
+        self._qm_selection = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
         self._topology_reader = MISSING_VALUE
@@ -1737,6 +1814,20 @@ class Project:
         self._transitions = MISSING_VALUE
         self._pdb_ids = MISSING_VALUE
         self._mds = MISSING_VALUE
+
+        # Selections passed through console override the ones in the inputs file
+        # Thus they are handled as forced inputs
+        forced_inputs = [ *(forced_inputs or []) ]
+        argument_inputs = {
+            'pbc_selection': pbc_selection,
+            'cg_selection': cg_selection,
+            'ua_selection': ua_selection,
+            'qm_selection': qm_selection,
+            'dummy_selection': dummy_selection,
+            'forced_class_selections': forced_class_selections,
+        }
+        for input_name, input_value in argument_inputs.items():
+            if input_value is not None: forced_inputs.append([input_name, input_value])
 
         # Input loading, validation, forced-value precedence, and defaults are
         # handled by ProjectInputs.  The loader callback preserves the
@@ -1801,7 +1892,8 @@ class Project:
         self.resorted_charges_file = File(self.pathify(RESORTED_CHARGES_FILENAME))
 
         # Register: useful to track previous workflow runs and problems
-        self.register = Register(File(self.pathify(REGISTER_FILENAME)))
+        # It is set the first time it is used (see get_register)
+        self._register = None
         self.cache = Cache(File(self.pathify(CACHE_FILENAME)))
 
         # Set tasks whose output is to be overwritten
@@ -2002,6 +2094,8 @@ class Project:
         # WARNING: Creating the inputs file mid run alters the order of things and it is not yet supported
         final_pbc_selection = self.pbc_selection.to_vmd() if self.pbc_selection else None
         final_cg_selection = self.cg_selection.to_vmd() if self.cg_selection else None
+        final_ua_selection = self.ua_selection.to_vmd() if self.ua_selection else None
+        final_qm_selection = self.qm_selection.to_vmd() if self.qm_selection else None
         final_dummy_selection = self.dummy_selection.to_vmd() if self.dummy_selection else None
         # Now start the actual autofilling process
         print('Automatically filling inputs file')
@@ -2014,6 +2108,8 @@ class Project:
         input_updates = self.inputs.autofill({
             'pbc_selection': final_pbc_selection,
             'cg_selection': final_cg_selection,
+            'ua_selection': final_ua_selection,
+            'qm_selection': final_qm_selection,
             'dummy_selection': final_dummy_selection,
         })
         # Fill the PBC selection
@@ -2024,6 +2120,14 @@ class Project:
         if input_updates['cg_selection']:
             # Update the value in tasks caches only if there was an actual update
             self.update_cache_inputs('input_cg_selection', final_cg_selection)
+        # Fill the UA selection
+        if input_updates['ua_selection']:
+            # Update the value in tasks caches only if there was an actual update
+            self.update_cache_inputs('input_ua_selection', final_ua_selection)
+        # Fill the QM selection
+        if input_updates['qm_selection']:
+            # Update the value in tasks caches only if there was an actual update
+            self.update_cache_inputs('input_qm_selection', final_qm_selection)
         # Fill the dummy atoms selection
         if input_updates['dummy_selection']:
             # Update the value in tasks caches only if there was an actual update
@@ -2071,6 +2175,8 @@ class Project:
     input_dataset = inputs_property('dataset_path', "Dataset storage file. (read only)")
     input_pbc_selection = inputs_property('pbc_selection', "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = inputs_property('cg_selection', "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
+    input_ua_selection = inputs_property('ua_selection', "Selection of atoms in united atom residues, whose carbons have their hydrogens absorbed (read only)")
+    input_qm_selection = inputs_property('qm_selection', "Selection of atoms which are treated with quantum mechanics (read only)")
     input_dummy_selection = inputs_property('dummy_selection', "The original user input dummy atoms selection (read only)")
     input_forced_class_selections = inputs_property('forced_class_selections', "The original input custom forced selections for molecular classification (read only)")
     input_chainer = inputs_property('chainer', "Chain letters to be forced in the processed structure as letter: selection pairs (read only)")
@@ -2119,6 +2225,37 @@ class Project:
         print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
         return self._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
+    def get_ua_selection(self) -> 'Selection':
+        """Get the united atom selection. Make sure it is coherent among all MDs."""
+        # If we already have a stored value then return it
+        if self._ua_selection is not MISSING_VALUE:
+            return self._ua_selection
+        # Make sure it is coherent among all MDs
+        unique_md_selections = set([md.ua_selection for md in self.mds if md is not REMOVED_MD])
+        if len(unique_md_selections) > 1:
+            raise InputError('United atom selection is not coherent among MDs. Please change the input value.')
+        self._ua_selection = self.reference_md.ua_selection
+        return self._ua_selection
+    ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
+
+    def get_ua_residues(self) -> list[int]:
+        """Get indices of residues in united atom."""
+        return self.structure.get_selection_residue_indices(self.ua_selection)
+    ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
+
+    def get_qm_selection(self) -> 'Selection':
+        """Get the quantum mechanics atom selection. Make sure it is coherent among all MDs."""
+        # If we already have a stored value then return it
+        if self._qm_selection is not MISSING_VALUE:
+            return self._qm_selection
+        # Make sure it is coherent among all MDs
+        unique_md_selections = set([md.qm_selection for md in self.mds if md is not REMOVED_MD])
+        if len(unique_md_selections) > 1:
+            raise InputError('Quantum mechanics selection is not coherent among MDs. Please change the input value.')
+        self._qm_selection = self.reference_md.qm_selection
+        return self._qm_selection
+    qm_selection = property(get_qm_selection, None, None, "Quantum mechanics atom selection (read only)")
 
     def get_pbc_selection(self) -> 'Selection':
         """Get the periodic boundary conditions atom selection. Make sure it is coherent among all MDs."""
@@ -2255,9 +2392,12 @@ class Project:
             # Compare other structure properties
             # Compare atom bonds
             for atom_index, (reference_atom_bonds, other_atom_bonds) in enumerate(zip(reference_structure.bonds, other_structure.bonds)):
-                if set(reference_atom_bonds) == set(other_atom_bonds): continue
+                # Missing bonds only match other missing bonds
+                if reference_atom_bonds is MISSING_BONDS or other_atom_bonds is MISSING_BONDS:
+                    if reference_atom_bonds is other_atom_bonds: continue
+                elif set(reference_atom_bonds) == set(other_atom_bonds): continue
                 missmatch_atom = reference_structure.atoms[atom_index]
-                raise InputError(error_message_header + f' Atom bonds do not match: {missmatch_atom.label} -> {reference_atom_bonds} while in the reference structure is {other_atom_bonds}.\n' + error_message_tail)
+                raise InputError(error_message_header + f' Atom bonds do not match: {missmatch_atom.label} -> {other_atom_bonds} while in the reference structure is {reference_atom_bonds}.\n' + error_message_tail)
         # If we made it this far then there are not inconsistencies between structure
         return reference_structure
     structure = property(get_structure, None, None, "Parsed structure from the reference MD (read only)")
@@ -2439,6 +2579,17 @@ class Project:
         """
         return self.register.warnings
     warnings = property(get_warnings, None, None, "Project warnings to be written in metadata")
+
+    def get_register(self) -> 'Register':
+        """Get the project register.
+
+        It is not created on init since creating it writes a new entry in the register file.
+        This way commands which only read the project (e.g. 'mwf ds view') do not leave a trace.
+        """
+        if self._register is None:
+            self._register = Register(File(self.pathify(REGISTER_FILENAME)))
+        return self._register
+    register = property(get_register, None, None, "Tracks project workflow runs, test results and warnings")
 
 
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------
@@ -2655,6 +2806,7 @@ class ErrorHandling:
         clear_register: bool = False,
     ):
         """Initialize the error handling."""
+        self.cache = cache
         self.uuids = {'uuid': cache.retrieve('uuid'),
                       'project_uuid': cache.retrieve('project_uuid')}
         self.is_md = True if self.uuids.get('project_uuid') else False
@@ -2669,8 +2821,18 @@ class ErrorHandling:
     def bind_dataset(self, dataset: Dataset | None):
         """Bind a dataset update function to the error handler."""
         if dataset:
+            rel_path = dataset._abs_to_rel(self.dir)
+            if not dataset.get_uuid_status(**self.uuids):
+                # The cache UUID is not registered, which happens when the cache was deleted and regenerated
+                # If this directory is already registered then recover its UUID instead of replacing the entry
+                registered = dataset.get_registered_uuids(rel_path, is_md=self.is_md)
+                if registered:
+                    uuid, project_uuid = registered
+                    self.cache.update('uuid', uuid)
+                    if self.is_md: self.cache.update('project_uuid', project_uuid)
+                    self.uuids = {'uuid': uuid, 'project_uuid': project_uuid}
             self.update_state = partial(dataset.update_status,
-                                        rel_path=dataset._abs_to_rel(self.dir),
+                                        rel_path=rel_path,
                                         **self.uuids)
             if not dataset.get_uuid_status(**self.uuids):
                 # If no status is available, add a new entry
@@ -2758,6 +2920,10 @@ def workflow(
         project.overwritables = tasker.get_project_overwritables()
         for md in project.mds:
             md.overwritables = tasker.get_md_overwritables()
+        # Create the registers now so every run is recorded, even if no task uses them
+        project.register
+        for md in project.mds:
+            if md != REMOVED_MD: md.register
 
     # Run the project tasks and MD tasks as per the task resolver.
     t0 = time.time()

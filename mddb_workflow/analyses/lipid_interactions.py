@@ -16,6 +16,7 @@ def lipid_interactions(
     output_directory: str,
     inchikey_map: list[dict],
     cg_residues: list[int],
+    ua_residues: list[int],
     snapshots: int,
     frames_limit: int = 100,
 ):
@@ -30,12 +31,15 @@ def lipid_interactions(
         return
 
     is_united_atom = False
-    if len(cg_residues) > 0:
+    # Coarse grain and united atom lipids have no InChI keys
+    no_inchikey_lipids = len(cg_residues) > 0 or len(ua_residues) > 0
+    if no_inchikey_lipids:
         # Lipids of all membranes and unassigned lipids, as found by the membrane mapping
         lipid_atoms = [atom for mem in membrane_map['mems'].values() for atoms in mem['leaflets'].values() for atom in atoms]
         lipids = universe.atoms[np.unique(lipid_atoms + membrane_map['no_mem_lipid'])]
-        # Heuristic: if the residues have more than 40 atoms, assume United Atom.
-        is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids.residues)
+        # United atom lipids are the ones in the united atom selection
+        ua_residues_set = set(int(resindex) for resindex in ua_residues)
+        is_united_atom = any(residue.resindex in ua_residues_set for residue in lipids.residues)
     else:
         lipids = [ref for ref in inchikey_map if ref['is_lipid']]
 
@@ -51,7 +55,7 @@ def lipid_interactions(
     # Choose the method according to the type of lipids present
     if is_united_atom:
         data = ua_lipid_interactions(universe, lipids, iterator)
-    elif len(cg_residues) > 0:
+    elif no_inchikey_lipids:
         data = cg_lipid_interactions(universe, lipids, iterator)
     else:
         data = aa_lipid_interactions(universe, lipids, iterator)

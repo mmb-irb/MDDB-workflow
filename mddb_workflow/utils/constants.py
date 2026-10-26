@@ -162,6 +162,14 @@ TRAJECTORY_SAMPLE_FILENAME = 'trajectory_SAMPLE.xtc'
 # Auxiliar files
 REGISTER_FILENAME = '.register.json'
 CACHE_FILENAME = '.mwf_cache.json'
+# VMD script to see cross-PBC contacts, written when the cross-PBC test fails
+CROSS_PBC_VIEW_FILENAME = '.cross_pbc_contacts.tcl'
+# VMD script to see the biggest RMSD jump, written when the trajectory integrity test fails
+TRAJECTORY_INTEGRITY_VIEW_FILENAME = '.trajectory_integrity_jump.tcl'
+# VMD script to see the wrong bonds, written when the stable bonds test fails
+STABLE_BONDS_VIEW_FILENAME = '.stable_bonds.tcl'
+# VMD script to see the atoms with a wrong number of bonds, written when the coherent bonds test fails
+COHERENT_BONDS_VIEW_FILENAME = '.coherent_bonds.tcl'
 
 # Files saving resorted bonds and charges when we have to resort atoms
 # Note that these files have priority when loading both bonds and charges
@@ -255,6 +263,11 @@ FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']
 
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9
+# How much better two gaussians must fit the RMSD jumps than one for the trajectory integrity test to fail
+BIMODALITY_BIC_CUTOFF = 50
+# How many times bigger the average jump of the bigger group must be than the one of the smaller group
+# Otherwise two gaussians may fit better just because jumps are skewed (e.g. rigid molecules with one flexible bond)
+BIMODALITY_SEPARATION_CUTOFF = 2
 DEFAULT_INTERACTION_CUTOFF = 0.1
 
 # Set register cache flags
@@ -585,9 +598,9 @@ STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4', 'W'
 STANDARD_COUNTER_CATION_ATOM_NAMES = {'K', 'NA', 'SOD', 'POT'}
 STANDARD_COUNTER_ANION_ATOM_NAMES = {'CL', 'CLA'}
 STANDARD_COUNTER_ION_ATOM_NAMES = STANDARD_COUNTER_CATION_ATOM_NAMES.union(STANDARD_COUNTER_ANION_ATOM_NAMES)
-# Regular expressions matched at the start of atom names (re.match), so 'DM' matches DM1, DM2...
-# WARNING: 'DM*' would match any name starting with D (e.g. the D2A beads of Martini unsaturated tails)
-STANDARD_DUMMY_ATOM_NAMES = {'MW', 'LP1', 'DM', 'EPW'}
+# Patterns which must match the whole atom name (re.fullmatch), so 'DM.*' matches DM1, DM2...
+# WARNING: 'DM*' with re.match would match any name starting with D (e.g. the D2A beads of Martini unsaturated tails)
+STANDARD_DUMMY_ATOM_NAMES = {'MW', 'LP1', 'DM.*', 'EPW'}
 DUMMY_ATOM_ELEMENT = 'Dm'
 CG_ATOM_ELEMENT = 'Cg'
 

@@ -15,6 +15,7 @@ def prepare_project_metadata (
     output_file : 'File',
     structure : 'Structure',
     cg_selection : 'Selection',
+    ua_selection : 'Selection',
     residue_map : dict,
     membrane_map : dict,
     inchikey_map : dict,
@@ -55,6 +56,8 @@ def prepare_project_metadata (
     input_water : str,
     input_pbc_selection : str,
     input_cg_selection : str,
+    input_ua_selection : str,
+    input_qm_selection : str,
     input_forced_class_selections: dict[str, str],
     input_customs : list[dict],
     input_orientation : list[float],
@@ -69,8 +72,8 @@ def prepare_project_metadata (
     # Get the box data
     boxsizex, boxsizey, boxsizez = simulation_box_size if simulation_box_size else (None, None, None)
 
-    # Select lipids using lipid references for all-atom regions and residue classification for CG regions
-    lipids_selection = get_lipids_selection(structure, inchikey_map, lipid_references, cg_selection)
+    # Select lipids using lipid references for all-atom regions and residue classification for CG and UA regions
+    lipids_selection = get_lipids_selection(structure, inchikey_map, lipid_references, cg_selection + ua_selection)
 
     # Count different types of atoms and residues
     # Unpack atom counts to write them independently in the metadata
@@ -80,7 +83,7 @@ def prepare_project_metadata (
     counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atom_counts(structure, lipids_selection)
 
     # Get the system keywords
-    system_keywords = get_system_keywords(structure, inchikey_map, lipids_selection, membrane_map, cg_selection, protein_map, chain_contacts)
+    system_keywords = get_system_keywords(structure, inchikey_map, lipids_selection, membrane_map, cg_selection, ua_selection, protein_map, chain_contacts)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
@@ -236,6 +239,8 @@ def prepare_project_metadata (
         'INTERACTIONS': metadata_interactions,
         'PBC_SELECTION': input_pbc_selection,
         'CG_SELECTION': input_cg_selection,
+        'UA_SELECTION': input_ua_selection,
+        'QM_SELECTION': input_qm_selection,
         'FORCED_CLASS_SELECTION': input_forced_class_selections,
         'CHAINNAMES': chainnames,
         'CUSTOMS': input_customs,

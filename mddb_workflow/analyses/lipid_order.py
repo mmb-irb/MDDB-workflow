@@ -20,6 +20,7 @@ def lipid_order(
     output_directory: str,
     inchikey_map: list[dict],
     cg_residues: list[int],
+    ua_residues: list[int],
     snapshots: int,
     frames_limit: int = 100
 ):
@@ -44,16 +45,17 @@ def lipid_order(
     bilayer_atoms = np.unique([atom for mem in bilayers for name, atoms in mem['leaflets'].items() if name != MIDPLANE for atom in atoms])
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     # Choose the method according to the type of lipids present
-    if len(cg_residues) > 0:
+    if len(cg_residues) > 0 or len(ua_residues) > 0:
         # Check supported formats: https://vachalab.github.io/gorder-manual/other_structure.html
         if topology_file.format not in ['tpr', 'gro']:
-            warn('Lipid order analysis requires a TPR o GRO topology file when using cg_selection.')
+            warn('Lipid order analysis requires a TPR o GRO topology file when using cg_selection or ua_selection.')
             return {}
         # One example residue of every lipid in the bilayers, used to extract the carbon chains
         bilayer_residues = universe.atoms[bilayer_atoms].residues
         lipids = [bilayer_residues[bilayer_residues.resnames == resname][0] for resname in np.unique(bilayer_residues.resnames)]
-        # Heuristic: if the residues have more than 40 atoms, assume United Atom.
-        is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids)
+        # United atom lipids are the ones in the united atom selection
+        ua_residues_set = set(int(resindex) for resindex in ua_residues)
+        is_united_atom = any(residue.resindex in ua_residues_set for residue in lipids)
         # gorder atom numbers start at 1
         selection = f'@membrane and atomnum {atom_number_ranges(bilayer_atoms + 1)}'
         if is_united_atom:

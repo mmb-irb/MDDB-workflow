@@ -1,11 +1,16 @@
 from os import remove
-from mddb_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
+from os.path import abspath
+import numpy as np
+from mddb_workflow.analyses.mindist import remove_view_script, MIN_FOCUS_SIZE
+from mddb_workflow.tools.generate_topology import format_selection
+from mddb_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, find_bonds_reference_frame
 from mddb_workflow.tools.get_bonds import get_most_stable_bonds
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frame
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
+from mddb_workflow.utils.constants import STABLE_BONDS_VIEW_FILENAME, COHERENT_BONDS_VIEW_FILENAME
 from mddb_workflow.utils.constants import LARGE_AMINOACID_FLAG, AVAILABLE_LETTERS
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure, Residue, get_next_letter
@@ -72,6 +77,153 @@ def get_excluded_atoms_indices(
     return set(excluded_atoms_selection.atom_indices)
 
 
+def get_mismatching_bonds(
+    clashes: list[tuple[int, tuple[int, ...], tuple[int, ...]]],
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """Split atom bond mismatches in bonds which are missing and bonds which should not be there.
+    Every bond is a sorted pair of atom indices.
+    """
+    missing_bonds, unexpected_bonds = set(), set()
+    for atom_index, actual_bonds, expected_bonds in clashes:
+        for bonded_index in set(expected_bonds) - set(actual_bonds):
+            missing_bonds.add(tuple(sorted((atom_index, bonded_index))))
+        for bonded_index in set(actual_bonds) - set(expected_bonds):
+            unexpected_bonds.add(tuple(sorted((atom_index, bonded_index))))
+    return sorted(missing_bonds), sorted(unexpected_bonds)
+
+
+def to_tcl_bonds(bonds: list[tuple[int, int]]) -> str:
+    """Format bonds as a Tcl list of atom index pairs."""
+    return '{' + ' '.join(f'{{{a} {b}}}' for a, b in bonds) + '}'
+
+
+def get_focus_commands(atoms: 'Selection') -> list[str]:
+    """Get VMD commands to center the view in some atoms of the main molecule and zoom in."""
+    return [
+        f'set focus [atomselect $main {{{atoms.to_vmd()}}}]',
+        'proc get_size {atoms} {',
+        '    lassign [measure minmax $atoms] lowest highest',
+        '    return [tcl::mathfunc::max {*}[vecsub $highest $lowest]]',
+        '}',
+        'display resetview',
+        'molinfo $main set center_matrix [list [transoffset [vecscale -1 [measure center $focus]]]]',
+        f'set zoom [expr {{[get_size [atomselect $main all]] / max([get_size $focus], {MIN_FOCUS_SIZE})}}]',
+        'if {$zoom > 1} { scale by $zoom }',
+    ]
+
+
+def write_stable_bonds_view_script(
+    script_filename: str,
+    structure_filename: str,
+    trajectory_filename: str,
+    frame: int,
+    failing_atoms: 'Selection',
+    missing_bonds: list[tuple[int, int]],
+    unexpected_bonds: list[tuple[int, int]],
+):
+    """Write a VMD script to see the wrong bonds in a frame.
+
+    Bonds are guessed by VMD from the coordinates in this frame, as the test does.
+    The failing atom and the atoms it is or should be bonded to are shown as spheres and their residues in licorice.
+    Missing bonds are drawn as red dashed lines and bonds which should not be there are highlighted in orange.
+    """
+    commands = [
+        f'# Wrong bonds in frame {frame}',
+        f'mol new {{{abspath(structure_filename)}}} type pdb waitfor all',
+        # Frames from the structure file are removed so frame numbers match the trajectory
+        'animate delete all',
+        f'mol addfile {{{abspath(trajectory_filename)}}} type xtc first {frame} last {frame} waitfor all',
+        'set main [molinfo top]',
+        # Bonds are guessed again from the coordinates in this frame
+        'mol bondsrecalc $main',
+        # Residues of the failing atoms
+        'mol representation Licorice 0.2',
+        'mol color Name',
+        f'mol selection {{same residue as ({failing_atoms.to_vmd()})}}',
+        'mol material Opaque',
+        'mol addrep $main',
+        # The failing atom and the atoms it is or should be bonded to
+        'mol representation VDW 0.4',
+        f'mol selection {{{failing_atoms.to_vmd()}}}',
+        'mol addrep $main',
+        # Draw a bond between the two atoms in a pair
+        'proc draw_bond {bond args} {',
+        '    global main',
+        '    set atoms [atomselect $main "index $bond"]',
+        '    lassign [$atoms get {x y z}] start end',
+        '    $atoms delete',
+        '    graphics $main {*}[linsert $args 1 $start $end]',
+        '}',
+        # Bonds which are missing
+        'graphics $main color red',
+        f'foreach bond {to_tcl_bonds(missing_bonds)} {{ draw_bond $bond line width 4 style dashed }}',
+        # Bonds which should not be there
+        'graphics $main color orange',
+        'graphics $main material Transparent',
+        f'foreach bond {to_tcl_bonds(unexpected_bonds)} {{ draw_bond $bond cylinder radius 0.4 }}',
+        # Center the view in the failing atoms and zoom in
+        *get_focus_commands(failing_atoms),
+        'puts "The failing atom and the atoms it is or should be bonded to are shown as spheres and their residues in licorice"',
+        'puts "Missing bonds are drawn as red dashed lines and bonds which should not be there are highlighted in orange"',
+    ]
+    with open(script_filename, 'w') as script_file:
+        script_file.write('\n'.join(commands) + '\n')
+
+
+def write_coherent_bonds_view_script(
+    script_filename: str,
+    structure_filename: str,
+    incoherent_atoms: 'Selection',
+    bonds: list[tuple[int, int]],
+):
+    """Write a VMD script to see the atoms with a wrong number of bonds.
+
+    Note that VMD guesses bonds from distances instead of reading them from the topology.
+    For this reason bonds in the topology of these atoms are passed and drawn apart.
+    Atoms with a wrong number of bonds are shown as big spheres and the atoms bonded to them as small spheres.
+    Their residues are shown in lines, with the bonds guessed by VMD.
+    """
+    bonded_atoms = Selection(sorted(set(index for bond in bonds for index in bond)))
+    commands = [
+        '# Atoms with a wrong number of bonds',
+        f'mol new {{{abspath(structure_filename)}}} type pdb waitfor all',
+        'set main [molinfo top]',
+        # Residues of the atoms with wrong bonds, with the bonds guessed by VMD
+        'mol representation Lines 2',
+        'mol color Name',
+        f'mol selection {{same residue as ({incoherent_atoms.to_vmd()})}}',
+        'mol material Opaque',
+        'mol addrep $main',
+        # Atoms with a wrong number of bonds
+        'mol representation VDW 0.4',
+        f'mol selection {{{incoherent_atoms.to_vmd()}}}',
+        'mol addrep $main',
+    ]
+    # Atoms bonded to them in the topology
+    if bonded_atoms:
+        commands += [
+            'mol representation VDW 0.2',
+            f'mol selection {{{bonded_atoms.to_vmd()}}}',
+            'mol addrep $main',
+        ]
+    commands += [
+        # Bonds in the topology
+        'graphics $main color yellow',
+        f'foreach bond {to_tcl_bonds(bonds)} {{',
+        '    set atoms [atomselect $main "index $bond"]',
+        '    lassign [$atoms get {x y z}] start end',
+        '    $atoms delete',
+        '    graphics $main cylinder $start $end radius 0.1',
+        '}',
+        # Center the view in the atoms with wrong bonds and zoom in
+        *get_focus_commands(incoherent_atoms),
+        'puts "Atoms with a wrong number of bonds are shown as big spheres and the atoms bonded to them as small spheres"',
+        'puts "Bonds in the topology are drawn in yellow, while lines show the bonds guessed by VMD from distances"',
+    ]
+    with open(script_filename, 'w') as script_file:
+        script_file.write('\n'.join(commands) + '\n')
+
+
 def structure_corrector(
     # Note that this is an early provisional structure
     structure: 'Structure',
@@ -79,6 +231,10 @@ def structure_corrector(
     input_topology_file: Union['File', Exception],
     output_structure_file: 'File',
     output_trajectory_file: Optional['File'],
+    # Files which will hold the processed structure and trajectory once the processing is over
+    # They are used in the VMD scripts to see failed tests, since current files are renamed further
+    final_structure_file: 'File',
+    final_trajectory_file: 'File',
     MD: 'MD',
     # Note that this is an early provisional atom selection
     pbc_selection: 'Selection',
@@ -156,6 +312,10 @@ def structure_corrector(
     # Check if the structure is missing bonds
     missing_any_bonds = any(bond == MISSING_BONDS for bond in safe_bonds)
 
+    # Failed tests to be reported at the end, once atoms are not to be sorted anymore
+    # Note that atom indices in warnings and VMD scripts would be wrong otherwise
+    pending_reports = []
+
     # If safe bonds do not match structure bonds then we have to fix it
     def check_stable_bonds():
         # Save the current structure bonds to further compare with the safe bonds
@@ -168,6 +328,8 @@ def structure_corrector(
         if not must_check_stable_bonds or missing_any_bonds: return
         # Reset warnings related to this analysis
         register.remove_warnings(STABLE_BONDS_FLAG)
+        stable_bonds_view_filename = MD.pathify(STABLE_BONDS_VIEW_FILENAME)
+        remove_view_script(stable_bonds_view_filename)
         # Set some atoms which are to be skipped from these test given their "fake" nature
         excluded_atom_indices = get_excluded_atoms_indices(structure, pbc_selection, cg_selection)
         # If bonds match from the begining we are done as well
@@ -184,7 +346,7 @@ def structure_corrector(
         ' Now we will look for a frame which has no clashes/overstretches at all.\n'
         ' This frame will be considered as the "reference frame".')
         # Find the first frame in the whole trajectory where safe bonds are respected
-        bonds_reference_frame, bonds_are_fine = get_bonds_reference_frame(
+        bonds_reference_frame, bonds_are_fine, bonds_failure = find_bonds_reference_frame(
             structure=structure,
             trajectory_file=input_trajectory_file,
             snapshots=snapshots,
@@ -205,11 +367,60 @@ def structure_corrector(
         # If there is no reference frame then stop here since there must be a problem
         if not bonds_are_fine:
             print('There is no reference frame for the safe bonds. Is the trajectory not imaged?')
-            if STABLE_BONDS_FLAG not in mercy:
-                raise TestFailure('Failed to find stable bonds')
+            message = 'Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.'
+            # Most frequent wrong bonds, in the first frame where they happen
+            clash, clash_frames, checked_frames, failing_frame = bonds_failure
+            missing_bonds, unexpected_bonds = get_mismatching_bonds([clash])
+            # Get the distance between the atoms of every wrong bond in this frame
+            frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, failing_frame)
+            frame_coords = np.array([ atom.coords for atom in Structure.from_pdb_file(frame_filename).atoms ])
+            remove(frame_filename)
+            # Keep atoms instead of indices, since atoms may be sorted further
+            def to_atom_bonds(bonds: list[tuple[int, int]]) -> list[tuple['Atom', 'Atom', float]]:
+                return [ (structure.atoms[a], structure.atoms[b], float(np.linalg.norm(frame_coords[a] - frame_coords[b])))
+                    for a, b in bonds ]
+            missing_atom_bonds = to_atom_bonds(missing_bonds)
+            unexpected_atom_bonds = to_atom_bonds(unexpected_bonds)
+            atom_index, actual_bonds, expected_bonds = clash
+            failing_atom = structure.atoms[atom_index]
+            # The failing atom along with the atoms it is bonded to and the atoms it should be bonded to
+            clash_atoms = [ structure.atoms[index] for index in sorted({ atom_index, *actual_bonds, *expected_bonds }) ]
+            must_be_killed = STABLE_BONDS_FLAG not in mercy
+            def report_stable_bonds():
+                description = ('The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.\n'
+                    f'The most failing atom is {failing_atom.label}, with the same wrong bonds in {clash_frames} of {checked_frames} checked frames.'
+                    f' First in frame {failing_frame}:')
+                for bonds, header in [(missing_atom_bonds, 'Atoms which should be bonded but are too far:'),
+                    (unexpected_atom_bonds, 'Atoms which should not be bonded but are too close:')]:
+                    if not bonds: continue
+                    description += f'\n {header}'
+                    for atom_a, atom_b, distance in bonds:
+                        description += f'\n  {atom_a.label} — {atom_b.label} ({distance:.2f} Å)'
+                # Atom indices are read now, once atoms are sorted
+                def to_index_pairs(bonds: list[tuple['Atom', 'Atom', float]]) -> list[tuple[int, int]]:
+                    return [ tuple(sorted((atom_a.index, atom_b.index))) for atom_a, atom_b, _ in bonds ]
+                missing_pairs, unexpected_pairs = to_index_pairs(missing_atom_bonds), to_index_pairs(unexpected_atom_bonds)
+                failing_atoms = Selection(sorted(atom.index for atom in clash_atoms))
+                # Frame and atoms to be shown in the client
+                data = {
+                    'frame': failing_frame,
+                    'selection': format_selection(structure, failing_atoms),
+                }
+                # Write a VMD script for the user to see the wrong bonds
+                # This is not part of the warning since it is only useful for the workflow user
+                # If the workflow is to be killed then current files will remain, otherwise they will be renamed
+                view_structure_file = output_structure_file if must_be_killed else final_structure_file
+                view_trajectory_file = input_trajectory_file if must_be_killed else final_trajectory_file
+                write_stable_bonds_view_script(stable_bonds_view_filename, view_structure_file.path,
+                    view_trajectory_file.path, failing_frame, failing_atoms, missing_pairs, unexpected_pairs)
+                view_hint = f'To see the wrong bonds run:\n  vmd -e {stable_bonds_view_filename}'
+                if must_be_killed:
+                    raise TestFailure(f'{message}\n{description}\n{view_hint}')
+                register.add_warning(STABLE_BONDS_FLAG, message, description, data)
+                print(f' {view_hint}')
+            if must_be_killed: report_stable_bonds()
             register.update_test(STABLE_BONDS_FLAG, False)
-            register.add_warning(STABLE_BONDS_FLAG, ('Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.\n'
-                'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
+            pending_reports.append(report_stable_bonds)
             return
         # Set also the stable bonds frame structure to mine its coordinates
         stable_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, bonds_reference_frame)
@@ -335,20 +546,51 @@ def structure_corrector(
 
     # If this analysis has been already passed then we skip the process
     if register.tests.get(COHERENT_BONDS_FLAG, None) is True:
-        must_check_stable_bonds = False
+        must_check_coherent_bonds = False
 
     # Run the coherent bonds analysis if necessary
     if must_check_coherent_bonds:
         # Reset warnings related to this analysis
         register.remove_warnings(COHERENT_BONDS_FLAG)
+        coherent_bonds_view_filename = MD.pathify(COHERENT_BONDS_VIEW_FILENAME)
+        remove_view_script(coherent_bonds_view_filename)
         # If the test is not passed then report it
-        if structure.check_incoherent_bonds():
+        incoherent_atom_indices = structure.check_incoherent_bonds()
+        if incoherent_atom_indices:
             print('FAIL: Uncoherent bonds were found')
+            message = 'Some atoms may have a higher or lower number of bonds than they should according to their element.'
+            # Keep atoms instead of indices, since atoms may be sorted further
+            incoherent_atoms = [ structure.atoms[index] for index in incoherent_atom_indices ]
+            atom_bonded_atoms = [ (atom, [ structure.atoms[index] for index in atom.get_bonds() ]) for atom in incoherent_atoms ]
             must_be_killed = COHERENT_BONDS_FLAG not in mercy
-            if must_be_killed:
-                raise TestFailure('Failed to find coherent bonds')
+            def report_coherent_bonds():
+                description = f'{len(incoherent_atoms)} atoms have a wrong number of bonds:'
+                MAX_REPORTED_ATOMS = 5
+                for atom, bonded_atoms in atom_bonded_atoms[:MAX_REPORTED_ATOMS]:
+                    description += f'\n  {atom.label} is a {atom.element} atom with {len(bonded_atoms)} bonds'
+                    if bonded_atoms: description += ': ' + ', '.join(bonded_atom.label for bonded_atom in bonded_atoms)
+                if len(incoherent_atoms) > MAX_REPORTED_ATOMS:
+                    description += f'\n  etc. ({len(incoherent_atoms)} atoms)'
+                # Atom indices are read now, once atoms are sorted
+                incoherent_selection = Selection(sorted(atom.index for atom in incoherent_atoms))
+                bonds = sorted(set( tuple(sorted((atom.index, bonded_atom.index)))
+                    for atom, bonded_atoms in atom_bonded_atoms for bonded_atom in bonded_atoms ))
+                # Atoms to be shown in the client
+                data = { 'selection': format_selection(structure, incoherent_selection) }
+                # Write a VMD script for the user to see the atoms with wrong bonds
+                # This is not part of the warning since it is only useful for the workflow user
+                # If the workflow is to be killed then the current file will remain, otherwise it will be renamed
+                view_structure_file = output_structure_file if must_be_killed else final_structure_file
+                write_coherent_bonds_view_script(coherent_bonds_view_filename, view_structure_file.path,
+                    incoherent_selection, bonds)
+                view_hint = f'To see the atoms with wrong bonds run:\n  vmd -e {coherent_bonds_view_filename}'
+                if must_be_killed:
+                    raise TestFailure(f'{message}\n{description}\n{view_hint}')
+                register.add_warning(COHERENT_BONDS_FLAG, message, description, data)
+                print(f' {view_hint}')
+            if must_be_killed: report_coherent_bonds()
             register.update_test(COHERENT_BONDS_FLAG, False)
-            register.add_warning(COHERENT_BONDS_FLAG, 'Some atoms may have a higher or lower number of bonds than they should according to their element.')
+            pending_reports.append(report_coherent_bonds)
         # Set the test as succeed if all was good
         else:
             register.update_test(COHERENT_BONDS_FLAG, True)
@@ -544,3 +786,10 @@ def structure_corrector(
 
     if structure.check_repeated_atoms(fix_atoms=True, display_summary=True):
         write_updated_structure(structure, output_structure_file, 'modified (repeated atoms)')
+
+    # ------------------------------------------------------------------------------------------
+    # Failed tests -----------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Report failed tests with mercy now that atoms are in their final order
+    for report in pending_reports: report()

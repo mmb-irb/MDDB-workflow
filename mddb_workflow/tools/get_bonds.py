@@ -12,8 +12,6 @@ from collections import Counter
 from math import ceil
 
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
-# Minimum number of frames where the same atom must fail to consider the reference frame test as failed
-MIN_ATOM_FAILURE_FRAMES = 3
 
 
 def get_bond_clashes(
@@ -136,8 +134,33 @@ def get_bonds_reference_frame(
     ignore_bonds: bool = False,
     patience: int = 100,  # Limit of frames to check before we surrender
     # Minimum ratio of checked frames where the same atom must fail to consider the test as failed
-    atom_failure_ratio: float = 0.1,
+    atom_failure_ratio: float = 0.2,
+    # Minimum number of frames where the same atom must fail to consider the test as failed
+    min_atom_failure_frames: int = 5,
 ) -> tuple[int, bool]:
+    """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
+    This is the frame used when representing the MD.
+    Also return a boolean saying if bonds are fine.
+    See find_bonds_reference_frame for more details.
+    """
+    reference_frame, bonds_are_fine, _ = find_bonds_reference_frame(structure, trajectory_file, snapshots,
+        reference_bonds, excluded_atom_indices, ignore_bonds, patience, atom_failure_ratio, min_atom_failure_frames)
+    return reference_frame, bonds_are_fine
+
+
+def find_bonds_reference_frame(
+    structure: 'Structure',
+    trajectory_file: 'File',
+    snapshots: int,
+    reference_bonds: list[list[int]],
+    excluded_atom_indices: set[int],
+    ignore_bonds: bool = False,
+    patience: int = 100,  # Limit of frames to check before we surrender
+    # Minimum ratio of checked frames where the same atom must fail to consider the test as failed
+    atom_failure_ratio: float = 0.2,
+    # Minimum number of frames where the same atom must fail to consider the test as failed
+    min_atom_failure_frames: int = 3,
+) -> tuple[int, bool, Optional[tuple[tuple[int, tuple[int, ...], tuple[int, ...]], int, int, int]]]:
     """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD.
     Also return a boolean saying if bonds are fine.
@@ -146,14 +169,18 @@ def get_bonds_reference_frame(
     If any atom fails in the atom failure ratio of checked frames or more then bonds are wrong.
     If failures are spread along different atoms then bonds are considered fine.
     In this case the frame with the fewest mismatches is returned as reference frame.
+
+    When bonds are wrong, also return the most frequent mismatch (i.e. the first row of the mismatches table)
+    along with the number of frames where it happens, the number of checked frames and the first frame where it happens.
+    Otherwise return None.
     """
     # If bonds were ignored then the reference frame makes no sense
-    if ignore_bonds: return 0, True
+    if ignore_bonds: return 0, True, None
 
     # If all atoms are to be excluded then set the first frame as the reference frame and stop here
     if len(excluded_atom_indices) == len(structure.atoms):
         print(' All atoms are excluded from bond checks -> Setting frame 1 as reference frame')
-        return 0, True
+        return 0, True, None
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the reference ones
     frames_limit = min(patience, snapshots)
@@ -166,6 +193,8 @@ def get_bonds_reference_frame(
     atom_clash_counts = Counter()
     checked_frames = 0
     frame_clash_counts = []
+    # First frame where every mismatch happens
+    clash_first_frames = {}
     # Cache the reference bond sets so do_bonds_match does not have to create them for every frame
     reference_bond_sets = [
         None if atom_index in excluded_atom_indices else frozenset(atom_bonds) - excluded_atom_indices
@@ -184,6 +213,7 @@ def get_bonds_reference_frame(
             )
             # Track every atom mismatch in this frame and its frequency across frames.
             frame_clash_counts.append(len(frame_clashes))
+            for clash in frame_clashes: clash_first_frames.setdefault(clash, frame_number)
             clash_counts.update(frame_clashes)
             atom_clash_counts.update(atom_index for atom_index, _, _ in frame_clashes)
             if not frame_clashes:
@@ -194,7 +224,7 @@ def get_bonds_reference_frame(
     # If we found a frame with the reference bonds then we are done
     if bonds_reference_frame is not None:
         print(f' Got it -> Frame {bonds_reference_frame + 1}')
-        return bonds_reference_frame, True
+        return bonds_reference_frame, True, None
     # Summarize mismatching atoms per frame, not distinct undirected bonds.
     print(
         f' Atom mismatches per frame: min={min(frame_clash_counts)}, '
@@ -209,17 +239,17 @@ def get_bonds_reference_frame(
     failure_cut = ceil(checked_frames * atom_failure_ratio)
     # With a few frames the cut would be too small and a few random failures would fail the test
     # Thus we set a minimum of frames
-    if failure_cut < MIN_ATOM_FAILURE_FRAMES:
-        failure_cut = MIN_ATOM_FAILURE_FRAMES
+    if failure_cut < min_atom_failure_frames:
+        failure_cut = min_atom_failure_frames
         warn(f'Only {checked_frames} frames were checked. With such a reduced sampling this test may fail.')
     recurrent_atoms = [ atom_index for atom_index, n in atom_clash_counts.items() if n >= failure_cut ]
     if not recurrent_atoms:
         print(f' No atom fails in {failure_cut} or more of the {checked_frames} checked frames -> Bonds are considered fine')
         print(f' Using the frame with the fewest mismatches -> Frame {bonds_reference_frame + 1}')
-        return bonds_reference_frame, True
+        return bonds_reference_frame, True, None
     print(f' {len(recurrent_atoms)} atoms fail in {failure_cut} or more of the {checked_frames} checked frames')
     worst_atom_index, worst_atom_failures = atom_clash_counts.most_common(1)[0]
-    print(f' The most failing atom is {structure.atoms[worst_atom_index].label} (index {worst_atom_index})'
+    print(f' The most failing atom is {structure.atoms[worst_atom_index].label}'
         f' which fails in {worst_atom_failures} frames')
     # Print the most frequent clashes table
     # Each count is the number of frames with this atom and bond-set mismatch.
@@ -240,7 +270,9 @@ def get_bonds_reference_frame(
     print("-+-".join('-' * width for width in col_widths))
     for row in table_data:
         print(format_row(row))
-    return bonds_reference_frame, False
+    # Report the most frequent mismatch
+    worst_clash, worst_clash_frames = count[0]
+    return bonds_reference_frame, False, (worst_clash, worst_clash_frames, checked_frames, clash_first_frames[worst_clash])
 
 
 def mine_topology_bonds(bonds_source_file: Union['File', Exception]) -> list[list[int]]:

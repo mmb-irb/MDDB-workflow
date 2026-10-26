@@ -13,7 +13,7 @@ from mddb_workflow.utils.gmx_spells import count_xtc_frames, copy_xtc_frames
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 
-from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION
+from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION, FIXED_STRUCTURE_EXCEPTION
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
 from mddb_workflow.tools.image_and_fit import image_and_fit
@@ -143,6 +143,10 @@ def process_input_files(
         if input_structure_file == initial_topology_file:
             input_structure_file = fixed_topology
         initial_topology_file = fixed_topology
+    # The same may happen with the structure when there is no topology
+    fixed_structure = exceptions.get(FIXED_STRUCTURE_EXCEPTION, None)
+    if fixed_structure:
+        input_structure_file = fixed_structure
 
     # --- CONVERTING AND MERGING ------------------------------------------------------------
 
@@ -208,7 +212,7 @@ def process_input_files(
     # Now we can set a provisional coarse grain selection
     # This selection is useful to avoid problems with CG atom elements
     # Since this is proviosonal we will make it silent
-    self._set_cg_selection(provisional_structure, verbose=False)
+    self._set_cg_selection(provisional_structure, skipped_trajectory_file, initial_topology_file, verbose=False)
     provisional_cg_selection = self.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
@@ -270,8 +274,8 @@ def process_input_files(
     provisional_structure = Structure.from_pdb_file(filtered_structure_file.path)
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
-    # Since this is proviosonal we will make it silent
-    self._set_cg_selection(provisional_structure, verbose=False)
+    # Logs are shown only here, since this structure is already filtered
+    self._set_cg_selection(provisional_structure, filtered_trajectory_file, filtered_topology_file, verbose=True)
     provisional_cg_selection = self.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
@@ -394,6 +398,8 @@ def process_input_files(
         input_topology_file=filtered_topology_file,
         output_structure_file=corrected_structure_file,
         output_trajectory_file=corrected_trajectory_file,
+        final_structure_file=output_structure_file,
+        final_trajectory_file=output_trajectory_file,
         MD=self,
         pbc_selection=provisional_pbc_selection,
         cg_selection=provisional_cg_selection,
@@ -489,7 +495,7 @@ def process_input_files(
 
     # Set the final structure
     final_structure = Structure.from_pdb_file(output_structure_file.path)
-    self._set_cg_selection(final_structure, verbose=False)
+    self._set_cg_selection(final_structure, output_trajectory_file, output_topology_file, verbose=False)
     final_cg_selection = self.cg_selection
 
     # Make sure the CG selection is identical to the provisional selection
@@ -518,7 +524,8 @@ def process_input_files(
         print(f'Difference: {different_atoms_vmd_selection}')
         raise InputError('PBC selection is not consistent after correcting the structure. '
             'Please consider using a different PBC selection. '
-            'Avoid relying in atom distances or elements to avoid this problem.')
+            'Avoid relying in atom distances or elements to avoid this problem.'
+            'Also always prefer to use "residue" instead of "resid".')
 
     # --- RUNNING FINAL TESTS ------------------------------------------------------------
 

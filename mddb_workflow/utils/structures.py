@@ -298,7 +298,7 @@ class Atom:
         # If the atom name is among the known dummy atoms then return a standard element for dummy atoms
         name = self.name.upper()
         for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
-            if re.match(dummy_name, name):
+            if re.fullmatch(dummy_name, name):
                 return DUMMY_ATOM_ELEMENT
         # If the element is already the "coarse grained" flag then return this very same flag
         # WARNING: This has to be preset before guessing or the guess may fail
@@ -2124,6 +2124,16 @@ class Structure:
         """
         return self.select_by_classification('solvent')
 
+    def select_water_by_residue_name(self) -> 'Selection':
+        """Select water atoms by residue name only.
+        Use this when atom elements are not known yet (e.g. coarse grained atoms are not flagged yet).
+        """
+        atom_indices = []
+        for residue in self.residues:
+            if residue.name in STANDARD_SOLVENT_RESIDUE_NAMES:
+                atom_indices += residue.atom_indices
+        return Selection(atom_indices)
+
     def select_ions(self) -> 'Selection':
         """Select ions."""
         return self.select_by_classification('ion')
@@ -3084,15 +3094,17 @@ class Structure:
         """Select all atoms in the structure which are explicitly missing bonds."""
         return Selection([ atom_index for atom_index, bonds in enumerate(self.bonds) if bonds == MISSING_BONDS ])
 
-    def check_incoherent_bonds(self) -> bool:
+    def check_incoherent_bonds(self) -> list[int]:
         """Check bonds to be incoherent i.e. check atoms not to have more or less
         bonds than expected according to their element.
-        Return True if any incoherent bond is found.
+        Return the indices of atoms with incoherent bonds, so an empty list means bonds are fine.
+        Only the first atom is detailed in the logs.
         """
         # Find out if there are hydrogens in the structure
         # It may happen that we encounter an structure without hydrogens
         has_hydrogen = next((True for atom in self.atoms if atom.element == 'H'), False)
         coherent_bonds = coherent_bonds_with_hydrogen if has_hydrogen else coherent_bonds_without_hydrogen
+        incoherent_atom_indices = []
         # Check coherent bonds atom by atom
         for atom in self.atoms:
             # Do not check this atom bonds if this may be an ion
@@ -3119,6 +3131,8 @@ class Structure:
             max_allowed_bonds = element_coherent_bonds['max']
             # Check the actual number of bonds is insdie the accepted range
             if max_nbonds < min_allowed_bonds or min_nbonds > max_allowed_bonds:
+                incoherent_atom_indices.append(atom.index)
+                if len(incoherent_atom_indices) > 1: continue
                 if min_nbonds == max_nbonds:
                     print(f' An atom with element {element} has {min_nbonds} bonds')
                 else:
@@ -3131,8 +3145,9 @@ class Structure:
                 print(f' -> Atom {atom.label}')
                 bond_label = ', '.join([self.atoms[atom].label for atom in atom.get_bonds(skip_ions=False)])
                 print(f' -> Bonds {bond_label}')
-                return True
-        return False
+        if len(incoherent_atom_indices) > 1:
+            print(f' There are {len(incoherent_atom_indices)} atoms with incoherent bonds')
+        return incoherent_atom_indices
 
     def find_covalent_bonds(self,
         selection: Optional['Selection'] = None,

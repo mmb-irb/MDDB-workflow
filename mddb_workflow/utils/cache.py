@@ -2,14 +2,22 @@ from mddb_workflow.utils.auxiliar import load_json, save_json
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.core.dataclass import InChIKeyData
-import uuid
+import uuid as uuid_module
 
 
 class Cache:
     """The cache is used to store data to be reused between different runs."""
 
-    def __init__(self, cache_file: 'File', project_uuid: str = None):
-        """Initialize the cache."""
+    def __init__(self, cache_file: 'File', project_uuid: str = None, uuid: str = None):
+        """Initialize the cache.
+
+        Args:
+            cache_file: The cache file.
+            project_uuid: The uuid of the parent project, for MD caches.
+            uuid: The uuid to use if the cache has none (e.g. the one already registered in a dataset).
+                If not passed and the cache has no uuid, a new one is generated.
+
+        """
         # Save the previous cache file
         self.file = cache_file
         # Set an auxiliar file which is used to not overwrite directly the previous cache
@@ -21,8 +29,8 @@ class Cache:
         # Load data from the cache file, if it already exists
         self.load()
         if not self.data.get('uuid'):
-            # Create a unique id for the Project/MD
-            self.data['uuid'] = str(uuid.uuid4())
+            # Create a unique id for the Project/MD, unless we already know which one it must be
+            self.data['uuid'] = uuid if uuid else str(uuid_module.uuid4())
         if project_uuid is not None:
             # Add Project uuid for this MD
             self.data['project_uuid'] = project_uuid

@@ -11,12 +11,50 @@ BIN_FLAG = 'gridfs'
 # Set the value used in binary files to flag missing values (e.g. atoms with missing bonds)
 BIN_MISSING_VALUE = 2 ** 32 - 1
 
+# Format selections in a database-efficient format
+# Parse selections to indices of chains, residues and atoms thus making the dict as light as possible
+# Alternatively the formatted selection may be the string 'all'
+def format_selection (structure : 'Structure', selection : 'Selection') -> dict | str:
+    if not selection: raise ValueError('Trying to format empty selection')
+    if len(selection) == structure.atom_count: return 'all'
+    atom_indices = set(selection.atom_indices)
+    # Get indices of residues or chains the atoms of which are totally covered by the selection
+    chain_indices = []
+    residue_indices = []
+    # Iterate structure chains to see if any of them fits entirely in the selection
+    for chain in structure.chains:
+        chain_atom_indices = set(chain.get_selection().atom_indices)
+        # If the whole chain is included in the selection then add it
+        if chain_atom_indices.issubset(atom_indices):
+            chain_indices.append(chain.index)
+            atom_indices -= chain_atom_indices
+            continue
+        # Iterate residues in this chain to see if any of them fits entirely in the selection
+        for residue in chain.residues:
+            residue_atom_indices = set(residue.get_selection().atom_indices)
+            # If the whole residue is included in the selection then add it
+            if residue_atom_indices.issubset(atom_indices):
+                residue_indices.append(residue.index)
+                atom_indices -= residue_atom_indices
+    # Set the finally formatted selection
+    formatted = { 'n': len(selection) }
+    if len(chain_indices) > 0:
+        formatted['ch'] = chain_indices
+    if len(residue_indices) > 0:
+        formatted['re'] = residue_indices
+    if len(atom_indices) > 0:
+        formatted['at'] = sorted(atom_indices)
+    return formatted
+
+
 def generate_topology (
     structure : 'Structure',
     md_charges : list[list[float]],
     residue_map : dict,
     pbc_selection : 'Selection',
     cg_selection : 'Selection',
+    ua_selection : 'Selection',
+    qm_selection : 'Selection',
     dummy_selection : 'Selection',
     output_directory : str,
 ):
@@ -166,51 +204,18 @@ def generate_topology (
     # Set custom atom selections
     selections = {}
 
-    # Set a function to format selections in a database-efficient format
-    # Parse selections to indices of chains, residues and atoms thus making the dict as light as possible
-    # Alternatively the formatted selection may be the string 'all'
-    def format_selection (selection : 'Selection') -> dict | str:
-        if not selection: raise ValueError('Trying to format empty selection')
-        if len(selection) == structure.atom_count: return 'all'
-        atom_indices = set(selection.atom_indices)
-        # Get indices of residues or chains the atoms of which are totally covered by the selection
-        chain_indices = []
-        residue_indices = []
-        # Iterate structure chains to see if any of them fits entirely in the selection
-        for chain in structure.chains:
-            chain_atom_indices = set(chain.get_selection().atom_indices)
-            # If the whole chain is included in the selection then add it
-            if chain_atom_indices.issubset(atom_indices):
-                chain_indices.append(chain.index)
-                atom_indices -= chain_atom_indices
-                continue
-            # Iterate residues in this chain to see if any of them fits entirely in the selection
-            for residue in chain.residues:
-                residue_atom_indices = set(residue.get_selection().atom_indices)
-                # If the whole residue is included in the selection then add it
-                if residue_atom_indices.issubset(atom_indices):
-                    residue_indices.append(residue.index)
-                    atom_indices -= residue_atom_indices
-        # Set the finally formatted selection
-        formatted = { 'n': len(selection) }
-        if len(chain_indices) > 0:
-            formatted['ch'] = chain_indices
-        if len(residue_indices) > 0:
-            formatted['re'] = residue_indices
-        if len(atom_indices) > 0:
-            formatted['at'] = sorted(atom_indices)
-        return formatted
-    
     # Add the main selections
-    if pbc_selection: selections['pbc'] = format_selection(pbc_selection)
-    if cg_selection: selections['cg'] = format_selection(cg_selection)
-    if dummy_selection: selections['dummy'] = format_selection(dummy_selection)
+    if pbc_selection: selections['pbc'] = format_selection(structure, pbc_selection)
+    if cg_selection: selections['cg'] = format_selection(structure, cg_selection)
+    if ua_selection: selections['ua'] = format_selection(structure, ua_selection)
+    if qm_selection: selections['qm'] = format_selection(structure, qm_selection)
+    if dummy_selection: selections['dummy'] = format_selection(structure, dummy_selection)
 
     # Add residue classes as selections
     available_classes = set([ residue.classification for residue in structure.residues ])
     for classification in available_classes:
         selection = structure.select_by_classification(classification)
-        selections[classification] = format_selection(selection)
+        selections[classification] = format_selection(structure, selection)
 
     # Setup the final output
     topology = {

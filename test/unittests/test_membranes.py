@@ -33,7 +33,9 @@ EXPECTED_TYPES = {'A05SA': [VESICLE], 'A05RV': [MICELLE], 'A05Q3': [VESICLE], 'A
 # Expected number of unassigned lipids for the test accessions which have some (none by default)
 EXPECTED_UNASSIGNED = {'A01JD': 1}
 # Coarse grained residues of the test accessions
-CG_SELECTIONS = {'cg_test': 'resname DPPC', 'A01JD': 'resname DPPC', 'A05T5': 'all'}
+CG_SELECTIONS = {'cg_test': 'resname DPPC', 'A05T5': 'all'}
+# United atom residues of the test accessions
+UA_SELECTIONS = {'A01JD': 'resname DPPC'}
 # Residue names which must be only in one membrane of the test accessions, by membrane index
 EXPECTED_MEMBRANE_RESNAMES = {'A05T5': ({'MC3', 'MC3H', 'DSPC', 'DPG2'}, '1')}
 
@@ -92,14 +94,16 @@ class TestMembraneMapping:
             universe = get_mda_universe_from_stopology(top, trajectory_file.absolute_path)
         else:
             universe = mda.Universe(top, trajectory_file.absolute_path)
-        cg_selection = universe.select_atoms(CG_SELECTIONS[test_accession]).residues.resindices if test_accession in CG_SELECTIONS else []
+        cg_residues = universe.select_atoms(CG_SELECTIONS[test_accession]).residues.resindices if test_accession in CG_SELECTIONS else []
+        ua_residues = universe.select_atoms(UA_SELECTIONS[test_accession]).residues.resindices if test_accession in UA_SELECTIONS else []
         output_file = File((test_dir / f'{test_accession}_membrane_mapping_output.json').as_posix())
         if output_file.exists: output_file.remove()
         membrane_map = generate_membrane_mapping(
             inchikeys,
             lipid_references,
             universe,
-            cg_selection,
+            cg_residues,
+            ua_residues,
             output_file
         )
         assert [mem['type'] for mem in membrane_map['mems'].values()] == EXPECTED_TYPES.get(test_accession, [BILAYER])
@@ -606,7 +610,7 @@ class TestLipidOrder:
 
     def test_all_atom_bilayer_lipids(self):
         assert [mem['type'] for mem in self.membrane_map['mems'].values()] == [BILAYER, MICELLE]
-        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
+        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], [], snapshots=1)
         assert len(self.calls) == 1
         assert [lipid['residue_indices'] for lipid in self.calls[0]] == [self.bilayer_residues]
 
@@ -616,13 +620,13 @@ class TestLipidOrder:
         midplane_residue = self.universe.atoms[bilayer['leaflets']['top']].residues[0]
         bilayer['leaflets']['top'] = [atom for atom in bilayer['leaflets']['top'] if atom not in midplane_residue.atoms.indices]
         bilayer['leaflets'][MIDPLANE] = midplane_residue.atoms.indices.tolist()
-        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
+        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], [], snapshots=1)
         assert [lipid['residue_indices'] for lipid in self.calls[0]] == [[r for r in self.bilayer_residues if r != midplane_residue.resindex]]
 
     def test_coarse_grain_bilayer_lipids(self):
         import types
         topology_file = types.SimpleNamespace(format='tpr')
-        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], snapshots=1)
+        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], [], snapshots=1)
         # Atom numbers of the bilayer lipids, 3 atoms per lipid
         assert self.calls == [f'@membrane and atomnum 1-{3 * len(self.bilayer_residues)}']
 
@@ -635,13 +639,25 @@ class TestLipidOrder:
         self.universe.residues.resnames = ['LIP'] * (n_bilayer // 2) + ['XYZ'] * (n_bilayer - n_bilayer // 2) + \
             ['MIC'] * (len(self.universe.residues) - n_bilayer)
         topology_file = types.SimpleNamespace(format='tpr')
-        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], snapshots=1)
+        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], [], snapshots=1)
         assert sorted(residue.resname for residue in self.cg_lipids) == ['LIP', 'XYZ']
         assert all(residue.resindex in self.bilayer_residues for residue in self.cg_lipids)
 
+    def test_united_atom_bilayer_lipids(self, monkeypatch):
+        """United atom lipids, the ones in the united atom selection, are analyzed with the united atom method."""
+        import types
+        import mddb_workflow.analyses.lipid_order as lipid_order
+        ua_calls = []
+        monkeypatch.setattr(lipid_order, 'ua_lipid_order', lambda universe, topology_file, output_directory, frame_step, lipids, selection:
+            ua_calls.append(selection))
+        topology_file = types.SimpleNamespace(format='tpr')
+        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [], self.bilayer_residues, snapshots=1)
+        assert ua_calls == [f'@membrane and atomnum 1-{3 * len(self.bilayer_residues)}']
+        assert self.calls == []
+
     def test_no_bilayers(self):
         del self.membrane_map['mems']['0']
-        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
+        self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], [], snapshots=1)
         assert self.calls == []
 
 
@@ -677,9 +693,15 @@ class TestLipidInteractions:
         universe = mda.Merge(lipids.atoms, protein.atoms)
         calls = []
         monkeypatch.setattr(lipid_interactions, 'cg_lipid_interactions', lambda universe, lipid_group, iterator: calls.append(lipid_group))
-        lipid_interactions.lipid_interactions(membrane_map, universe, None, [], [0], snapshots=1)
+        lipid_interactions.lipid_interactions(membrane_map, universe, None, [], [0], [], snapshots=1)
         assert len(calls) == 1
         assert len(calls[0].residues) == len(heads)
+        # United atom lipids are also taken from the membrane mapping, but analysed with the united atom method
+        ua_calls = []
+        monkeypatch.setattr(lipid_interactions, 'ua_lipid_interactions', lambda universe, lipid_group, iterator: ua_calls.append(lipid_group))
+        lipid_interactions.lipid_interactions(membrane_map, universe, None, [], [], list(range(len(heads))), snapshots=1)
+        assert len(calls) == 1
+        assert len(ua_calls[0].residues) == len(heads)
 
 
 # Molecules to test the lipid classification, with their expected LIPID MAPS category
@@ -941,13 +963,13 @@ class TestInChIKeys:
 
     def test_single_residue_without_pool(self):
         universe, structure, cg_selection = self.molecules(['CCO'])
-        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, parallel=True)
+        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, cg_selection, parallel=True)
         assert list(inchikeys) == ['LFQSCWFLJHTTHZ-UHFFFAOYSA-N']
         assert self.processes == []
 
     def test_pool_processes_capped(self):
         universe, structure, cg_selection = self.molecules(['CCO', 'CC(=O)O'])
-        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, parallel=True)
+        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, cg_selection, parallel=True)
         assert len(inchikeys) == 2
         assert self.processes == [2]
 

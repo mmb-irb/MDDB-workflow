@@ -11,7 +11,7 @@ from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.atom_counters import get_topology_and_trajectory_atoms
 from mddb_workflow.tools.atom_counters import get_structure_atoms
 from mddb_workflow.tools.atom_counters import get_structure_and_trajectory_atoms
-from mddb_workflow.tools.guess_and_filter import guess_and_filter_topology
+from mddb_workflow.tools.guess_and_filter import guess_and_filter_topology, guess_and_filter_structure
 
 import re
 from scipy.io import netcdf_file
@@ -24,6 +24,7 @@ EMPTY_LINE = '\n'
 
 # Set exceptions for fixes applied from here
 FIXED_TOPOLOGY_EXCEPTION = Exception('Fixed topology')
+FIXED_STRUCTURE_EXCEPTION = Exception('Fixed structure')
 
 
 def check_input_files(
@@ -165,9 +166,26 @@ def check_input_files(
 
     # Make sure their atom counts match
     if structure_atom_count != trajectory_atom_count:
-        raise InputError('Mismatch in the number of atoms between input files:\n' +
+        mismatch_message = ('Mismatch in the number of atoms between input files:\n' +
             f' Structure "{structure_file.path}" -> {structure_atom_count} atoms\n' +
             f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
+        if structure_atom_count < trajectory_atom_count:
+            raise InputError(mismatch_message)
+        # If the structure has more atoms than the trajectory (e.g. it includes the solvent) we may attempt to guess
+        # If we guess which atoms are the ones in the trajectory then we can filter the structure
+        warn(mismatch_message)
+        prefiltered_structure_file = structure_file.get_prefixed_file('prefiltered.')
+        guessed = guess_and_filter_structure(
+            structure_file,
+            prefiltered_structure_file,
+            trajectory_atom_count)
+        if not guessed:
+            raise InputError(mismatch_message + '\nCould not guess structure atom selection to match trajectory atoms count')
+        # Save the new structure file in the exceptions
+        # From now on use the prefiltered structure as the structure
+        exceptions[FIXED_STRUCTURE_EXCEPTION] = prefiltered_structure_file
+        structure_file = prefiltered_structure_file
+        structure_atom_count = trajectory_atom_count
 
     # If we have a number of topology atoms then make sure it matches the structure and trajectory atoms
     # This may happen if the topology is our standard topology file instead of a valid topology

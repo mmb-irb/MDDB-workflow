@@ -339,13 +339,13 @@ def main():
     # In case the view tool was called
     elif subcommand == 'view':
         view_project(
-            structure_filepath=args.structure,
-            trajectory_filepath=args.trajectory,
+            input_filepaths=args.input_files,
             start=args.start,
             end=args.end,
             step=args.step,
             frames=args.frames,
-            selection=args.selection
+            selection=args.selection,
+            all_frames=args.all
         )
 
     # In case the chainer tool was called
@@ -435,7 +435,8 @@ def main():
                 end=args.end,
                 step=args.step,
                 frames=args.frames,
-                selection=args.selection
+                selection=args.selection,
+                all_frames=args.all
             )
         elif args.dataset_subcommand == 'show':
             if args.summary:
@@ -507,6 +508,16 @@ def main():
             dataset.set_inputs_field(
                 field=field,
                 value=value,
+                query_path=args.query_path,
+                query_state=args.query_state,
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
+            )
+        elif args.dataset_subcommand == 'inputs' and not args.inputs_template:
+            # Without a template there is nothing to generate so we show the existing inputs files
+            if args.inputs_generator or args.overwrite:
+                ds_inputs.error("--inputs_generator and --overwrite require --inputs_template")
+            dataset.show_inputs_files(
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_message=args.query_message,
@@ -746,6 +757,8 @@ run_parser_selection_args = [
     (['-filt', '--filter_selection'], {'nargs': '?', 'default': False, 'const': True, 'help': project_init_help['filter_selection']}),
     (['-pbc', '--pbc_selection'], {'default': None, 'help': project_init_help['pbc_selection']}),
     (['-cg', '--cg_selection'], {'default': None, 'help': project_init_help['cg_selection']}),
+    (['-ua', '--ua_selection'], {'default': None, 'help': project_init_help['ua_selection']}),
+    (['-qm', '--qm_selection'], {'default': None, 'help': project_init_help['qm_selection']}),
     (['-pcafit', '--pca_fit_selection'], {'default': PROTEIN_AND_NUCLEIC_BACKBONE, 'help': project_init_help['pca_fit_selection']}),
     (['-pcana', '--pca_analysis_selection'], {'default': PROTEIN_AND_NUCLEIC_BACKBONE, 'help': project_init_help['pca_analysis_selection']}),
 ]
@@ -866,12 +879,12 @@ for flags, kwargs in subset_parser_args:
 # The view command
 view_parser = subparsers.add_parser("view",
     help="Open VMD with the most processed structure and trajectory of the current project\n" +
-        "Only the first 10 frames are loaded unless other frames are specified",
+        "If no frames are specified then all frames are loaded for trajectories under 500 MB and only the first 10 frames otherwise",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
 view_parser_args = [
-    (["structure"], {'nargs': '?', 'default': None, 'help': "Path to the structure file. The most processed structure in the project by default"}),
-    (["trajectory"], {'nargs': '?', 'default': None, 'help': "Path to the trajectory file. If the structure is passed alone then no trajectory is loaded"}),
+    (["input_files"], {'nargs': '*', 'metavar': 'FILE', 'help': "Paths to the structure and the trajectory files, in any order. " +
+        "The most processed structure and trajectory in the project by default. If the structure is passed alone then no trajectory is loaded"}),
 ]
 # Frame and selection options are shared with the dataset view command
 view_shared_args = [
@@ -879,6 +892,7 @@ view_shared_args = [
     (["-end", "--end"], {'type': int, 'default': None, 'help': "End frame (0-based, not included). The last frame by default if start or step are passed"}),
     (["-step", "--step"], {'type': int, 'default': None, 'help': "Frame step"}),
     (["-fr", "--frames"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be loaded (0-based). Other arguments are ignored."}),
+    (["-a", "--all"], {'action': 'store_true', 'help': "Load all frames. Other frame arguments are ignored."}),
     (["-sel", "--selection"], {'default': None, 'help': "Atom selection (VMD syntax) to focus the view on. It is also shown in CPK over the default representation."}),
 ]
 for flags, kwargs in view_parser_args + view_shared_args:

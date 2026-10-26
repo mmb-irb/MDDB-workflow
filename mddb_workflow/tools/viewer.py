@@ -6,7 +6,7 @@ from glob import glob
 from subprocess import call
 from tempfile import TemporaryDirectory
 from mddb_workflow.mwf import Project, MD
-from mddb_workflow.utils.auxiliar import InputError, parse_glob, unique
+from mddb_workflow.utils.auxiliar import InputError, parse_glob, unique, warn
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, STRUCTURE_FILENAME, TRAJECTORY_FILENAME, TRAJECTORY_SAMPLE_FILENAME
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, IMAGED_STRUCTURE, FILTERED_STRUCTURE, CONVERTED_STRUCTURE
 from mddb_workflow.utils.constants import CORRECTED_TRAJECTORY, IMAGED_TRAJECTORY, FILTERED_TRAJECTORY, CONVERTED_TRAJECTORY
@@ -15,6 +15,8 @@ from mddb_workflow.utils.constants import ACCEPTED_INPUT_FILENAMES, CACHE_FILENA
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.vmd_spells import VMD_FORMAT, vmd_supported_trajectory_formats
+from mddb_workflow.tools.atom_counters import get_topology_and_trajectory_atoms, get_structure_and_trajectory_atoms
+from mddb_workflow.tools.guess_and_filter import guess_and_filter_topology, guess_and_filter_structure
 
 # Structure formats which VMD can load, with the VMD name of each format
 # Topologies have no coordinates but they are fine since a trajectory is always loaded
@@ -32,11 +34,18 @@ NO_COORDINATES_FORMATS = {'prmtop', 'psf'}
 # Topology formats which VMD can not load but we can convert to gro
 CONVERTIBLE_TOPOLOGY_FORMATS = {'tpr'}
 
+# Formats which can be filtered when they have more atoms than the trajectory
+FILTERABLE_TOPOLOGY_FORMATS = {'tpr', 'prmtop'}
+FILTERABLE_STRUCTURE_FORMATS = {'pdb', 'gro'}
+
 # Minimum size in Angstroms of the focused region, to avoid zooming too much on a few atoms
 MIN_FOCUS_SIZE = 10
 
-# Number of frames to be loaded when no frames are specified
+# Number of frames to be loaded when no frames are specified and the trajectory is big
 DEFAULT_FRAMES_COUNT = 10
+
+# Trajectories smaller than this size (in bytes) are fully loaded when no frames are specified
+FULL_LOAD_SIZE_LIMIT = 500 * 1024 * 1024
 
 # Directory where intermediate files are written while input files are processed
 INPRO_DIRECTORY = INCOMPLETE_PREFIX + 'inpro'
@@ -173,30 +182,57 @@ def get_project(directory: str) -> Project:
     return Project(directory=directory, input_md_directories=md_directories)
 
 
+def sort_input_files(input_filepaths: list[str]) -> tuple[File | None, File | None]:
+    """Find out which input file is the structure and which is the trajectory from their formats.
+
+    A single file is always the structure.
+    If both files could be either the structure or the trajectory (e.g. two pdb files) then the input order is kept.
+    """
+    if len(input_filepaths) > 2:
+        raise InputError(f'Up to 2 input files are expected (structure and trajectory) but {len(input_filepaths)} were passed')
+    input_files = [File(filepath) for filepath in input_filepaths]
+    for input_file in input_files:
+        if not input_file.exists:
+            raise InputError(f'File {input_file.path} does not exist')
+    if len(input_files) == 0: return None, None
+    supported_structure_formats = set(VMD_STRUCTURE_FORMATS) | CONVERTIBLE_TOPOLOGY_FORMATS
+    if len(input_files) == 1:
+        structure_file = input_files[0]
+        if structure_file.format not in supported_structure_formats and structure_file.format in vmd_supported_trajectory_formats:
+            raise InputError(f'{structure_file.path} is a trajectory. Pass also a structure, e.g. mwf view structure.pdb {structure_file.path}')
+        return structure_file, None
+    first_file, second_file = input_files
+    def is_valid(structure_file: File, trajectory_file: File) -> bool:
+        return structure_file.format in supported_structure_formats and trajectory_file.format in vmd_supported_trajectory_formats
+    if is_valid(first_file, second_file): return first_file, second_file
+    if is_valid(second_file, first_file): return second_file, first_file
+    raise InputError(f'Could not find out which file is the structure and which is the trajectory: {first_file.path}, {second_file.path}\n'
+        f'  Supported structure formats: {", ".join(sorted(supported_structure_formats))}\n'
+        f'  Supported trajectory formats: {", ".join(sorted(vmd_supported_trajectory_formats))}')
+
+
 def view_project(
     directory: str = '.',
-    structure_filepath: str | None = None,
-    trajectory_filepath: str | None = None,
+    input_filepaths: list[str] = [],
     start: int | None = None,
     end: int | None = None,
     step: int | None = None,
     frames: list[int] = [],
     selection: str | None = None,
+    all_frames: bool = False,
 ):
     """Open VMD with a structure and some frames of a trajectory.
 
-    If no structure is passed then the most processed structure and trajectory in the project directory are used.
+    Input files are the structure and the trajectory, in any order.
+    If no file is passed then the most processed structure and trajectory in the project directory are used.
     If only the structure is passed then it is loaded alone.
-    If no frames are specified then the first 10 frames are loaded.
+    If all frames are requested then the whole trajectory is loaded and other frame options are ignored.
+    If no frames are specified then the whole trajectory is loaded if it is small, or only the first 10 frames otherwise.
     If only some of start/end/step are specified then the end is the last frame.
     The end frame is not included, as in the subset command.
     If a selection is passed then the view is focused on it and it is also shown in CPK.
     """
-    structure_file = File(structure_filepath) if structure_filepath else None
-    trajectory_file = File(trajectory_filepath) if trajectory_filepath else None
-    for passed_file in [structure_file, trajectory_file]:
-        if passed_file and not passed_file.exists:
-            raise InputError(f'File {passed_file.path} does not exist')
+    structure_file, trajectory_file = sort_input_files(input_filepaths)
     # If only the structure is passed then it is loaded alone
     if not structure_file:
         project = get_project(directory)
@@ -210,6 +246,9 @@ def view_project(
     if trajectory_file: print(f'Trajectory: {trajectory_file.path}')
     # Temporary files are removed once VMD is closed
     temporary_directory = TemporaryDirectory()
+    # Remove atoms missing in the trajectory (e.g. water) from the structure, as it is done when checking the inputs
+    if trajectory_file:
+        structure_file = match_trajectory_atoms(structure_file, trajectory_file, temporary_directory.name)
     # Convert topologies which VMD can not load to gro
     if structure_file.format in CONVERTIBLE_TOPOLOGY_FORMATS:
         converted_structure_file = structure_file.get_reformated_file('gro').get_relocated_file(temporary_directory.name)
@@ -231,12 +270,17 @@ def view_project(
         commands.append('animate delete all')
         trajectory_vmd_format = VMD_FORMAT[trajectory_file.format]
         load_command = f'mol addfile {{{trajectory_file.path}}} type {trajectory_vmd_format}'
-        if frames:
+        if all_frames:
+            commands.append(f'{load_command} waitfor all')
+        elif frames:
             for frame in sorted(frames):
                 commands.append(f'{load_command} first {frame} last {frame} waitfor all')
         else:
             no_frame_options = start is None and end is None and step is None
-            if no_frame_options: end = DEFAULT_FRAMES_COUNT
+            if no_frame_options and trajectory_file.size >= FULL_LOAD_SIZE_LIMIT:
+                print(f'The trajectory is bigger than {FULL_LOAD_SIZE_LIMIT // (1024 * 1024)} MB. '
+                    f'Only the first {DEFAULT_FRAMES_COUNT} frames are loaded. Use --all to load all frames')
+                end = DEFAULT_FRAMES_COUNT
             if start is None: start = 0
             if step is None: step = 1
             if end is not None and end <= start:
@@ -264,6 +308,41 @@ def view_project(
             selection_error = file.read().strip()
     temporary_directory.cleanup()
     if selection_error: raise InputError(selection_error)
+
+
+def match_trajectory_atoms(structure_file: File, trajectory_file: File, output_directory: str) -> File:
+    """Filter the structure when it has more atoms than the trajectory.
+
+    Typical atom selections (e.g. no water) are tried until one matches the trajectory atom count.
+    The filtered structure is written in the output directory.
+    """
+    if structure_file.format in FILTERABLE_TOPOLOGY_FORMATS:
+        structure_atom_count, trajectory_atom_count = get_topology_and_trajectory_atoms(structure_file, trajectory_file)
+    elif structure_file.format in FILTERABLE_STRUCTURE_FORMATS:
+        structure_atom_count, trajectory_atom_count = get_structure_and_trajectory_atoms(structure_file, trajectory_file)
+    # Other formats are loaded as they are and VMD complains if atoms do not match
+    else: return structure_file
+    if structure_atom_count == trajectory_atom_count: return structure_file
+    mismatch_message = ('Mismatch in the number of atoms between input files:\n' +
+        f' Structure "{structure_file.path}" -> {structure_atom_count} atoms\n' +
+        f' Trajectory "{trajectory_file.path}" -> {trajectory_atom_count} atoms')
+    if structure_atom_count < trajectory_atom_count: raise InputError(mismatch_message)
+    warn(mismatch_message)
+    if structure_file.format in FILTERABLE_TOPOLOGY_FORMATS:
+        filtered_structure_file = structure_file.get_prefixed_file('prefiltered.').get_relocated_file(output_directory)
+        guessed = guess_and_filter_topology(structure_file, filtered_structure_file, trajectory_atom_count)
+    else:
+        # Gro files are converted to pdb since the structure filter can not read them
+        if structure_file.format == 'gro':
+            pdb_structure_file = structure_file.get_reformated_file('pdb').get_relocated_file(output_directory)
+            run_gromacs(f'editconf -f {structure_file.path} -o {pdb_structure_file.path}')
+            structure_file = pdb_structure_file
+        filtered_structure_file = structure_file.get_prefixed_file('prefiltered.').get_relocated_file(output_directory)
+        guessed = guess_and_filter_structure(structure_file, filtered_structure_file, trajectory_atom_count)
+    if not guessed:
+        raise InputError(mismatch_message + '\nCould not guess structure atom selection to match trajectory atoms count')
+    print(f'Structure filtered to match the trajectory: {filtered_structure_file.path}')
+    return filtered_structure_file
 
 
 def get_focus_commands(selection: str, selection_error_filepath: str) -> list[str]:

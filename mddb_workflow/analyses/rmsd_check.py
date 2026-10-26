@@ -3,16 +3,35 @@ import pytraj as pt
 import numpy as np
 import math
 import sys
+from os.path import abspath
 
 # Visual output tools
 from tqdm import tqdm
 import plotext as plt
+from sklearn.mixture import GaussianMixture
 
 from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn, fail
 from mddb_workflow.utils.auxiliar import round_to_hundredths
-from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG, RED_HEADER, COLOR_END
+from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG, BIMODALITY_BIC_CUTOFF, BIMODALITY_SEPARATION_CUTOFF
+from mddb_workflow.utils.constants import RED_HEADER, COLOR_END
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory
+from mddb_workflow.utils.mdt_spells import iterate_xtc_frames, unrotate_box
+from mddb_workflow.utils.selections import Selection
+from mddb_workflow.analyses.mindist import remove_view_script, MIN_FOCUS_SIZE
+from mddb_workflow.tools.generate_topology import format_selection
 from mddb_workflow.utils.type_hints import *
+
+# Number of bonds which change the most in the biggest jump to be highlighted in the VMD script
+HIGHLIGHTED_BONDS = 5
+
+# Number of failed fragments to be shown in the logs, since there may be thousands
+SHOWN_FAILED_FRAGMENTS = 3
+
+# The meta-fragment is not a real molecule, so it must be explained when it fails
+META_FRAGMENT_NAME = 'Inter-fragment distances'
+META_FRAGMENT_EXPLANATION = ('Note that "Inter-fragment distances" is not a real molecule, but the first atom of every molecule not under PBC.'
+    ' Its distances are between the first atom of every molecule and the next one, which should not change suddenly.'
+    ' If they do, then whole molecules jumped at once (e.g. across the box boundaries).')
 
 # Check if the output is going to a terminal or not
 is_terminal = sys.stdout.isatty()
@@ -29,6 +48,7 @@ is_terminal = sys.stdout.isatty()
 def check_trajectory_integrity (
     input_structure_filename : str,
     input_trajectory_filename : str,
+    view_script_filename : str,
     structure : 'Structure',
     pbc_selection : 'Selection',
     mercy : list[str],
@@ -59,6 +79,7 @@ def check_trajectory_integrity (
 
     # Remove old warnings
     register.remove_warnings(TRAJECTORY_INTEGRITY_FLAG)
+    remove_view_script(view_script_filename)
 
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
@@ -126,7 +147,10 @@ def check_trajectory_integrity (
     fragment_split_selection = structure.invert_selection(chain_split_selection)
     if fragment_split_selection:
         for fragment in structure.find_fragments(fragment_split_selection):
-            fragment_name = structure.name_selection(fragment)
+            # Many fragments may cover the same part of a chain (e.g. lipids) so we add their first atom to the name
+            # Otherwise they would share the name and overwrite each other
+            first_atom = structure.atoms[fragment.atom_indices[0]]
+            fragment_name = f'{structure.name_selection(fragment)} starting at {first_atom.label}'
             bonded_fragments[fragment_name] = fragment
 
     # Merge all fragments together
@@ -138,17 +162,17 @@ def check_trajectory_integrity (
     if len(non_pbc_fragments) >= 2:
         header_atoms_indices = [ fragment.atom_indices[0] for fragment in non_pbc_fragments ]
         meta_fragment = structure.select_atom_indices(header_atoms_indices)
-        meta_fragment_name = 'Inter-fragment distances'
-        unbonded_fragments[meta_fragment_name] = meta_fragment
-        all_fragments[meta_fragment_name] = meta_fragment
+        unbonded_fragments[META_FRAGMENT_NAME] = meta_fragment
+        all_fragments[META_FRAGMENT_NAME] = meta_fragment
 
     print(f'Checking trajectory integrity ({len(all_fragments)} fragments)')
 
-    # Load the trajectory frame by frame
-    trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
+    # Read the trajectory frame by frame with boxes as they are in the file
+    # MDtraj would rebuild them not rotated, which is wrong for fitted trajectories
+    frames = iterate_xtc_frames(input_trajectory_filename)
 
     # Save the previous frame every time
-    previous_frame = next(trajectory)
+    previous_positions, previous_box = next(frames)
 
     # Build atom pairs per fragment to track via distance RMSD
     # Bonded fragments use the safe bonds
@@ -192,50 +216,59 @@ def check_trajectory_integrity (
         indices = fragment.atom_indices
         fragment_bond_pairs[fragment_name] = np.array([(indices[i], indices[i + 1]) for i in range(len(indices) - 1)])
 
+    # Join the pairs of all fragments so distances are computed with a single call per frame
+    # Then every fragment takes its own slice of distances
+    paired_fragment_names = [ name for name, pairs in fragment_bond_pairs.items() if pairs is not None ]
+    single_atom_fragment_names = [ name for name, pairs in fragment_bond_pairs.items() if pairs is None ]
+    pairs_per_fragment = [ len(fragment_bond_pairs[name]) for name in paired_fragment_names ]
+    fragment_starts = np.cumsum([0] + pairs_per_fragment[:-1])
+    all_pairs = np.concatenate([ fragment_bond_pairs[name] for name in paired_fragment_names ])
+
     # Compute distances for the first frame so the loop always has a previous reference
-    previous_bond_distances = {}
-    for fragment_name, pairs in fragment_bond_pairs.items():
-        if pairs is not None:
-            previous_bond_distances[fragment_name] = mdt.compute_distances(previous_frame, pairs, periodic=True)[0]
-        else:
-            previous_bond_distances[fragment_name] = None
+    previous_distances = compute_periodic_distances(previous_positions, previous_box, all_pairs)
 
     # Save all RMSD jumps
-    fragment_rmsd_jumps = { fragment_name: [] for fragment_name in all_fragments.keys() }
+    # Jumps of fragments with pairs are saved as one array per frame, with one value per fragment
+    paired_rmsd_jumps = []
+    single_atom_rmsd_jumps = { fragment_name: [] for fragment_name in single_atom_fragment_names }
 
     # Initialize progress bar first
-    pbar = tqdm(trajectory, total=snapshots, desc=' Frame', unit='frame', initial=1)
+    pbar = tqdm(frames, total=snapshots, desc=' Frame', unit='frame', initial=1)
 
     # Iterate trajectory frames
-    for frame in pbar:
+    for positions, box_vectors in pbar:
 
-        # Iterate over the different fragments
-        for fragment_name, fragment in all_fragments.items():
-            # If the fragment has multiple atoms then compute bond distance RMSD between consecutive frames
-            if len(fragment) > 1:
-                pairs = fragment_bond_pairs[fragment_name]
-                if pairs is not None:
-                    current_dists = mdt.compute_distances(frame, pairs, periodic=True)[0]
-                    bond_dist_rmsd = np.sqrt(np.mean((current_dists - previous_bond_distances[fragment_name]) ** 2))
-                    fragment_rmsd_jumps[fragment_name].append(bond_dist_rmsd)
-                    previous_bond_distances[fragment_name] = current_dists
-            # If the fragment has s ingle atom then check the RMSD as is
-            else:
-                # Calculate RMSD value between previous and current frame
-                # DANI: El centrado de MDtraj elimina el salto a través de las boundaries
-                # DANI: El precentered=True debería evitarlo, pero era ignorado si había atom_indices
-                # DANI: Esto fué arreglado en las últimas versiones de MDtraj
-                rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=fragment.atom_indices, superpose=False)[0]
-                fragment_rmsd_jumps[fragment_name].append(rmsd_value)
+        # Compute bond distance RMSD between consecutive frames for all fragments with pairs at once
+        current_distances = compute_periodic_distances(positions, box_vectors, all_pairs)
+        squared_differences = (current_distances - previous_distances) ** 2
+        squared_sums = np.add.reduceat(squared_differences, fragment_starts)
+        paired_rmsd_jumps.append(np.sqrt(squared_sums / pairs_per_fragment))
+        previous_distances = current_distances
+
+        # If the fragment has a single atom then its RMSD is just how much it moved
+        # Boxes are not used here, so jumps across the boundaries are also caught
+        for fragment_name in single_atom_fragment_names:
+            atom_index = all_fragments[fragment_name].atom_indices[0]
+            rmsd_value = np.linalg.norm(positions[atom_index] - previous_positions[atom_index])
+            single_atom_rmsd_jumps[fragment_name].append(rmsd_value)
 
         # Update the previous frame as the current one
-        previous_frame = frame
+        previous_positions = positions
+
+    # Gather the RMSD jumps of every fragment
+    paired_rmsd_jumps = np.array(paired_rmsd_jumps)
+    fragment_rmsd_jumps = { name: paired_rmsd_jumps[:, i] for i, name in enumerate(paired_fragment_names) }
+    fragment_rmsd_jumps.update(single_atom_rmsd_jumps)
 
     # Check all fragments and store their test result here before issuing the final report
     fragment_reports = []
 
+    # Count failed fragments, since only the first ones are shown in the logs
+    failed_fragments = 0
+
     # Iterate over the different fragments
     for fragment_name, fragment in all_fragments.items():
+        show_logs = failed_fragments < SHOWN_FAILED_FRAGMENTS
 
         # get the results
         rmsd_jumps = fragment_rmsd_jumps[fragment_name]
@@ -243,8 +276,7 @@ def check_trajectory_integrity (
         # Skip fragments for which no metric could be computed (single atoms with no pairs)
         # A multi-atom fragment with no intra-fragment bonds means all its bonds point outside
         # the fragment — likely a cofactor or ligand fully bonded to another fragment in the topology
-        if not rmsd_jumps:
-            breakpoint()
+        if len(rmsd_jumps) == 0:
             raise RuntimeError(f'Fragment "{fragment_name}" could not be analyzed')
 
         # Capture outliers
@@ -278,11 +310,44 @@ def check_trajectory_integrity (
                     continue
                 # If we are no long bypassing frist frames then outliers mean the test has failed
                 # But don't kill the check just yet
-                if outliers_count < 4:
-                    print(f' FAIL: Sudden RMSD jump in fragment "{fragment_name}" between frames {i} and {i+1} (z score = {round_to_hundredths(z_score)})')
-                if outliers_count == 4:
+                if show_logs and outliers_count < 4:
+                    print(f' FAIL: Sudden RMSD jump in fragment "{fragment_name}" between frames {i} and {i+1} (1-based numeration) with a z-score of {round_to_hundredths(z_score)}')
+                if show_logs and outliers_count == 4:
                     print(' etc...')
                 outliers_count += 1
+
+        # A jump which breaks the fragment for good leaves big jumps in all the following frames
+        # These jumps make the standard deviation bigger and then the first jump does not stand out in the z score
+        # However, the RMSD jumps are then split in two groups: before and after the break
+        # The same happens when a region jumps and comes back repeatedly along the trajectory
+        # So we also check if two gaussians fit the RMSD jumps much better than one
+        # Jumps are divided by their median so the fit does not depend on their scale
+        scaled_jumps = (rmsd_jumps / np.median(rmsd_jumps)).reshape(-1, 1)
+        one_gaussian = GaussianMixture(1, random_state=0).fit(scaled_jumps)
+        two_gaussians = GaussianMixture(2, random_state=0).fit(scaled_jumps)
+        bimodality_score = one_gaussian.bic(scaled_jumps) - two_gaussians.bic(scaled_jumps)
+        # Two gaussians may also fit better when there is a single group of jumps which is skewed
+        # e.g. a rigid molecule with a single flexible bond has a minimum jump and then a tail of bigger jumps
+        # So the groups must be also far from each other: bigger jumps must be several times bigger on average
+        group_means = two_gaussians.means_[:, 0]
+        separation = group_means.max() / group_means.min()
+        bimodal_frames = 0
+        if bimodality_score > BIMODALITY_BIC_CUTOFF and separation > BIMODALITY_SEPARATION_CUTOFF:
+            # Find the frames in the group of bigger jumps
+            bigger_group = np.argmax(group_means)
+            bigger_group_frames = np.where(two_gaussians.predict(scaled_jumps) == bigger_group)[0] + 1
+            # If bigger jumps are all in the first frames then these frames are not equilibrated
+            if bigger_group_frames[-1] == len(bigger_group_frames):
+                bypassed_frames = max(bypassed_frames, len(bigger_group_frames))
+            else:
+                bimodal_frames = len(bigger_group_frames)
+                first_frame = bigger_group_frames[0]
+                if show_logs:
+                    print(f' FAIL: RMSD jumps in fragment "{fragment_name}" are split in two groups'
+                        f' (bimodality score = {round_to_hundredths(bimodality_score)}, separation = {round_to_hundredths(separation)}).'
+                        f' Bigger jumps start between frames {first_frame} and {first_frame + 1}')
+
+        if outliers_count > 0 or bimodal_frames > 0: failed_fragments += 1
 
         # Save the report for this fragment
         fragment_reports.append({
@@ -291,51 +356,111 @@ def check_trajectory_integrity (
             'frame': max_z_score_frame,
             'outliers': outliers_count,
             'bypass': bypassed_frames,
+            'bimodality': bimodality_score,
+            'separation': separation,
+            'bimodal_frames': bimodal_frames,
             'jumps' : rmsd_jumps
         })
 
+    hidden_fragments = failed_fragments - SHOWN_FAILED_FRAGMENTS
+    if hidden_fragments > 0: print(f' (and {hidden_fragments} fragments more)')
+
     # If there was any outliers or any bypassed frames then the test has failed
     # LORE: Back in the day having bypassed frames was not a test failure, but now it is
-    any_outliers = any(report['outliers'] > 0 for report in fragment_reports)
+    any_outliers = any(report['outliers'] > 0 or report['bimodal_frames'] > 0 for report in fragment_reports)
     any_bypassed_frames = any(report['bypass'] > 0 for report in fragment_reports)
 
     # If the test has failed then display a full report
+    # Only failed fragments are shown since there may be thousands of fragments
     if any_outliers or any_bypassed_frames:
         print('-- RMSD Check final report --')
+        passed_count = 0
+        shown_count = 0
         for report in fragment_reports:
             name = report['name']
             max_z_score = round_to_hundredths(report['score'])
             max_z_score_frame = report['frame']
             outliers = report['outliers']
             bypassed_frames = report['bypass']
-            passed = outliers == 0 and bypassed_frames == 0
-            # If the fragment has n0 problems
+            bimodal_frames = report['bimodal_frames']
+            passed = outliers == 0 and bypassed_frames == 0 and bimodal_frames == 0
+            # If the fragment has no problems
             if passed:
-                print(f'Fragment "{name}" PASSED with a maximum z-score of {max_z_score}'
-                      f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
+                passed_count += 1
                 continue
             # If the fragment failed to pass the test
+            if shown_count == SHOWN_FAILED_FRAGMENTS: continue
+            shown_count += 1
             fail(f'Fragment "{name}" FAILED with a maximum z-score of {max_z_score}'
-                 f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}{COLOR_END}')
+                 f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}'
+                 f', a bimodality score of {round_to_hundredths(report["bimodality"])}'
+                 f' and a separation of {round_to_hundredths(report["separation"])}{COLOR_END}')
             if outliers > 0: print(f' Outliers: {outliers}')
+            if bimodal_frames > 0: print(f' Frames in the group of bigger jumps: {bimodal_frames}')
             if bypassed_frames > 0: print(f' Bypassed frames: {bypassed_frames}')
+        hidden_fragments = len(fragment_reports) - passed_count - shown_count
+        if hidden_fragments > 0: print(f'(and {hidden_fragments} failed fragments more)')
+        print(f'{passed_count} other fragments PASSED')
         print('*The z-score of a value means how many times the standard deviation away it is from the average')
+        print('*The bimodality score means how much better two gaussians fit the jumps than one (BIC difference)')
+        print('*The separation means how many times bigger the jumps of the bigger gaussian are on average')
+        print('*The bimodality only fails when both the bimodality score and the separation are above their cutoffs')
+
+        # Find the worst fragment
+        # Show the most bimodal fragment if any, since its jumps may not stand out in the z score
+        bimodal_reports = [ report for report in fragment_reports if report['bimodal_frames'] > 0 ]
+        if bimodal_reports:
+            worst_report = max(bimodal_reports, key=lambda report: report['bimodality'])
+        elif any_outliers:
+            worst_report = max(fragment_reports, key=lambda report: report['score'])
+        else:
+            worst_report = max(fragment_reports, key=lambda report: report['bypass'])
+
+        # Write a VMD script for the user to see the biggest jump in the worst fragment
+        # This is not part of the warning since it is only useful for the workflow user
+        worst_fragment = all_fragments[worst_report['name']]
+        # Frame after the biggest jump, starting at 0
+        jump_frame = int(np.argmax(worst_report['jumps'])) + 1
+        # Show the two frames before the jump and the two frames after it, as long as they exist
+        last_frame = len(worst_report['jumps'])
+        shown_frames = list(range(max(jump_frame - 2, 0), min(jump_frame + 1, last_frame) + 1))
+        jumping_atoms = find_jumping_atoms(input_trajectory_filename,
+            worst_fragment, fragment_bond_pairs[worst_report['name']], jump_frame)
+        is_meta_fragment = worst_report['name'] == META_FRAGMENT_NAME
+        write_view_script(view_script_filename, input_structure_filename, input_trajectory_filename,
+            jump_frame, shown_frames, worst_fragment, jumping_atoms, is_meta_fragment)
+        view_hint = f'To see the clearest jump run:\n  vmd -e {view_script_filename}'
+
+        # Describe the worst fragment and its biggest jump in the warning
+        failed_count = len(fragment_reports) - passed_count
+        description = (f'{failed_count} of {len(fragment_reports)} fragments failed. The worst one is "{worst_report["name"]}"'
+            f', with a maximum z-score of {round_to_hundredths(worst_report["score"])} (cutoff {standard_deviations_cutoff})'
+            f', a bimodality score of {round_to_hundredths(worst_report["bimodality"])} (cutoff {BIMODALITY_BIC_CUTOFF})'
+            f' and a separation of {round_to_hundredths(worst_report["separation"])} (cutoff {BIMODALITY_SEPARATION_CUTOFF})')
+        if worst_report['bypass'] > 0:
+            description += f', and {worst_report["bypass"]} bypassed frames at the beginning'
+        description += f'.\nIts biggest jump is between frames {jump_frame - 1} and {jump_frame}.'
+        if is_meta_fragment: description += f'\n{META_FRAGMENT_EXPLANATION}'
+        # Frames and atoms to be shown in the client
+        data = {
+            'frames': shown_frames,
+            'selection': format_selection(structure, worst_fragment),
+        }
 
     # If there were any outlier then the check has failed
     if any_outliers > 0:
         # Add a warning an return True since the test failed in case we have mercy
         message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
         if TRAJECTORY_INTEGRITY_FLAG in mercy:
-            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
+            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message, description, data)
+            print(f' {view_hint}')
             register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
             return False
         # Otherwise kill the process right away, after displaying a graph
-        max_z_score = max(report['score'] for report in fragment_reports)
-        worst_report = next(report for report in fragment_reports if report['score'] == max_z_score)
-        title = f'RMSD jumps along the trajectory in fragment "{report["name"]}"'
+        title = f'RMSD jumps along the trajectory in fragment "{worst_report["name"]}"'
         report_data = worst_report['jumps']
         display_rmsd_jumps_graph(report_data, title)
-        raise TestFailure(message)
+        raise TestFailure(f'{message}\n{description}\n{view_hint}')
 
     # Warn the user if we had bypassed frames
     if any_bypassed_frames > 0:
@@ -344,25 +469,119 @@ def check_trajectory_integrity (
         message = f'First {max_bypassed_frames} frames may be not equilibrated.'
         # Add a warning an return True since the test failed in case we have mercy
         if TRAJECTORY_INTEGRITY_FLAG in mercy:
-            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
+            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message, description, data)
+            print(f' {view_hint}')
             register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
             return False
         # Otherwise kill the process, after displaying a graph
-        max_z_score = max(report['score'] for report in fragment_reports)
-        worst_report = next(report for report in fragment_reports if report['score'] == max_z_score)
         graph_frames_limit = max_bypassed_frames + 100
         report_data = worst_report['jumps'][0:graph_frames_limit]
-        title = f'RMSD jumps along the trajectory in fragment "{report["name"]}" (first {graph_frames_limit} frames)'
+        title = f'RMSD jumps along the trajectory in fragment "{worst_report["name"]}" (first {graph_frames_limit} frames)'
         display_rmsd_jumps_graph(report_data, title)
         # Note that frames already skipped must be added to the suggested number of frames to skip
         message += f' Use the "--mercy {TRAJECTORY_INTEGRITY_FLAG}" flag to skip this error' \
             f' or exclude these frames from the trajectory with "-skip {md_index} {skipped_frames + max_bypassed_frames}"' \
             ' (or the "skip_frames" input).'
-        raise TestFailure(message)
+        raise TestFailure(f'{message}\n{description}\n{view_hint}')
 
     print(' Test has passed successfully')
     register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
     return True
+
+
+def compute_periodic_distances(
+    positions : np.ndarray,
+    box_vectors : np.ndarray,
+    pairs : np.ndarray,
+) -> np.ndarray:
+    """Get the distance between the atoms of every pair, using the closest periodic image.
+    Boxes may be rotated (e.g. in fitted trajectories), which MDtraj does not support.
+    For this reason the whole frame is rotated back before calculating distances.
+    A box full of zeros means there are no periodic boundaries.
+    """
+    has_box = box_vectors.any()
+    if has_box: positions, box_vectors = unrotate_box(positions, box_vectors)
+    frame = mdt.Trajectory(positions[np.newaxis], None)
+    if has_box: frame.unitcell_vectors = box_vectors[np.newaxis]
+    return mdt.compute_distances(frame, pairs, periodic=True)[0]
+
+
+def find_jumping_atoms(
+    trajectory_filename : str,
+    fragment : 'Selection',
+    pairs : Optional[np.ndarray],
+    jump_frame : int,
+) -> 'Selection':
+    """Find the atoms of the bonds which change the most in a jump, from the previous frame to the jump frame.
+    Fragments with a single atom have no bonds, so the atom itself is returned.
+    """
+    if pairs is None: return fragment
+    with mdt.formats.XTCTrajectoryFile(trajectory_filename) as reader:
+        reader.seek(jump_frame - 1)
+        xyz, _, _, boxes = reader.read(n_frames=2)
+    previous_distances = compute_periodic_distances(xyz[0], boxes[0], pairs)
+    distances = compute_periodic_distances(xyz[1], boxes[1], pairs)
+    changes = np.abs(distances - previous_distances)
+    biggest_changes = np.argsort(-changes)[:HIGHLIGHTED_BONDS]
+    # Keep only bonds which change at least half as much as the bond which changes the most
+    # Otherwise a single broken bond would be shown along with bonds which barely change
+    biggest_changes = biggest_changes[changes[biggest_changes] >= changes[biggest_changes[0]] / 2]
+    return Selection([ int(index) for index in np.unique(pairs[biggest_changes]) ])
+
+
+def write_view_script(
+    script_filename : str,
+    structure_filename : str,
+    trajectory_filename : str,
+    jump_frame : int,
+    shown_frames : list[int],
+    fragment : 'Selection',
+    jumping_atoms : 'Selection',
+    is_meta_fragment : bool,
+):
+    """Write a VMD script to see a jump, from the previous frame to the jump frame.
+
+    Only the shown frames are loaded.
+    The fragment is shown in yellow licorice and the atoms of the bonds which change the most in CPK.
+    """
+    previous_frame = jump_frame - 1
+    commands = [
+        f'# Biggest RMSD jump, between frames {previous_frame} and {jump_frame}',
+        f'mol new {{{abspath(structure_filename)}}} type pdb waitfor all',
+        # Frames from the structure file are removed so frame numbers match the trajectory
+        'animate delete all',
+        f'mol addfile {{{abspath(trajectory_filename)}}} type xtc first {shown_frames[0]} last {shown_frames[-1]} waitfor all',
+        'set main [molinfo top]',
+        # Fragment
+        'mol representation Licorice',
+        'mol color ColorID 4',
+        f'mol selection {{{fragment.to_vmd()}}}',
+        'mol material Opaque',
+        'mol addrep $main',
+        # Atoms of the bonds which change the most
+        'mol representation CPK',
+        'mol color Name',
+        f'mol selection {{{jumping_atoms.to_vmd()}}}',
+        'mol addrep $main',
+        # Center the view in the fragment before the jump and zoom in
+        f'animate goto {shown_frames.index(previous_frame)}',
+        f'set fragment [atomselect $main {{{fragment.to_vmd()}}}]',
+        'proc get_size {atoms} {',
+        '    lassign [measure minmax $atoms] lowest highest',
+        '    return [tcl::mathfunc::max {*}[vecsub $highest $lowest]]',
+        '}',
+        'display resetview',
+        'molinfo $main set center_matrix [list [transoffset [vecscale -1 [measure center $fragment]]]]',
+        f'set zoom [expr {{[get_size [atomselect $main all]] / max([get_size $fragment], {MIN_FOCUS_SIZE})}}]',
+        'if {$zoom > 1} { scale by $zoom }',
+        f'puts "Frames {shown_frames[0]} to {shown_frames[-1]} are loaded as frames 0 to {len(shown_frames) - 1}"',
+        f'puts "The jump is between frames {shown_frames.index(previous_frame)} and {shown_frames.index(jump_frame)}"',
+        'puts "The fragment is shown in yellow licorice and the atoms of the bonds which change the most in CPK"',
+    ]
+    if is_meta_fragment:
+        commands.append(f'puts {{{META_FRAGMENT_EXPLANATION}}}')
+    with open(script_filename, 'w') as script_file:
+        script_file.write('\n'.join(commands) + '\n')
 
 
 def display_rmsd_jumps_graph (data : list, title : str):

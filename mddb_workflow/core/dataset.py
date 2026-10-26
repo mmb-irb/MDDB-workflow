@@ -22,6 +22,8 @@ from contextlib import contextmanager
 import importlib.util
 import random
 
+JOB_SCRIPT_FILENAME = 'mwf_slurm_job.sh'
+
 
 def _stream_output(stream, log_file_handle, output_stream):
     """Stream output from subprocess to both log file and terminal."""
@@ -443,6 +445,21 @@ class Dataset:
                     message=message,
                 )
 
+    def get_registered_uuids(self, rel_path: str, is_md: bool) -> tuple[str, str | None] | None:
+        """Get the UUID (and project UUID for MDs) registered in the database for a relative path.
+
+        Returns None if the path is not registered.
+        """
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            if is_md:
+                cur.execute("SELECT uuid, project_uuid FROM mds WHERE rel_path=?", (rel_path,))
+                row = cur.fetchone()
+                return (row[0], row[1]) if row else None
+            cur.execute("SELECT uuid FROM projects WHERE rel_path=?", (rel_path,))
+            row = cur.fetchone()
+            return (row[0], None) if row else None
+
     def _read_uuid_from_cache(self, directory: str, make_uuid: bool = False, project_uuid: str = None) -> tuple[str, str | None]:
         """Read UUID and project_uuid from cache file in the given directory."""
         directory = Path(directory).resolve()
@@ -456,7 +473,16 @@ class Dataset:
             if uuid:
                 return uuid, project_uuid
         if make_uuid:
-            cache = Cache(File(str(cache_file)), project_uuid=project_uuid)
+            # If the cache was lost but the directory is already registered then keep its UUID
+            # Otherwise a new UUID would replace the registered entry and its MDs
+            registered = self.get_registered_uuids(self._abs_to_rel(directory), is_md=project_uuid is not None)
+            registered_uuid = None
+            if registered:
+                registered_uuid, registered_project_uuid = registered
+                if project_uuid is not None and registered_project_uuid != project_uuid:
+                    raise ValueError(f"MD {self._abs_to_rel(directory)} is registered under project UUID "
+                                     f"'{registered_project_uuid}' but its parent project has UUID '{project_uuid}'")
+            cache = Cache(File(str(cache_file)), project_uuid=project_uuid, uuid=registered_uuid)
             uuid = cache.retrieve('uuid')
             project_uuid = cache.retrieve('project_uuid')
             return uuid, project_uuid
@@ -631,19 +657,9 @@ class Dataset:
                     ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                 except sqlite3.IntegrityError as e:
                     if 'UNIQUE constraint failed: mds.rel_path' in str(e):
-                        # In case of rel_path collision, remove the existing entry and insert the new one
-                        # This is the same as saying we maintain the rel_path and updating the uuid
                         cur.execute("SELECT uuid FROM mds WHERE rel_path=?", (rel_path,))
-                        row = cur.fetchone()
-                        if row:
-                            existing_uuid = row[0]
-                            cur.execute("DELETE FROM mds WHERE uuid=?", (existing_uuid,))
-                            cur.execute('''
-                                INSERT INTO mds (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
-                    else:
-                        raise
+                        raise ValueError(self._rel_path_collision_message('MD', rel_path, uuid, cur.fetchone()[0])) from e
+                    raise
             else:
                 # This is a project entry
                 if rel_path is None:
@@ -667,24 +683,25 @@ class Dataset:
                             rel_path=excluded.rel_path
                     ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                 except sqlite3.IntegrityError as e:
-                    # Handling rel_path collision like for MDs
                     if 'UNIQUE constraint failed: projects.rel_path' in str(e):
-                        # Get the UUID of the existing project with this rel_path
                         cur.execute("SELECT uuid FROM projects WHERE rel_path=?", (rel_path,))
-                        row = cur.fetchone()
-                        if row:
-                            existing_uuid = row[0]
-                            # Replacing project automatically removes linked MD rows via ON DELETE CASCADE.
-                            cur.execute("DELETE FROM projects WHERE uuid=?", (existing_uuid,))
-                            cur.execute('''
-                                INSERT INTO projects (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified, num_mds)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-                            ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
-
-                    else:
-                        raise
+                        raise ValueError(self._rel_path_collision_message('Project', rel_path, uuid, cur.fetchone()[0])) from e
+                    raise
 
             self.conn.commit()
+
+    @staticmethod
+    def _rel_path_collision_message(scope: str, rel_path: str, uuid: str, registered_uuid: str) -> str:
+        """Explain why a path cannot be registered with a different UUID.
+
+        Replacing the registered entry would silently delete it (and, for projects, all its MDs).
+        """
+        return (
+            f"{scope} '{rel_path}' is already registered with UUID '{registered_uuid}' "
+            f"but its cache has UUID '{uuid}'. The registered entry is not replaced to avoid losing it. "
+            f"If the cache was regenerated, write the UUID '{registered_uuid}' back to its {CACHE_FILENAME}. "
+            f"If this is really a different {scope.lower()}, remove the old entry first with 'mwf ds remove'."
+        )
 
     def remove_entry(self, query_path: str | list[str], query_scope: str = "projects", verbose: bool = True):
         """Remove a single project or MD entry from the database by directory."""
@@ -855,6 +872,45 @@ class Dataset:
                 continue
             found, value = _read_inputs_field(inputs_filepath, keys)
             print(f'{rel_path}: ' + (repr(value) if found else '(missing)'))
+
+    def show_inputs_files(self,
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [],
+            query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
+        ):
+        """Print the whole content of the inputs files of the selected projects.
+
+        Args:
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
+
+        """
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        if len(filtered_projects) == 0:
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            return
+        for project_entry in filtered_projects:
+            project_dict = dict(zip(self.project_columns, project_entry))
+            rel_path = project_dict['rel_path']
+            inputs_filepath = self._find_inputs_file(rel_path)
+            if inputs_filepath is None:
+                print(f'{rel_path}: (no inputs file)')
+                continue
+            print(f'===== {inputs_filepath} =====')
+            with open(inputs_filepath, 'r') as f:
+                print(f.read())
 
     def show_logs(self,
             error: bool = False,
@@ -1085,6 +1141,8 @@ class Dataset:
             glob_conditions = []
             for pattern in query_path:
                 if pattern and pattern != '*':
+                    # Stored paths have no trailing slash or leading './' so remove them from the pattern too
+                    pattern = os.path.normpath(pattern)
                     sql_pattern = pattern.replace('**/', '*').replace('**', '*')
                     glob_conditions.append("rel_path GLOB ?")
                     params.append(sql_pattern)
@@ -1373,6 +1431,7 @@ class Dataset:
                 Path to the bash script or SLURM job template file. You can use Jinja2
                 templating to customize the job script using the fields of
                 the input YAML, the project directory, and whether SLURM is used.
+                If not provided, the job script generated by a previous run in each project is reused.
             query_path (list[str] | str):
                 If provided, filters rows whose 'rel_path' matches these glob patterns.
             query_state (list[str] | str):
@@ -1386,12 +1445,8 @@ class Dataset:
 
         """
         # Validation: ensure proper parameters are provided
-        if slurm and not job_template:
-            raise ValueError("job_template must be provided when slurm is True")
-        if not job_template and not cmd:
-            raise ValueError("Either a command (-c) or job_template (-jt) must be provided.")
         if slurm and cmd:
-            raise NotImplementedError("Custom command execution is not implemented for SLURM mode. Please provide a job_template that includes the necessary commands.")
+            raise InputError("Custom command execution is not implemented for SLURM mode. Please provide a job_template that includes the necessary commands.")
 
         # Load job template if provided
         template_str = None
@@ -1412,19 +1467,30 @@ class Dataset:
         query_message = _type_check_dir_list(query_message)
         filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
 
-        n = 0
         if debug:
             print(f"DEBUG: Found {len(filtered_projects)} projects matching the query filters.")
             if len(filtered_projects) > 0 and slurm:
                 print("DEBUG: Job will not be submitted to SLURM in debug mode, but the job script will be generated.")
+        if n_jobs > 0:
+            filtered_projects = filtered_projects[:n_jobs]
+
+        # Without a template nor a command, reuse the job scripts from a previous run
+        # Check all of them before launching anything so we do not launch only a part of the projects
+        if not job_template and not cmd:
+            missing_scripts = []
+            for project_entry in filtered_projects:
+                rel_path = dict(zip(self.project_columns, project_entry))['rel_path']
+                if not os.path.exists(os.path.join(self._rel_to_abs(rel_path), JOB_SCRIPT_FILENAME)):
+                    missing_scripts.append(rel_path)
+            if missing_scripts:
+                raise InputError(f"Missing job script ({JOB_SCRIPT_FILENAME}) from a previous run in {len(missing_scripts)} projects: "
+                    + ", ".join(missing_scripts) + "\nPlease provide a command (-c) or a job template (-jt).")
+
         for project_entry in filtered_projects:
             project_dict = dict(zip(self.project_columns, project_entry))
             rel_path = project_dict['rel_path']
             project_dir = self._rel_to_abs(rel_path)
-
-            n += 1
-            if n_jobs > 0 and n > n_jobs:
-                break
+            job_script_path = os.path.join(project_dir, JOB_SCRIPT_FILENAME)
             # Generate job script from template if provided
             if template_str:
                 inputs_yaml_path = os.path.join(project_dir, 'inputs.yaml')
@@ -1436,7 +1502,6 @@ class Dataset:
                                                 PATH=Path(project_dir),
                                                 slurm=slurm)
 
-                job_script_path = os.path.join(project_dir, 'mwf_slurm_job.sh')
                 with open(job_script_path, 'w') as f:
                     f.write(rendered_script)
                 os.chmod(job_script_path, 0o755)
