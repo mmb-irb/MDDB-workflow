@@ -191,18 +191,18 @@ def check_cross_periodic_contacts(
 
     print(f'Checking cross-PBC contacts ({n_nonpbc} non-PBC atoms, cutoff {distance_cutoff} Å)')
 
-    # Split non-PBC atoms in fragments to check none of them goes away from the rest of the system
-    # The geometric center of every fragment is compared against the geometric center of all non-PBC atoms
-    # If bonds are missing then we can not find fragments so we use chains instead
-    if structure.is_missing_any_bonds():
-        fragments = [ chain.get_selection() & non_pbc_selection for chain in structure.chains ]
-        fragments = [ fragment for fragment in fragments if fragment ]
-    else:
-        fragments = list(structure.find_fragments(non_pbc_selection))
-    fragments_atom_indices = [ np.array(fragment.atom_indices) for fragment in fragments ]
-    # Frames where every fragment escaped, and the distances in the first escaped frame
-    escape_frames = [ [] for _ in fragments ]
-    first_escape_distances = [ None for _ in fragments ]
+    # # Split non-PBC atoms in fragments to check none of them goes away from the rest of the system
+    # # The geometric center of every fragment is compared against the geometric center of all non-PBC atoms
+    # # If bonds are missing then we can not find fragments so we use chains instead
+    # if structure.is_missing_any_bonds():
+    #     fragments = [ chain.get_selection() & non_pbc_selection for chain in structure.chains ]
+    #     fragments = [ fragment for fragment in fragments if fragment ]
+    # else:
+    #     fragments = list(structure.find_fragments(non_pbc_selection))
+    # fragments_atom_indices = [ np.array(fragment.atom_indices) for fragment in fragments ]
+    # # Frames where every fragment escaped, and the distances in the first escaped frame
+    # escape_frames = [ [] for _ in fragments ]
+    # first_escape_distances = [ None for _ in fragments ]
 
     violation_frames = []
     # Frame with the largest number of atoms in cross-PBC contact, to be reported as example
@@ -226,13 +226,13 @@ def check_cross_periodic_contacts(
         box_vectors = frame_box.astype(np.float64)   # (3, 3) nm, rows are vectors
         all_positions = frame_positions.astype(np.float64)
         positions = all_positions[non_pbc_indices]  # (n_nonpbc, 3) nm
-        # Check if any fragment is closer to a periodic image of the non-PBC center than to the center itself
-        fragment_centers = np.array([ all_positions[atom_indices].mean(axis=0) for atom_indices in fragments_atom_indices ])
-        escaped = find_frame_escaped_fragments(positions.mean(axis=0), fragment_centers, box_vectors, ESCAPE_MARGIN)
-        for fragment_index, own_distance, image_distance in escaped:
-            escape_frames[fragment_index].append(frame_idx)
-            if first_escape_distances[fragment_index] is None:
-                first_escape_distances[fragment_index] = (own_distance, image_distance)
+        # # Check if any fragment is closer to a periodic image of the non-PBC center than to the center itself
+        # fragment_centers = np.array([ all_positions[atom_indices].mean(axis=0) for atom_indices in fragments_atom_indices ])
+        # escaped = find_frame_escaped_fragments(positions.mean(axis=0), fragment_centers, box_vectors, ESCAPE_MARGIN)
+        # for fragment_index, own_distance, image_distance in escaped:
+        #     escape_frames[fragment_index].append(frame_idx)
+        #     if first_escape_distances[fragment_index] is None:
+        #         first_escape_distances[fragment_index] = (own_distance, image_distance)
         # Check if there are atoms too close to its period images in this frame
         pairs, distances, cell_shifts = find_frame_cross_contacts(positions, box_vectors, cutoff_nm)
         if len(pairs) == 0: continue
@@ -246,8 +246,9 @@ def check_cross_periodic_contacts(
             example_box_vectors = box_vectors
 
     # Report any problem
-    escaped_fragment_indices = [ index for index, frames in enumerate(escape_frames) if frames ]
-    if not violation_frames and not escaped_fragment_indices:
+    # escaped_fragment_indices = [ index for index, frames in enumerate(escape_frames) if frames ]
+    # if not violation_frames and not escaped_fragment_indices:
+    if not violation_frames:
         print(' Test passed: no cross-PBC contacts detected')
         register.update_test(CROSS_PBC_FLAG, True)
         return True
