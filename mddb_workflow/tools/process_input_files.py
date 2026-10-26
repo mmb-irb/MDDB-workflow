@@ -524,7 +524,8 @@ def process_input_files(
         print(f'Difference: {different_atoms_vmd_selection}')
         raise InputError('PBC selection is not consistent after correcting the structure. '
             'Please consider using a different PBC selection. '
-            'Avoid relying in atom distances or elements to avoid this problem.')
+            'Avoid relying in atom distances or elements to avoid this problem.'
+            'Also always prefer to use "residue" instead of "resid".')
 
     # --- RUNNING FINAL TESTS ------------------------------------------------------------
 
