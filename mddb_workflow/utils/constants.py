@@ -265,6 +265,9 @@ FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']
 DEFAULT_RMSD_CUTOFF = 9
 # How much better two gaussians must fit the RMSD jumps than one for the trajectory integrity test to fail
 BIMODALITY_BIC_CUTOFF = 50
+# How many times bigger the average jump of the bigger group must be than the one of the smaller group
+# Otherwise two gaussians may fit better just because jumps are skewed (e.g. rigid molecules with one flexible bond)
+BIMODALITY_SEPARATION_CUTOFF = 2
 DEFAULT_INTERACTION_CUTOFF = 0.1
 
 # Set register cache flags

@@ -474,6 +474,18 @@ def is_box_rotated(box_vectors: np.ndarray) -> bool:
     return bool(np.abs(box_vectors[[0, 0, 1], [1, 2, 2]]).max() > ROTATED_BOX_TOLERANCE)
 
 
+def unrotate_box(positions: np.ndarray, box_vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Rotate the coordinates and the box of a frame so the box is not rotated anymore (see is_box_rotated).
+    This way tools which expect boxes not rotated (e.g. MDtraj) can be used with fitted trajectories.
+    """
+    first_vector, second_vector = box_vectors[0], box_vectors[1]
+    x_axis = first_vector / np.linalg.norm(first_vector)
+    y_axis = second_vector - (second_vector @ x_axis) * x_axis
+    y_axis /= np.linalg.norm(y_axis)
+    basis = np.stack([x_axis, y_axis, np.cross(x_axis, y_axis)], axis=1)
+    return positions @ basis, box_vectors @ basis
+
+
 # Thresholds to guess if a trajectory is fitted
 # These thresholds were set by looking at 40 fitted trajectories in the database, a few unfitted trajectories
 # and fitted trajectories which were rotated and translated on purpose
