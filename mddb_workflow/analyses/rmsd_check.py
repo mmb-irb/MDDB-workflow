@@ -519,6 +519,8 @@ def find_jumping_atoms(
     with mdt.formats.XTCTrajectoryFile(trajectory_filename) as reader:
         reader.seek(jump_frame - 1)
         xyz, _, _, boxes = reader.read(n_frames=2)
+    # Trajectories with no box have no periodic boundaries, as a box full of zeros
+    if boxes is None: boxes = np.zeros((2, 3, 3), dtype=np.float32)
     previous_distances = compute_periodic_distances(xyz[0], boxes[0], pairs)
     distances = compute_periodic_distances(xyz[1], boxes[1], pairs)
     changes = np.abs(distances - previous_distances)
