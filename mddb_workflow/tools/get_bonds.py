@@ -12,8 +12,6 @@ from collections import Counter
 from math import ceil
 
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
-# Minimum number of frames where the same atom must fail to consider the reference frame test as failed
-MIN_ATOM_FAILURE_FRAMES = 3
 
 
 def get_bond_clashes(
@@ -136,7 +134,9 @@ def get_bonds_reference_frame(
     ignore_bonds: bool = False,
     patience: int = 100,  # Limit of frames to check before we surrender
     # Minimum ratio of checked frames where the same atom must fail to consider the test as failed
-    atom_failure_ratio: float = 0.1,
+    atom_failure_ratio: float = 0.2,
+    # Minimum number of frames where the same atom must fail to consider the test as failed
+    min_atom_failure_frames: int = 5,
 ) -> tuple[int, bool]:
     """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD.
@@ -144,7 +144,7 @@ def get_bonds_reference_frame(
     See find_bonds_reference_frame for more details.
     """
     reference_frame, bonds_are_fine, _ = find_bonds_reference_frame(structure, trajectory_file, snapshots,
-        reference_bonds, excluded_atom_indices, ignore_bonds, patience, atom_failure_ratio)
+        reference_bonds, excluded_atom_indices, ignore_bonds, patience, atom_failure_ratio, min_atom_failure_frames)
     return reference_frame, bonds_are_fine
 
 
@@ -157,7 +157,9 @@ def find_bonds_reference_frame(
     ignore_bonds: bool = False,
     patience: int = 100,  # Limit of frames to check before we surrender
     # Minimum ratio of checked frames where the same atom must fail to consider the test as failed
-    atom_failure_ratio: float = 0.1,
+    atom_failure_ratio: float = 0.2,
+    # Minimum number of frames where the same atom must fail to consider the test as failed
+    min_atom_failure_frames: int = 3,
 ) -> tuple[int, bool, Optional[tuple[tuple[int, tuple[int, ...], tuple[int, ...]], int, int, int]]]:
     """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD.
@@ -237,8 +239,8 @@ def find_bonds_reference_frame(
     failure_cut = ceil(checked_frames * atom_failure_ratio)
     # With a few frames the cut would be too small and a few random failures would fail the test
     # Thus we set a minimum of frames
-    if failure_cut < MIN_ATOM_FAILURE_FRAMES:
-        failure_cut = MIN_ATOM_FAILURE_FRAMES
+    if failure_cut < min_atom_failure_frames:
+        failure_cut = min_atom_failure_frames
         warn(f'Only {checked_frames} frames were checked. With such a reduced sampling this test may fail.')
     recurrent_atoms = [ atom_index for atom_index, n in atom_clash_counts.items() if n >= failure_cut ]
     if not recurrent_atoms:
