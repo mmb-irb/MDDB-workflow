@@ -1,7 +1,7 @@
 from biobb_mem.fatslim.fatslim_apl import fatslim_apl
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.constants import OUTPUT_APL_FILENAME, APL_ANALYSIS_VERSION
-from mddb_workflow.tools.membrane_mapping import get_bilayers
+from mddb_workflow.tools.membrane_mapping import get_bilayers, get_bilayer_polar_atoms
 from mddb_workflow.utils.type_hints import *
 from scipy.interpolate import griddata
 from contextlib import redirect_stdout
@@ -29,10 +29,7 @@ def area_per_lipid(
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_APL_FILENAME}'
 
-    head_sel = []
-    for bilayer in bilayers:
-        head_sel.extend(bilayer['polar_atoms']['top'])
-        head_sel.extend(bilayer['polar_atoms']['bot'])
+    head_sel = get_bilayer_polar_atoms(bilayers)
     head_sel_mda = 'index ' + " ".join(map(str, (head_sel)))
     # Run the analysis on the whole membrane
     prop = {
