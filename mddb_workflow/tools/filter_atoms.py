@@ -1,12 +1,14 @@
 from os import remove
 from os.path import exists
 import json
+from collections import Counter
 
 import pytraj as pt
 
 from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS
+from mddb_workflow.utils.selections import Selection
+from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS, InputError
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter
 from mddb_workflow.utils.vmd_spells import vmd_converter
 from mddb_workflow.utils.type_hints import *
@@ -131,6 +133,7 @@ def filter_atoms (
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Topology atoms number does not match the structure atoms number and tpr files can not be filtered alone')
+                check_interleaved_filtered_residues(reference_structure, parsed_filter_selection, keep_selection, filter_selection)
                 tpr_filter(
                     input_topology_file.path,
                     output_topology_file.path,
@@ -181,6 +184,42 @@ def filter_atoms (
         output_trajectory_file.set_symlink_to(input_trajectory_file)
     if output_topology_file != MISSING_TOPOLOGY and not output_topology_file.exists:
         output_topology_file.set_symlink_to(input_topology_file)
+
+def check_interleaved_filtered_residues (
+    reference_structure : 'Structure',
+    parsed_filter_selection : 'Selection',
+    keep_selection : 'Selection',
+    filter_selection : bool | str,
+):
+    """ Kill the workflow if the TPR would come out of the filtering with wrong residues.
+    Gromacs convert-tpr has a bug when renumbering residues of the filtered topology.
+    It compares the original residue index of every atom with the new residue index of the previous atom.
+    Both indices are the same until a whole residue is removed, so the bug only shows after that.
+    From then on, residues are split in several pieces and some pieces may have no mass (e.g. a virtual site alone).
+    This makes Gromacs write NaN coordinates when imaging by residues (-pbc res).
+    It happens when some residues are fully removed but there are kept atoms after them. """
+    last_kept_atom_index = keep_selection.atom_indices[-1]
+    filtered_atom_indices = set(parsed_filter_selection.atom_indices)
+    interleaved_residues = [ residue for residue in reference_structure.residues
+        if max(residue.atom_indices) < last_kept_atom_index
+        and all(index in filtered_atom_indices for index in residue.atom_indices) ]
+    if not interleaved_residues: return
+    interleaved_selection = Selection([ index for residue in interleaved_residues for index in residue.atom_indices ])
+    residue_name_counts = Counter(residue.name for residue in interleaved_residues)
+    residue_names_summary = ', '.join(f'{count} {name}' for name, count in residue_name_counts.most_common())
+    suggested_filter = f'({filter_selection}) and index > {last_kept_atom_index}' \
+        if isinstance(filter_selection, str) else f'<your filter selection> and index > {last_kept_atom_index}'
+    # Reported to Gromacs in https://gitlab.com/gromacs/gromacs/-/work_items/5777
+    # Once it is fixed this check may be removed
+    raise InputError('The filtered TPR file would have wrong residues because of a bug in Gromacs convert-tpr.\n'
+        '  Gromacs splits residues in pieces when whole residues are removed before atoms which are kept.\n'
+        '  Some pieces may have no mass and then imaging by residues writes NaN coordinates.\n'
+        f'  There are {len(interleaved_residues)} residues ({len(interleaved_selection)} atoms) to be filtered which are'
+        f' placed before the last kept atom (index {last_kept_atom_index}): {residue_names_summary}\n'
+        f'  These are the interleaved atoms (VMD selection): {interleaved_selection.to_vmd()}\n'
+        '  To avoid the bug do not filter them, so the filtered atoms are only at the end. e.g.:\n'
+        f'    filter_selection: {suggested_filter}\n'
+        '  Remember to add the kept water and ions to the pbc_selection.')
 
 # Set a function to filter the standard topology file
 # WARNING: This function has not been checked in depth to work properly
