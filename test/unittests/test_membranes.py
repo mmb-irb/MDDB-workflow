@@ -30,8 +30,8 @@ def generate_test_caches(cache_str: str, test_file: str, keep_refbonds: list = F
 
 # Expected aggregate types for the test accessions which are not a single bilayer
 EXPECTED_TYPES = {'A05SA': [VESICLE], 'A05RV': [MICELLE], 'A05Q3': [VESICLE], 'A05T5': [BILAYER, MICELLE]}
-# Expected number of unassigned lipids for the test accessions where it is known
-EXPECTED_UNASSIGNED = {'A01JD': 1, 'A05T5': 0}
+# Expected number of unassigned lipids for the test accessions which have some (none by default)
+EXPECTED_UNASSIGNED = {'A01JD': 1}
 # Coarse grained residues of the test accessions
 CG_SELECTIONS = {'cg_test': 'resname DPPC', 'A01JD': 'resname DPPC', 'A05T5': 'all'}
 # Residue names which must be only in one membrane of the test accessions, by membrane index
@@ -104,9 +104,8 @@ class TestMembraneMapping:
         )
         assert [mem['type'] for mem in membrane_map['mems'].values()] == EXPECTED_TYPES.get(test_accession, [BILAYER])
         membrane = membrane_map['mems']['0']
-        if test_accession in EXPECTED_UNASSIGNED:
-            unassigned_lipids = len(set(universe.atoms[membrane_map['no_mem_lipid']].resindices))
-            assert unassigned_lipids == EXPECTED_UNASSIGNED[test_accession]
+        unassigned_lipids = len(set(universe.atoms[membrane_map['no_mem_lipid']].resindices))
+        assert unassigned_lipids == EXPECTED_UNASSIGNED.get(test_accession, 0)
         if test_accession in EXPECTED_MEMBRANE_RESNAMES:
             resnames, expected_key = EXPECTED_MEMBRANE_RESNAMES[test_accession]
             for key, mem in membrane_map['mems'].items():
