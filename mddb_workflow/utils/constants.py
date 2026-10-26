@@ -170,6 +170,8 @@ TRAJECTORY_INTEGRITY_VIEW_FILENAME = '.trajectory_integrity_jump.tcl'
 STABLE_BONDS_VIEW_FILENAME = '.stable_bonds.tcl'
 # VMD script to see the atoms with a wrong number of bonds, written when the coherent bonds test fails
 COHERENT_BONDS_VIEW_FILENAME = '.coherent_bonds.tcl'
+# VMD script to see the molecule whose InChI could not be found
+INCHI_FAILURE_VIEW_FILENAME = '.inchi_failure.tcl'
 
 # Files saving resorted bonds and charges when we have to resort atoms
 # Note that these files have priority when loading both bonds and charges

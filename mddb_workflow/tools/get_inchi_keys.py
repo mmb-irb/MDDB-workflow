@@ -1,8 +1,12 @@
 import MDAnalysis
 import traceback
 import multiprocessing
+from os.path import abspath, dirname
+from collections import Counter
+from mddb_workflow.analyses.mindist import remove_view_script
+from mddb_workflow.tools.structure_corrector import get_focus_commands
 from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout, DatabaseUnavailableError
-from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION
+from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHI_FAILURE_VIEW_FILENAME
 from mddb_workflow.core.dataclass import InChIKeyData
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.pubchem import pubchem_standardization
@@ -17,6 +21,17 @@ from MDAnalysis.converters.RDKitInferring import MDAnalysisInferrer
 
 # Regular expression matching formulas of single ions
 ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?\d?$'
+# Maximum number of residues to be listed when the InChI fails
+MAX_LISTED_RESIDUES = 10
+
+
+class InChIFailure(RuntimeError):
+    """The InChI of a molecule could not be found."""
+
+    def __init__(self, resindices: list[int], message: str):
+        super().__init__(resindices, message)
+        self.resindices = resindices
+        self.message = message
 
 
 def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
@@ -102,13 +117,52 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
         inchikey = Chem.MolToInchiKey(res_RD)
         # rdinchi.MolToInchi so it doesnt print the warnings
         inchi, retcode, message, logs, aux = Chem.rdinchi.MolToInchi(res_RD)
-    if not inchi: raise RuntimeError('Failed to find inchi. Is the atom group too big?')
+    if not inchi: raise InChIFailure(resindices, message)
     return (inchikey, inchi, resindices, error)
+
+
+def report_inchi_failure(failure: InChIFailure, structure: 'Structure', structure_file: 'File', script_filename: str) -> str:
+    """Describe the molecule whose InChI could not be found and write a VMD script to see it."""
+    residues = [structure.residues[index] for index in failure.resindices]
+    atoms = [atom for residue in residues for atom in residue.atoms]
+    # Formula with carbon and hydrogen first and the rest in alphabetical order
+    element_counts = Counter(atom.element for atom in atoms)
+    elements = [e for e in ('C', 'H') if e in element_counts] + sorted(e for e in element_counts if e not in ('C', 'H'))
+    formula = ''.join(f'{e}{element_counts[e]}' for e in elements)
+    name_counts = Counter(residue.name for residue in residues)
+    names = ', '.join(f'{name} x{count}' for name, count in name_counts.items())
+    labels = ', '.join(residue.label for residue in residues[:MAX_LISTED_RESIDUES])
+    if len(residues) > MAX_LISTED_RESIDUES: labels += ', ...'
+    classes = ', '.join(sorted({ residue.classification for residue in residues }))
+    # Write a VMD script for the user to see the molecule
+    molecule_atoms = Selection(sorted(atom.index for atom in atoms))
+    commands = [
+        '# Molecule whose InChI could not be found',
+        f'mol new {{{abspath(structure_file.path)}}} type pdb waitfor all',
+        'set main [molinfo top]',
+        'mol representation Licorice 0.2',
+        'mol color Name',
+        f'mol selection {{{molecule_atoms.to_vmd()}}}',
+        'mol material Opaque',
+        'mol addrep $main',
+        *get_focus_commands(molecule_atoms),
+    ]
+    with open(script_filename, 'w') as script_file:
+        script_file.write('\n'.join(commands) + '\n')
+    return ('Failed to find the InChI of a molecule.\n'
+        f' InChI says: {failure.message or "no message"}\n'
+        f' Size: {len(atoms)} atoms in {len(residues)} residues\n'
+        f' Formula: {formula}\n'
+        f' Classification: {classes}\n'
+        f' Residue names: {names}\n'
+        f' Residues: {labels}\n'
+        f'To see the molecule run:\n  vmd -e {script_filename}')
 
 
 def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
+    structure_file: 'File',
     cg_selection: 'Selection',
     ua_selection: 'Selection',
     parallel: bool = False,
@@ -124,6 +178,7 @@ def generate_inchikeys(
     Args:
         universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
+        structure_file (File): The structure file, used to see the molecule in VMD if its InChI fails.
         cg_selection (Selection): Selection object for coarse-grained regions.
         ua_selection (Selection): Selection object for united atom regions, which have no explicit hydrogens.
         parallel (bool): Whether to use multiprocessing (default False). Set to True for parallel processing (higher memory).
@@ -181,31 +236,37 @@ def generate_inchikeys(
         # Convert to RDKit and get InChI data
         tasks.append((resatoms, resindices))
 
+    # Remove the VMD script from a previous run, if any
+    script_filename = dirname(abspath(structure_file.path)) + '/' + INCHI_FAILURE_VIEW_FILENAME
+    remove_view_script(script_filename)
     results = []
-    if parallel:
-        # Execute tasks in parallel
-        # Use 'spawn' context to avoid fork-safety issues with threading (RDKit?)
-        # https://pythonspeed.com/articles/python-multiprocessing/
-        ctx = multiprocessing.get_context('spawn')
-        with ctx.Pool() as pool:
-            try:
-                print(f'Processing {len(tasks)} residues to get InChI keys (parallel mode)...')
-                async_results = pool.map_async(residue_to_inchi, tasks)
-                # Add timeout (e.g., 60 seconds = 1 minute per task)
-                results = async_results.get(timeout=60 * len(tasks))
-            except multiprocessing.TimeoutError:
-                warn('Pool timeout - some tasks did not complete.')
-                pool.terminate()  # Force kill all workers
-                pool.join()
-                raise
-            except Exception:
-                pool.terminate()
-                pool.join()
-                raise
-    else:
-        print(f'Processing {len(tasks)} residues to get InChI keys (sequential mode)...')
-        for task in tasks:
-            results.append(residue_to_inchi(task))
+    try:
+        if parallel:
+            # Execute tasks in parallel
+            # Use 'spawn' context to avoid fork-safety issues with threading (RDKit?)
+            # https://pythonspeed.com/articles/python-multiprocessing/
+            ctx = multiprocessing.get_context('spawn')
+            with ctx.Pool() as pool:
+                try:
+                    print(f'Processing {len(tasks)} residues to get InChI keys (parallel mode)...')
+                    async_results = pool.map_async(residue_to_inchi, tasks)
+                    # Add timeout (e.g., 60 seconds = 1 minute per task)
+                    results = async_results.get(timeout=60 * len(tasks))
+                except multiprocessing.TimeoutError:
+                    warn('Pool timeout - some tasks did not complete.')
+                    pool.terminate()  # Force kill all workers
+                    pool.join()
+                    raise
+                except Exception:
+                    pool.terminate()
+                    pool.join()
+                    raise
+        else:
+            print(f'Processing {len(tasks)} residues to get InChI keys (sequential mode)...')
+            for task in tasks:
+                results.append(residue_to_inchi(task))
+    except InChIFailure as failure:
+        raise RuntimeError(report_inchi_failure(failure, structure, structure_file, script_filename)) from failure
 
     # 2) Process results and build dictionaries
     inchikeys: dict[str, InChIKeyData] = {}  # To see if different name for same residue
