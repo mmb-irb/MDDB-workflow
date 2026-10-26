@@ -16,7 +16,7 @@ from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
 from mddb_workflow.core.inputs import ProjectInputs
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE
+from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import warn, load_json
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import get_git_version, download_file
@@ -2391,9 +2391,12 @@ class Project:
             # Compare other structure properties
             # Compare atom bonds
             for atom_index, (reference_atom_bonds, other_atom_bonds) in enumerate(zip(reference_structure.bonds, other_structure.bonds)):
-                if set(reference_atom_bonds) == set(other_atom_bonds): continue
+                # Missing bonds only match other missing bonds
+                if reference_atom_bonds is MISSING_BONDS or other_atom_bonds is MISSING_BONDS:
+                    if reference_atom_bonds is other_atom_bonds: continue
+                elif set(reference_atom_bonds) == set(other_atom_bonds): continue
                 missmatch_atom = reference_structure.atoms[atom_index]
-                raise InputError(error_message_header + f' Atom bonds do not match: {missmatch_atom.label} -> {reference_atom_bonds} while in the reference structure is {other_atom_bonds}.\n' + error_message_tail)
+                raise InputError(error_message_header + f' Atom bonds do not match: {missmatch_atom.label} -> {other_atom_bonds} while in the reference structure is {reference_atom_bonds}.\n' + error_message_tail)
         # If we made it this far then there are not inconsistencies between structure
         return reference_structure
     structure = property(get_structure, None, None, "Parsed structure from the reference MD (read only)")
