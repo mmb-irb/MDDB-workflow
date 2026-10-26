@@ -8,7 +8,7 @@ from os.path import abspath
 # Visual output tools
 from tqdm import tqdm
 import plotext as plt
-from sklearn.mixture import GaussianMixture
+from scipy import special
 
 from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn, fail
 from mddb_workflow.utils.auxiliar import round_to_hundredths
@@ -23,6 +23,19 @@ from mddb_workflow.utils.type_hints import *
 
 # Number of bonds which change the most in the biggest jump to be highlighted in the VMD script
 HIGHLIGHTED_BONDS = 5
+
+# Number of jumps of each group to be shown in the VMD script when jumps are split in two groups
+SHOWN_JUMPS_PER_GROUP = 10
+
+# Number of jumps along the trajectory used to find how much every pair of atoms usually changes its distance
+SCALE_SAMPLED_JUMPS = 100
+
+# Fitting two groups of jumps starts with these fractions of the biggest jumps in the bigger group
+# Several starts are tried since the fit may get stuck depending on where it starts
+TWO_GROUPS_START_FRACTIONS = [0.01, 0.05, 0.2, 0.5]
+# The fit stops when the log likelihood improves less than this
+TWO_GROUPS_TOLERANCE = 1e-3
+TWO_GROUPS_MAX_ITERATIONS = 1000
 
 # Number of failed fragments to be shown in the logs, since there may be thousands
 SHOWN_FAILED_FRAGMENTS = 3
@@ -80,6 +93,7 @@ def check_trajectory_integrity (
     # Remove old warnings
     register.remove_warnings(TRAJECTORY_INTEGRITY_FLAG)
     remove_view_script(view_script_filename)
+    remove_view_script(get_view_frames_filename(view_script_filename))
 
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
@@ -224,12 +238,18 @@ def check_trajectory_integrity (
     fragment_starts = np.cumsum([0] + pairs_per_fragment[:-1])
     all_pairs = np.concatenate([ fragment_bond_pairs[name] for name in paired_fragment_names ])
 
+    # Every pair changes its distance by a different amount (e.g. rigid and flexible bonds)
+    # If changes are summed as they are then jumps of the whole fragment have no simple shape
+    # So for the bimodality check every change is divided by how much its pair usually changes
+    squared_pair_scales = get_pair_scales(input_trajectory_filename, all_pairs, snapshots) ** 2
+
     # Compute distances for the first frame so the loop always has a previous reference
     previous_distances = compute_periodic_distances(previous_positions, previous_box, all_pairs)
 
     # Save all RMSD jumps
     # Jumps of fragments with pairs are saved as one array per frame, with one value per fragment
     paired_rmsd_jumps = []
+    paired_scaled_jumps = []
     single_atom_rmsd_jumps = { fragment_name: [] for fragment_name in single_atom_fragment_names }
 
     # Initialize progress bar first
@@ -243,6 +263,8 @@ def check_trajectory_integrity (
         squared_differences = (current_distances - previous_distances) ** 2
         squared_sums = np.add.reduceat(squared_differences, fragment_starts)
         paired_rmsd_jumps.append(np.sqrt(squared_sums / pairs_per_fragment))
+        scaled_squared_sums = np.add.reduceat(squared_differences / squared_pair_scales, fragment_starts)
+        paired_scaled_jumps.append(np.sqrt(scaled_squared_sums / pairs_per_fragment))
         previous_distances = current_distances
 
         # If the fragment has a single atom then its RMSD is just how much it moved
@@ -259,6 +281,10 @@ def check_trajectory_integrity (
     paired_rmsd_jumps = np.array(paired_rmsd_jumps)
     fragment_rmsd_jumps = { name: paired_rmsd_jumps[:, i] for i, name in enumerate(paired_fragment_names) }
     fragment_rmsd_jumps.update(single_atom_rmsd_jumps)
+    paired_scaled_jumps = np.array(paired_scaled_jumps)
+    fragment_scaled_jumps = { name: paired_scaled_jumps[:, i] for i, name in enumerate(paired_fragment_names) }
+    # Single atoms have no pairs so their jumps are used as they are
+    fragment_scaled_jumps.update({ name: np.array(jumps) for name, jumps in single_atom_rmsd_jumps.items() })
 
     # Check all fragments and store their test result here before issuing the final report
     fragment_reports = []
@@ -320,22 +346,15 @@ def check_trajectory_integrity (
         # These jumps make the standard deviation bigger and then the first jump does not stand out in the z score
         # However, the RMSD jumps are then split in two groups: before and after the break
         # The same happens when a region jumps and comes back repeatedly along the trajectory
-        # So we also check if two gaussians fit the RMSD jumps much better than one
-        # Jumps are divided by their median so the fit does not depend on their scale
-        scaled_jumps = (rmsd_jumps / np.median(rmsd_jumps)).reshape(-1, 1)
-        one_gaussian = GaussianMixture(1, random_state=0).fit(scaled_jumps)
-        two_gaussians = GaussianMixture(2, random_state=0).fit(scaled_jumps)
-        bimodality_score = one_gaussian.bic(scaled_jumps) - two_gaussians.bic(scaled_jumps)
-        # Two gaussians may also fit better when there is a single group of jumps which is skewed
-        # e.g. a rigid molecule with a single flexible bond has a minimum jump and then a tail of bigger jumps
-        # So the groups must be also far from each other: bigger jumps must be several times bigger on average
-        group_means = two_gaussians.means_[:, 0]
-        separation = group_means.max() / group_means.min()
+        # So we also check if two groups of jumps fit the jumps much better than one
+        # Jumps are not in the same order than in time, so a region which jumps and comes back repeatedly is also caught
+        scaled_jumps = fragment_scaled_jumps[fragment_name]
+        bimodality_score, bigger_probabilities, group_means = check_bimodality(scaled_jumps)
+        separation = math.sqrt(group_means[1] / group_means[0])
         bimodal_frames = 0
         if bimodality_score > BIMODALITY_BIC_CUTOFF and separation > BIMODALITY_SEPARATION_CUTOFF:
             # Find the frames in the group of bigger jumps
-            bigger_group = np.argmax(group_means)
-            bigger_group_frames = np.where(two_gaussians.predict(scaled_jumps) == bigger_group)[0] + 1
+            bigger_group_frames = np.where(bigger_probabilities > 0.5)[0] + 1
             # If bigger jumps are all in the first frames then these frames are not equilibrated
             if bigger_group_frames[-1] == len(bigger_group_frames):
                 bypassed_frames = max(bypassed_frames, len(bigger_group_frames))
@@ -345,7 +364,7 @@ def check_trajectory_integrity (
                 if show_logs:
                     print(f' FAIL: RMSD jumps in fragment "{fragment_name}" are split in two groups'
                         f' (bimodality score = {round_to_hundredths(bimodality_score)}, separation = {round_to_hundredths(separation)}).'
-                        f' Bigger jumps start between frames {first_frame} and {first_frame + 1}')
+                        f' {bimodal_frames} jumps are in the group of bigger jumps, the first one between frames {first_frame} and {first_frame + 1}')
 
         if outliers_count > 0 or bimodal_frames > 0: failed_fragments += 1
 
@@ -359,7 +378,10 @@ def check_trajectory_integrity (
             'bimodality': bimodality_score,
             'separation': separation,
             'bimodal_frames': bimodal_frames,
-            'jumps' : rmsd_jumps
+            'jumps' : rmsd_jumps,
+            'scaled_jumps': scaled_jumps,
+            'bigger_probabilities': bigger_probabilities,
+            'group_means': group_means,
         })
 
     hidden_fragments = failed_fragments - SHOWN_FAILED_FRAGMENTS
@@ -402,9 +424,10 @@ def check_trajectory_integrity (
         if hidden_fragments > 0: print(f'(and {hidden_fragments} failed fragments more)')
         print(f'{passed_count} other fragments PASSED')
         print('*The z-score of a value means how many times the standard deviation away it is from the average')
-        print('*The bimodality score means how much better two gaussians fit the jumps than one (BIC difference)')
-        print('*The separation means how many times bigger the jumps of the bigger gaussian are on average')
+        print('*The bimodality score means how much better two groups of jumps fit the jumps than one (BIC difference)')
+        print('*The separation means how many times bigger the jumps of the bigger group are on average')
         print('*The bimodality only fails when both the bimodality score and the separation are above their cutoffs')
+        print('*Jumps of every bond are measured relative to how much that bond usually changes, so rigid and flexible bonds count the same')
 
         # Find the worst fragment
         # Show the most bimodal fragment if any, since its jumps may not stand out in the z score
@@ -416,22 +439,47 @@ def check_trajectory_integrity (
         else:
             worst_report = max(fragment_reports, key=lambda report: report['bypass'])
 
-        # Write a VMD script for the user to see the biggest jump in the worst fragment
+        # Write a VMD script for the user to see the jumps of the worst fragment
         # This is not part of the warning since it is only useful for the workflow user
         worst_fragment = all_fragments[worst_report['name']]
-        # Frame after the biggest jump, starting at 0
-        jump_frame = int(np.argmax(worst_report['jumps'])) + 1
-        # Show the two frames before the jump and the two frames after it, as long as they exist
-        last_frame = len(worst_report['jumps'])
-        shown_frames = list(range(max(jump_frame - 2, 0), min(jump_frame + 1, last_frame) + 1))
-        jumping_atoms = find_jumping_atoms(input_trajectory_filename,
-            worst_fragment, fragment_bond_pairs[worst_report['name']], jump_frame)
+        worst_pairs = fragment_bond_pairs[worst_report['name']]
         is_meta_fragment = worst_report['name'] == META_FRAGMENT_NAME
+        notes = []
+        # If jumps are split in two groups then show some typical jumps of each group
+        # Jumps of the same group may be anywhere along the trajectory, so they are not shown in time order
+        # Every jump is shown with two frames: the frame before the jump and the frame after it
+        if worst_report['bimodal_frames'] > 0:
+            smaller_jump_frames, bigger_jump_frames = pick_typical_jumps(worst_report)
+            shown_frames = [ frame for jump_frame in smaller_jump_frames + bigger_jump_frames for frame in (jump_frame - 1, jump_frame) ]
+            # Highlight the bonds which change the most in the most typical jump of the bigger group
+            jump_frame = bigger_jump_frames[0]
+            focus_frame = 2 * len(smaller_jump_frames)
+            smaller_count = 2 * len(smaller_jump_frames)
+            notes.append(f'Frames 0 to {smaller_count - 1} are {len(smaller_jump_frames)} typical jumps of the group of smaller jumps')
+            notes.append(f'Frames {smaller_count} to {len(shown_frames) - 1} are {len(bigger_jump_frames)} typical jumps of the group of bigger jumps')
+            notes.append('Every jump is shown as two frames: before and after the jump. Jumps are not in time order')
+            notes.append(f'Trajectory frames: {" ".join(str(frame) for frame in shown_frames)}')
+            jumps_description = (f'{worst_report["bimodal_frames"]} jumps are in the group of bigger jumps'
+                f' (e.g. between frames {jump_frame - 1} and {jump_frame}).')
+        # Otherwise show the biggest jump
+        else:
+            # Frame after the biggest jump, starting at 0
+            jump_frame = int(np.argmax(worst_report['jumps'])) + 1
+            # Show the two frames before the jump and the two frames after it, as long as they exist
+            last_frame = len(worst_report['jumps'])
+            shown_frames = list(range(max(jump_frame - 2, 0), min(jump_frame + 1, last_frame) + 1))
+            focus_frame = shown_frames.index(jump_frame - 1)
+            notes.append(f'Frames {shown_frames[0]} to {shown_frames[-1]} are loaded as frames 0 to {len(shown_frames) - 1}')
+            notes.append(f'The jump is between frames {focus_frame} and {focus_frame + 1}')
+            jumps_description = f'Its biggest jump is between frames {jump_frame - 1} and {jump_frame}.'
+        notes.append('The fragment is shown in yellow licorice and the atoms of the bonds which change the most in CPK')
+        if is_meta_fragment: notes.append(META_FRAGMENT_EXPLANATION)
+        jumping_atoms = find_jumping_atoms(input_trajectory_filename, worst_fragment, worst_pairs, jump_frame)
         write_view_script(view_script_filename, input_structure_filename, input_trajectory_filename,
-            jump_frame, shown_frames, worst_fragment, jumping_atoms, is_meta_fragment)
-        view_hint = f'To see the clearest jump run:\n  vmd -e {view_script_filename}'
+            shown_frames, focus_frame, worst_fragment, jumping_atoms, notes)
+        view_hint = f'To see the clearest jumps run:\n  vmd -e {view_script_filename}'
 
-        # Describe the worst fragment and its biggest jump in the warning
+        # Describe the worst fragment and its jumps in the warning
         failed_count = len(fragment_reports) - passed_count
         description = (f'{failed_count} of {len(fragment_reports)} fragments failed. The worst one is "{worst_report["name"]}"'
             f', with a maximum z-score of {round_to_hundredths(worst_report["score"])} (cutoff {standard_deviations_cutoff})'
@@ -439,7 +487,7 @@ def check_trajectory_integrity (
             f' and a separation of {round_to_hundredths(worst_report["separation"])} (cutoff {BIMODALITY_SEPARATION_CUTOFF})')
         if worst_report['bypass'] > 0:
             description += f', and {worst_report["bypass"]} bypassed frames at the beginning'
-        description += f'.\nIts biggest jump is between frames {jump_frame - 1} and {jump_frame}.'
+        description += f'.\n{jumps_description}'
         if is_meta_fragment: description += f'\n{META_FRAGMENT_EXPLANATION}'
         # Frames and atoms to be shown in the client
         data = {
@@ -506,6 +554,113 @@ def compute_periodic_distances(
     return mdt.compute_distances(frame, pairs, periodic=True)[0]
 
 
+def get_pair_scales(
+    trajectory_filename : str,
+    pairs : np.ndarray,
+    snapshots : int,
+) -> np.ndarray:
+    """Find how much the distance of every pair usually changes from one frame to the next.
+    It is the median change in some jumps spread along the trajectory, so a few strange jumps do not affect it.
+    """
+    jump_frames = np.unique(np.linspace(1, snapshots - 1, SCALE_SAMPLED_JUMPS).astype(int))
+    changes = []
+    with mdt.formats.XTCTrajectoryFile(trajectory_filename) as reader:
+        for jump_frame in jump_frames:
+            reader.seek(jump_frame - 1)
+            xyz, _, _, boxes = reader.read(n_frames=2)
+            previous_distances = compute_periodic_distances(xyz[0], boxes[0], pairs)
+            distances = compute_periodic_distances(xyz[1], boxes[1], pairs)
+            changes.append(np.abs(distances - previous_distances))
+    scales = np.median(changes, axis=0)
+    still_pairs = pairs[scales == 0]
+    if len(still_pairs) > 0:
+        raise ValueError(f'The distance between some pairs of atoms (e.g. atoms {still_pairs[0][0]} and {still_pairs[0][1]})'
+            ' does not change in most frames. Are there repeated frames in the trajectory?')
+    return scales
+
+
+def fit_gamma_shape(log_ratio : float) -> float:
+    """Find the shape of the gamma distribution which fits best some values.
+    The log ratio is the log of the mean of the values minus the mean of the logs of the values.
+    It starts from an approximation which is then refined a few times.
+    """
+    shape = (3 - log_ratio + math.sqrt((log_ratio - 3) ** 2 + 24 * log_ratio)) / (12 * log_ratio)
+    for _ in range(10):
+        shape -= (math.log(shape) - special.digamma(shape) - log_ratio) / (1 / shape - special.polygamma(1, shape))
+    return shape
+
+
+def gamma_log_densities(values : np.ndarray, log_values : np.ndarray, shape : float, scale : float) -> np.ndarray:
+    """Get the log of the gamma distribution density for every value."""
+    return (shape - 1) * log_values - values / scale - shape * math.log(scale) - special.gammaln(shape)
+
+
+def check_bimodality(jumps : np.ndarray) -> tuple[float, np.ndarray, tuple[float, float]]:
+    """Check if jumps are split in two groups: normal jumps and bigger jumps.
+    When nothing is wrong squared jumps follow a gamma distribution: many small values and a tail of bigger values.
+    So we fit one gamma and two gammas and check how much better two gammas fit, as a BIC difference.
+    Both gammas have the same shape, so they differ only in the size of their jumps.
+    Return the bimodality score, the probability of every jump to be in the group of bigger jumps
+    and the average squared jump of each group, smaller group first.
+    """
+    values = jumps ** 2
+    # A jump may be exactly 0 because of the trajectory precision, but a gamma has no values at 0
+    values = np.maximum(values, values[values > 0].min())
+    log_values = np.log(values)
+    mean_log = log_values.mean()
+    # Fit one gamma
+    shape = fit_gamma_shape(math.log(values.mean()) - mean_log)
+    one_gamma_log_likelihood = gamma_log_densities(values, log_values, shape, values.mean() / shape).sum()
+    # Fit two gammas
+    # Every start puts a different number of the biggest jumps in the bigger group and the best fit is kept
+    best_log_likelihood = -np.inf
+    for start_fraction in TWO_GROUPS_START_FRACTIONS:
+        bigger_probabilities = (values >= np.quantile(values, 1 - start_fraction)).astype(float)
+        log_likelihood = -np.inf
+        for _ in range(TWO_GROUPS_MAX_ITERATIONS):
+            # Update the gammas according to which jumps are in every group
+            bigger_weight = bigger_probabilities.mean()
+            smaller_mean = np.average(values, weights=1 - bigger_probabilities)
+            bigger_mean = np.average(values, weights=bigger_probabilities)
+            shape = fit_gamma_shape(bigger_weight * math.log(bigger_mean)
+                + (1 - bigger_weight) * math.log(smaller_mean) - mean_log)
+            # Update which jumps are in every group according to the gammas
+            smaller_log_densities = math.log(1 - bigger_weight) + gamma_log_densities(values, log_values, shape, smaller_mean / shape)
+            bigger_log_densities = math.log(bigger_weight) + gamma_log_densities(values, log_values, shape, bigger_mean / shape)
+            total_log_densities = np.logaddexp(smaller_log_densities, bigger_log_densities)
+            bigger_probabilities = np.exp(bigger_log_densities - total_log_densities)
+            previous_log_likelihood = log_likelihood
+            log_likelihood = total_log_densities.sum()
+            if log_likelihood - previous_log_likelihood < TWO_GROUPS_TOLERANCE: break
+        if log_likelihood > best_log_likelihood:
+            best_log_likelihood = log_likelihood
+            best_fit = (bigger_probabilities, smaller_mean, bigger_mean)
+    bigger_probabilities, smaller_mean, bigger_mean = best_fit
+    # The group which starts with the biggest jumps may end up being the smaller one
+    if bigger_mean < smaller_mean:
+        bigger_probabilities = 1 - bigger_probabilities
+        smaller_mean, bigger_mean = bigger_mean, smaller_mean
+    # One gamma has 2 parameters (shape and scale) and two gammas have 4 (shape, two scales and the weight)
+    log_n = math.log(len(values))
+    one_gamma_bic = 2 * log_n - 2 * one_gamma_log_likelihood
+    two_gammas_bic = 4 * log_n - 2 * best_log_likelihood
+    return one_gamma_bic - two_gammas_bic, bigger_probabilities, (smaller_mean, bigger_mean)
+
+
+def pick_typical_jumps(report : dict) -> tuple[list[int], list[int]]:
+    """Pick the most typical jumps of every group, i.e. the ones closest to the average of their group.
+    Return the frame after every jump, starting at 0, with the most typical jump first.
+    """
+    values = report['scaled_jumps'] ** 2
+    is_bigger = report['bigger_probabilities'] > 0.5
+    picked_frames = []
+    for in_group, group_mean in zip([ ~is_bigger, is_bigger ], report['group_means']):
+        group_indices = np.where(in_group)[0]
+        typical_indices = group_indices[np.argsort(np.abs(values[group_indices] - group_mean))]
+        picked_frames.append([ int(index) + 1 for index in typical_indices[:SHOWN_JUMPS_PER_GROUP] ])
+    return tuple(picked_frames)
+
+
 def find_jumping_atoms(
     trajectory_filename : str,
     fragment : 'Selection',
@@ -529,28 +684,40 @@ def find_jumping_atoms(
     return Selection([ int(index) for index in np.unique(pairs[biggest_changes]) ])
 
 
+def get_view_frames_filename(script_filename : str) -> str:
+    """Get the filename of the trajectory with the frames to be shown in the VMD script."""
+    return script_filename.replace('.tcl', '.xtc')
+
+
 def write_view_script(
     script_filename : str,
     structure_filename : str,
     trajectory_filename : str,
-    jump_frame : int,
     shown_frames : list[int],
+    focus_frame : int,
     fragment : 'Selection',
     jumping_atoms : 'Selection',
-    is_meta_fragment : bool,
+    notes : list[str],
 ):
-    """Write a VMD script to see a jump, from the previous frame to the jump frame.
+    """Write a VMD script to see some jumps.
 
-    Only the shown frames are loaded.
+    The shown frames are written to a small trajectory next to the script, in the same order.
+    This way VMD does not have to read the whole trajectory to load frames which are far from each other.
+    The view is centered in the fragment at the focus frame, which is an index of the shown frames.
     The fragment is shown in yellow licorice and the atoms of the bonds which change the most in CPK.
     """
-    previous_frame = jump_frame - 1
+    frames_filename = get_view_frames_filename(script_filename)
+    with mdt.formats.XTCTrajectoryFile(trajectory_filename) as reader, \
+        mdt.formats.XTCTrajectoryFile(frames_filename, 'w') as writer:
+        for frame in shown_frames:
+            reader.seek(frame)
+            xyz, _, _, boxes = reader.read(n_frames=1)
+            writer.write(xyz, box=boxes)
     commands = [
-        f'# Biggest RMSD jump, between frames {previous_frame} and {jump_frame}',
         f'mol new {{{abspath(structure_filename)}}} type pdb waitfor all',
-        # Frames from the structure file are removed so frame numbers match the trajectory
+        # The frame from the structure file is removed so only the shown frames remain
         'animate delete all',
-        f'mol addfile {{{abspath(trajectory_filename)}}} type xtc first {shown_frames[0]} last {shown_frames[-1]} waitfor all',
+        f'mol addfile {{{abspath(frames_filename)}}} type xtc waitfor all',
         'set main [molinfo top]',
         # Fragment
         'mol representation Licorice',
@@ -563,8 +730,8 @@ def write_view_script(
         'mol color Name',
         f'mol selection {{{jumping_atoms.to_vmd()}}}',
         'mol addrep $main',
-        # Center the view in the fragment before the jump and zoom in
-        f'animate goto {shown_frames.index(previous_frame)}',
+        # Center the view in the fragment and zoom in
+        f'animate goto {focus_frame}',
         f'set fragment [atomselect $main {{{fragment.to_vmd()}}}]',
         'proc get_size {atoms} {',
         '    lassign [measure minmax $atoms] lowest highest',
@@ -574,12 +741,8 @@ def write_view_script(
         'molinfo $main set center_matrix [list [transoffset [vecscale -1 [measure center $fragment]]]]',
         f'set zoom [expr {{[get_size [atomselect $main all]] / max([get_size $fragment], {MIN_FOCUS_SIZE})}}]',
         'if {$zoom > 1} { scale by $zoom }',
-        f'puts "Frames {shown_frames[0]} to {shown_frames[-1]} are loaded as frames 0 to {len(shown_frames) - 1}"',
-        f'puts "The jump is between frames {shown_frames.index(previous_frame)} and {shown_frames.index(jump_frame)}"',
-        'puts "The fragment is shown in yellow licorice and the atoms of the bonds which change the most in CPK"',
     ]
-    if is_meta_fragment:
-        commands.append(f'puts {{{META_FRAGMENT_EXPLANATION}}}')
+    commands += [ f'puts {{{note}}}' for note in notes ]
     with open(script_filename, 'w') as script_file:
         script_file.write('\n'.join(commands) + '\n')
 
