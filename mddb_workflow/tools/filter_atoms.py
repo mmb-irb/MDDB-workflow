@@ -1,13 +1,11 @@
 from os import remove
 from os.path import exists
 import json
-from collections import Counter
 
 import pytraj as pt
 
 from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS, InputError
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter
 from mddb_workflow.utils.vmd_spells import vmd_converter
@@ -200,13 +198,10 @@ def check_interleaved_filtered_residues (
     It happens when some residues are fully removed but there are kept atoms after them. """
     last_kept_atom_index = keep_selection.atom_indices[-1]
     filtered_atom_indices = set(parsed_filter_selection.atom_indices)
-    interleaved_residues = [ residue for residue in reference_structure.residues
-        if max(residue.atom_indices) < last_kept_atom_index
-        and all(index in filtered_atom_indices for index in residue.atom_indices) ]
-    if not interleaved_residues: return
-    interleaved_selection = Selection([ index for residue in interleaved_residues for index in residue.atom_indices ])
-    residue_name_counts = Counter(residue.name for residue in interleaved_residues)
-    residue_names_summary = ', '.join(f'{count} {name}' for name, count in residue_name_counts.most_common())
+    has_interleaved_residues = any(max(residue.atom_indices) < last_kept_atom_index
+        and all(index in filtered_atom_indices for index in residue.atom_indices)
+        for residue in reference_structure.residues)
+    if not has_interleaved_residues: return
     suggested_filter = f'({filter_selection}) and index > {last_kept_atom_index}' \
         if isinstance(filter_selection, str) else f'<your filter selection> and index > {last_kept_atom_index}'
     # Reported to Gromacs in https://gitlab.com/gromacs/gromacs/-/work_items/5777
@@ -214,10 +209,7 @@ def check_interleaved_filtered_residues (
     raise InputError('The filtered TPR file would have wrong residues because of a bug in Gromacs convert-tpr.\n'
         '  Gromacs splits residues in pieces when whole residues are removed before atoms which are kept.\n'
         '  Some pieces may have no mass and then imaging by residues writes NaN coordinates.\n'
-        f'  There are {len(interleaved_residues)} residues ({len(interleaved_selection)} atoms) to be filtered which are'
-        f' placed before the last kept atom (index {last_kept_atom_index}): {residue_names_summary}\n'
-        f'  These are the interleaved atoms (VMD selection): {interleaved_selection.to_vmd()}\n'
-        '  To avoid the bug do not filter them, so the filtered atoms are only at the end. e.g.:\n'
+        f'  To avoid the bug do not filter residues placed before the last kept atom (index {last_kept_atom_index}), so the filtered atoms are only at the end. e.g.:\n'
         f'    filter_selection: {suggested_filter}\n'
         '  Remember to add the kept water and ions to the pbc_selection.')
 
