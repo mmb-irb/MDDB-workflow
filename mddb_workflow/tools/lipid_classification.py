@@ -22,7 +22,7 @@ Peptides with acyl chains (lipopeptide antibiotics) are not saccharolipids nor f
 SMARTS use generic bonds and no hydrogen counts since the molecules come from MD structures,
 whose InChIs may have unusual tautomers (e.g. amides as imidic acids) or charges.
 """
-from collections import Counter, deque
+from collections import deque
 from rdkit import Chem, rdBase
 from mddb_workflow.utils.type_hints import *
 
@@ -128,17 +128,17 @@ class HydrophobicChains:
             and all(neighbor.GetAtomicNum() in (1, 6) for neighbor in atom.GetNeighbors())}
         self.neighbors = {index: [neighbor.GetIdx() for neighbor in mol.GetAtomWithIdx(index).GetNeighbors()
             if neighbor.GetIdx() in self.atoms] for index in self.atoms}
-        # Chain (connected component) of each atom and the length of the longest path of each chain
+        # Chain (connected component) of each atom, the length of the longest path and the size of each chain
         self.chain_of = {}
         self.lengths = []
+        self.sizes = []
         for index in self.atoms:
             if index in self.chain_of: continue
             farthest, _, component = self._bfs(index)
             _, length, _ = self._bfs(farthest)
             for atom in component: self.chain_of[atom] = len(self.lengths)
             self.lengths.append(length)
-        counts = Counter(self.chain_of.values())
-        self.sizes = [counts[chain] for chain in range(len(self.lengths))]
+            self.sizes.append(len(component))
 
     def _bfs(self, start: int) -> tuple[int, int, set[int]]:
         """Get the farthest atom from the start atom, its distance in atoms and the visited atoms."""
@@ -196,11 +196,6 @@ def classify_lipid(inchi: str) -> Optional[str]:
     """Get the LIPID MAPS category of the molecule of an InChI, or None if it is not a lipid."""
     mol = inchi_to_mol(inchi)
     if mol is None: return None
-    return classify_lipid_mol(mol)
-
-
-def classify_lipid_mol(mol: 'Chem.Mol') -> Optional[str]:
-    """Get the LIPID MAPS category of an RDKit molecule, or None if it is not a lipid."""
     chains = HydrophobicChains(mol)
     if has_acylated_glycerol(mol, chains, PATTERNS['glycerophosphate']):
         return GLYCEROPHOSPHOLIPIDS
@@ -225,9 +220,8 @@ def classify_lipid_mol(mol: 'Chem.Mol') -> Optional[str]:
 def has_acylated_glycerol(mol: 'Chem.Mol', chains: HydrophobicChains, pattern: 'Chem.Mol') -> bool:
     """Check if a glycerol backbone has an oxygen linked to a chain (acyl, alkyl or alkenyl)."""
     for match in mol.GetSubstructMatches(pattern):
-        oxygens = [index for index in match if mol.GetAtomWithIdx(index).GetAtomicNum() == 8]
         # The phosphate oxygens are not part of the glycerol
-        oxygens = oxygens[-3:]
+        oxygens = [index for index in match if mol.GetAtomWithIdx(index).GetAtomicNum() == 8][-3:]
         if any(chains.oxygen_substituent_length(oxygen, set(match)) >= MIN_CORE_CHAIN for oxygen in oxygens):
             return True
     return False
