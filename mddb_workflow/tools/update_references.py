@@ -9,7 +9,7 @@ from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError,
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, PROTEIN_REFERENCES_FILENAME
 from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHIKEY_REFERENCES_FILENAME, INCOMPLETE_REFERENCE_VERSION
 from mddb_workflow.utils.constants import PDB_REFERENCE_VERSION, PDB_REFERENCES_FILENAME
-from mddb_workflow.utils.constants import CACHE_FILENAME, LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG
+from mddb_workflow.utils.constants import CACHE_FILENAME
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.database import Database, get_available_nodes
@@ -33,8 +33,7 @@ def get_inchi_reference(inchi: str, cache: 'Cache') -> dict:
     # Lipids get no lipid database references if SwissLipids is not available, so fail instead
     if lipid_references.get(inchikey, {}).get('version') == INCOMPLETE_REFERENCE_VERSION:
         raise RemoteServiceError('SwissLipids is not available')
-    ligand_references = generate_ligand_references(None, cache, None, [], inchikeys,
-        mercy=[LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG])
+    ligand_references = generate_ligand_references(None, cache, None, [], inchikeys)
     return make_inchikey_reference(inchikey, inchi,
         lipid_references.get(inchikey), ligand_references.get(inchikey))
 

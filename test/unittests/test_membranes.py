@@ -931,28 +931,48 @@ class TestLipidReferences:
         reference = update_references.get_inchi_reference(popc_inchi, cache=None)
         assert reference['swisslipids'] == {'entity_id': 'SLM:000000001'}
 
-    def test_membrane_lipids_are_not_ligands(self, tmp_path):
-        """Lipids with ligand references are ligands only when most of them are out of membranes."""
+    def membrane_and_free_lipids(self, tmp_path, pubchem: bool, mercy: list[str] = []) -> list[dict]:
+        """Get the InChI key map of a few MC3 lipids in a membrane and many POPC lipids out of membranes.
+        Their ligand references have a PubChem ID only if requested.
+        """
+        import types
         from mddb_workflow.tools.get_inchi_keys import generate_inchi_references
         from mddb_workflow.utils.selections import Selection
 
         class Structure:
-            """Structure with 3 atoms per residue."""
+            """Structure with 3 atoms per residue and no large aminoacids."""
+            residues = [types.SimpleNamespace(is_large_aa=lambda: False)] * 12
             def select_residue_indices(self, residue_indices):
                 return Selection([3 * index + atom for index in residue_indices for atom in range(3)])
 
-        # A few MC3 lipids in a membrane and many POPC lipids out of membranes
         mc3_key, mc3_data = inchikey_data(LIPIDS['MC3'][0], 'MC3', 'fatty', n_molecules=2)
         popc_key, popc_data = inchikey_data(LIPIDS['POPC'][0], 'POPC', 'fatty', n_molecules=10)
         popc_data.resindices = list(range(2, 12))
         inchikeys = {mc3_key: mc3_data, popc_key: popc_data}
         lipid_references = {key: {'category': 'GP', 'version': '0.1.0'} for key in inchikeys}
-        ligand_references = {key: {'formula': 'C42H82NO8P'} for key in inchikeys}
+        ligand_references = {key: {'formula': 'C42H82NO8P', **({'pubchem': '1'} if pubchem else {})} for key in inchikeys}
         membrane_map = {'no_mem_lipid': Structure().select_residue_indices(popc_data.resindices).atom_indices}
-        inchikey_map = generate_inchi_references(inchikeys, lipid_references, ligand_references, membrane_map,
-            Structure(), File(str(tmp_path / 'inchikey_references.json')))
-        is_ligand = {data['inchikey']: data['is_ligand'] for data in inchikey_map}
-        assert is_ligand == {mc3_key: False, popc_key: True}
+        return generate_inchi_references(inchikeys, lipid_references, ligand_references, membrane_map,
+            Structure(), File(str(tmp_path / 'inchikey_references.json')), mercy)
+
+    def test_membrane_lipids_are_not_ligands(self, tmp_path):
+        """Lipids with ligand references are ligands only when most of them are out of membranes."""
+        inchikey_map = self.membrane_and_free_lipids(tmp_path, pubchem=True)
+        assert {data['name']: data['is_ligand'] for data in inchikey_map} == {'MC3': False, 'POPC': True}
+
+    def test_unmatched_ligands(self, tmp_path):
+        """Ligands not matched to PubChem fail unless the ligands mercy flag is passed.
+        Lipids in membranes are not ligands, so they do not need to be in PubChem (e.g. synthetic PEG-lipids).
+        """
+        from mddb_workflow.utils.auxiliar import InputError
+        from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG
+        with pytest.raises(InputError) as error:
+            self.membrane_and_free_lipids(tmp_path, pubchem=False)
+        assert 'POPC' in str(error.value) and 'MC3' not in str(error.value)
+        assert not (tmp_path / 'inchikey_references.json').exists()
+        inchikey_map = self.membrane_and_free_lipids(tmp_path, pubchem=False, mercy=[LIGANDS_MATCH_FLAG])
+        assert {data['name']: data['is_ligand'] for data in inchikey_map} == {'MC3': False, 'POPC': True}
+        assert (tmp_path / 'inchikey_references.json').exists()
 
 
 class TestInChIKeys:

@@ -1,8 +1,8 @@
 import MDAnalysis
 import traceback
 import multiprocessing
-from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout, DatabaseUnavailableError
-from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCOMPLETE_REFERENCE_VERSION
+from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout, DatabaseUnavailableError, InputError
+from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCOMPLETE_REFERENCE_VERSION, LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG
 from mddb_workflow.core.dataclass import InChIKeyData
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.pubchem import pubchem_standardization
@@ -334,8 +334,12 @@ def generate_inchi_references(
     membrane_map: dict,
     structure: 'Structure',
     output_file: 'File',
+    mercy: list[str] = [],
 ) -> list[dict]:
-    """Generate InChI references for the database."""
+    """Generate InChI references for the database.
+    Ligands must be matched to PubChem, so the workflow fails otherwise unless the ligands mercy flag is passed.
+    Lipids in membranes are not ligands, so they do not need to be in PubChem (e.g. synthetic PEG-lipids).
+    """
     inchikey_references = []  # For the database
     inchikey_map = []  # For the workflow
     # Add the user selected ligands to the references, if any
@@ -359,7 +363,6 @@ def generate_inchi_references(
             'is_ligand': False,  # Updated later
             'generated_inchikey': inchikey,  # Original inchikey generated from the structure
         })
-    save_json(inchikey_references, output_file.path)
 
     # Use inchikeys to 'classify' residues as ligands
     no_mem_lipid = Selection(membrane_map['no_mem_lipid'])
@@ -380,4 +383,30 @@ def generate_inchi_references(
             if len(no_mem_ligand_selection) / len(ligand_selection) < 0.5:
                 continue
         inchikey_data['is_ligand'] = True
+
+    # Check that ligands were matched to PubChem
+    not_matched_ligands = []
+    large_aa = []
+    for inchikey_data in inchikey_map:
+        key = inchikey_data['generated_inchikey']
+        if not inchikey_data['is_ligand'] or 'pubchem' in ligand_references[key]: continue
+        resids = inchikeys[key].resindices
+        molname = inchikeys[key].molname
+        is_large_aa = any(structure.residues[resid].is_large_aa() for resid in resids)
+        if is_large_aa:
+            large_aa.append((molname, resids, key))
+        else:
+            not_matched_ligands.append((molname, resids, key))
+        warn(f'Ligand {molname} could not be matched to any PubChem ID{" and has an aminoacid-like structure" if is_large_aa else ""}. Residues: {resids}')
+    large_aa_fail = large_aa and LARGE_AMINOACID_FLAG not in mercy
+    not_matched_fail = not_matched_ligands and LIGANDS_MATCH_FLAG not in mercy
+    if large_aa_fail or not_matched_fail:
+        fail_msg = 'Some ligands could not be matched to PubChem IDs.\n\tPlease, provide PubChem IDs for all ligands or a PDB code where they are present.'
+        if large_aa_fail:
+            fail_msg += f'\n\tUse the flag "-m {LARGE_AMINOACID_FLAG}" to bypass the check on: ' + ', '.join([f'{name} - {key} (residues {resids})' for name, resids, key in large_aa])
+        if not_matched_fail:
+            fail_msg += f'\n\tUse the flag "-m {LIGANDS_MATCH_FLAG}" to bypass the check on: ' + ', '.join([f'{name} - {key} (residues {resids})' for name, resids, key in not_matched_ligands])
+        raise InputError(fail_msg)
+
+    save_json(inchikey_references, output_file.path)
     return inchikey_map
