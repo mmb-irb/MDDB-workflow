@@ -2146,6 +2146,7 @@ class Project:
     input_interactions = inputs_property('interactions', "Interactions to be analyzed (read only)")
     input_protein_references = inputs_property('forced_references', "Uniprot IDs to be used first when aligning protein sequences (read only)")
     input_pdb_ids = inputs_property('pdb_ids', "Protein Data Bank IDs used for the setup of the system (read only)")
+    input_forced_lipids = inputs_property('forced_lipids', "Residue names to be treated as lipids (read only)")
     input_type = inputs_property('type', "Set if its a trajectory or an ensemble (read only)")
     input_ligands = inputs_property('ligands', "Input ligand references (read only)")
     input_force_fields = inputs_property('ff', "Input force fields (read only)")

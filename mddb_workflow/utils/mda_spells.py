@@ -1,11 +1,10 @@
-import re
 import json
 import numpy as np
 import pickle
 
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
-from mddb_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS
+from mddb_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 
 import MDAnalysis
 from MDAnalysis.topology.TPRParser import TPRParser
@@ -44,6 +43,8 @@ def to_MDAnalysis_topology(standard_topology_path: str) -> 'Topology':
     # transform bond to non redundant tuples
     bonds = []
     for bond_from, bond_tos in enumerate(topology['atom_bonds']):
+        # Atoms with missing bonds have no bonds
+        if bond_tos == JSON_SERIALIZABLE_MISSING_BONDS: continue
         for bond_to in bond_tos:
             bond = tuple(sorted([bond_from, bond_to]))
             bonds.append(bond)
@@ -283,55 +284,6 @@ def get_head_tail_split(
     """
     tail_ag = get_tail_atom_group(residue, include_hydrogens=include_hydrogens)
     head_ag = residue.atoms - tail_ag
-    return head_ag, tail_ag
-
-
-# Regex matching CG tail bead names: C<digit(s)><chain letter> (e.g. C1A, C3B)
-CG_TAIL_NAME_RE = re.compile(r'^C\d+[A-Z]$')
-
-
-def get_cg_acyl_chains(residue: 'MDAnalysis.Residue') -> list[list[str]]:
-    """Get CG acyl chain bead names grouped by chain letter.
-
-    Identifies tail beads using `CG_TAIL_NAME_RE` and groups them by their
-    trailing chain letter (e.g. C1A, C2A -> chain 'A').
-
-    Args:
-        residue: An MDAnalysis Residue representing a single CG lipid molecule.
-
-    Returns:
-        List of lists of bead name strings, one per chain (sorted by chain letter).
-
-    """
-    chains: dict[str, list[str]] = {}
-    for atom in residue.atoms:
-        m = CG_TAIL_NAME_RE.match(atom.name)
-        if m:
-            chain_letter = atom.name[-1]
-            chains.setdefault(chain_letter, []).append(atom.name)
-    return [names for _, names in sorted(chains.items())]
-
-
-def get_cg_head_tail_split(
-    residue: 'MDAnalysis.Residue',
-) -> tuple['MDAnalysis.AtomGroup', 'MDAnalysis.AtomGroup']:
-    """Split a coarse-grain lipid residue into headgroup and tail AtomGroups.
-
-    Tail beads are identified via `get_cg_acyl_chains` using the CG naming
-    convention: C<digit(s)><chain letter> (e.g. C1A, C3B).
-
-    Args:
-        residue: An MDAnalysis Residue representing a single CG lipid molecule.
-
-    Returns:
-        (head_ag, tail_ag) tuple of AtomGroups.
-
-    """
-    chains = get_cg_acyl_chains(residue)
-    tail_names = {name for chain in chains for name in chain}
-    mask = np.array([atom.name in tail_names for atom in residue.atoms])
-    tail_ag = residue.atoms[mask]
-    head_ag = residue.atoms[~mask]
     return head_ag, tail_ag
 
 

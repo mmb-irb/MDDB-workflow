@@ -4,7 +4,7 @@ import json
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
-from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LARGE_AMINOACID_FLAG, LIGAND_REFERENCE_VERSION
+from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGAND_REFERENCE_VERSION
 from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, handle_http_request, SocketTimeout
 from mddb_workflow.utils.pubchem import make_pubchem_request, pubchem_standardization, _make_post_request
 from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
@@ -67,8 +67,7 @@ def generate_ligand_references(
        PubChem ID, reuse its ligand data and skip the matching steps.
 
     1. **Direct InChIKey matching**: Extracts InChIKeys from structure fragments
-       (excluding lipids and membrane components) and attempts direct matching with
-       PubChem database.
+       and attempts direct matching with PubChem database.
 
     2. **Chemical similarity matching**: If direct matching fails, progressively
        modifies the molecular structure and calculates Tanimoto coefficient (TC)
@@ -79,7 +78,8 @@ def generate_ligand_references(
        4. Match against PDB-derived ligands (TC threshold ≥ 0.9)
        5. Perform similarity search in PubChem/ChEMBL (TC threshold ≥ 0.9)
 
-    3. **Fallback handling**: Unmatched ligands are saved as-is with warnings.
+    3. **Fallback handling**: Unmatched ligands are saved as-is. Lipids in membranes are not ligands,
+       so the check of unmatched ligands is done later in the InChI references (see generate_inchi_references).
 
     4. **User-forced selections**: Respects user-specified ligand selections from
        inputs.yaml, with warnings if TC compared to original fragment is insufficient.
@@ -273,28 +273,8 @@ def generate_ligand_references(
         print(f'Matched input ligand {input_data["pubchem"]} to reference {matched_inchikey} with TC={tc:.3f}')
 
     # Merge user and automatic references into ligand_references
+    # Molecules not matched to PubChem are checked in the InChI references, once lipids in membranes are known
     ligand_references = {**user_references, **automatic_references}
-    not_matched_ligands = []
-    large_aa = []
-    for key, data in ligand_references.items():
-        if 'pubchem' in data: continue
-        resids = inchikeys[key].resindices
-        molname = inchikeys[key].molname
-        is_large_aa = any(structure.residues[resid].is_large_aa() for resid in resids)
-        if is_large_aa:
-            large_aa.append((molname, resids, key))
-        else:
-            not_matched_ligands.append((molname, resids, key))
-        warn(f'Ligand {molname} could not be matched to any PubChem ID{" and has an aminoacid-like structure" if is_large_aa else ""}. Residues: {resids}')
-    large_aa_fail = large_aa and LARGE_AMINOACID_FLAG not in mercy
-    not_matched_fail = not_matched_ligands and LIGANDS_MATCH_FLAG not in mercy
-    if large_aa_fail or not_matched_fail:
-        fail_msg = 'Some ligands could not be matched to PubChem IDs.\n\tPlease, provide PubChem IDs for all ligands or a PDB code where they are present.'
-        if large_aa_fail:
-            fail_msg += f'\n\tUse the flag "-m {LARGE_AMINOACID_FLAG}" to bypass the check on: ' + ', '.join([f'{name} - {key} (residues {resids})' for name, resids, key in large_aa])
-        if not_matched_fail:
-            fail_msg += f'\n\tUse the flag "-m {LIGANDS_MATCH_FLAG}" to bypass the check on: ' + ', '.join([f'{name} - {key} (residues {resids})' for name, resids, key in not_matched_ligands])
-        raise InputError(fail_msg)
 
     if not ligand_references:
         print('No ligands were matched')

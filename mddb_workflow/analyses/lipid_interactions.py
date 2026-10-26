@@ -1,7 +1,8 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
-from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPIDS_RESIDUE_NAMES, LIPID_INTERACTIONS_ANALYSIS_VERSION
-from mddb_workflow.utils.mda_spells import get_head_tail_split, get_cg_head_tail_split, get_all_acyl_chains
+from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPID_INTERACTIONS_ANALYSIS_VERSION
+from mddb_workflow.utils.mda_spells import get_head_tail_split, get_all_acyl_chains
+from mddb_workflow.tools.cg_lipids import coarse_grain_head_tail_split
 from mddb_workflow.utils.type_hints import *
 import numpy as np
 import multiprocessing
@@ -15,10 +16,13 @@ def lipid_interactions(
     output_directory: str,
     inchikey_map: list[dict],
     cg_residues: list[int],
+    ua_residues: list[int],
     snapshots: int,
     frames_limit: int = 100,
 ):
-    """Lipid-protein interactions analysis."""
+    """Lipid-protein interactions analysis.
+    Contacts do not depend on the membrane shape, so lipids of vesicles and micelles are analysed too.
+    """
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('   No membranes found, skipping lipid interactions analysis')
         return
@@ -27,10 +31,15 @@ def lipid_interactions(
         return
 
     is_united_atom = False
-    if len(cg_residues) > 0:
-        lipids = universe.select_atoms(f'resname {" ".join(LIPIDS_RESIDUE_NAMES)}')
-        # Heuristic: if the residues have more than 40 atoms, assume United Atom.
-        is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids.residues)
+    # Coarse grain and united atom lipids have no InChI keys
+    no_inchikey_lipids = len(cg_residues) > 0 or len(ua_residues) > 0
+    if no_inchikey_lipids:
+        # Lipids of all membranes and unassigned lipids, as found by the membrane mapping
+        lipid_atoms = [atom for mem in membrane_map['mems'].values() for atoms in mem['leaflets'].values() for atom in atoms]
+        lipids = universe.atoms[np.unique(lipid_atoms + membrane_map['no_mem_lipid'])]
+        # United atom lipids are the ones in the united atom selection
+        ua_residues_set = set(int(resindex) for resindex in ua_residues)
+        is_united_atom = any(residue.resindex in ua_residues_set for residue in lipids.residues)
     else:
         lipids = [ref for ref in inchikey_map if ref['is_lipid']]
 
@@ -46,7 +55,7 @@ def lipid_interactions(
     # Choose the method according to the type of lipids present
     if is_united_atom:
         data = ua_lipid_interactions(universe, lipids, iterator)
-    elif len(cg_residues) > 0:
+    elif no_inchikey_lipids:
         data = cg_lipid_interactions(universe, lipids, iterator)
     else:
         data = aa_lipid_interactions(universe, lipids, iterator)
@@ -237,7 +246,7 @@ def cg_lipid_interactions(universe, lipid_group, iterator):
     tail_indices = {}  # lipid_residx -> frozenset of acyl-chain atom indices
     lipid_resindex_to_resname = {}
     for residue in lipid_group.residues:
-        head_ag, tail_ag = get_cg_head_tail_split(residue)
+        head_ag, tail_ag = coarse_grain_head_tail_split(residue)
         head_indices[residue.resindex] = frozenset(head_ag.indices.tolist())
         tail_indices[residue.resindex] = frozenset(tail_ag.indices.tolist())
         lipid_resindex_to_resname[residue.resindex] = residue.resname

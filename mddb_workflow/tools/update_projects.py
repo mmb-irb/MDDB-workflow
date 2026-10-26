@@ -6,9 +6,10 @@ from shutil import rmtree
 
 from mddb_workflow.utils.auxiliar import load_json, save_json, load_yaml, InputError
 from mddb_workflow.utils.constants import PROJECT_METADATA_VERSION, TOPOLOGY_VERSION
-from mddb_workflow.utils.constants import OUTPUT_METADATA_FILENAME, STANDARD_TOPOLOGY_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_METADATA_FILENAME, STANDARD_TOPOLOGY_FILENAME, MEMBRANE_MAPPING_FILENAME
 from mddb_workflow.utils.constants import RED_HEADER, GREEN_HEADER, COLOR_END
-from mddb_workflow.utils.constants import CHANNELS_ANALYSIS_VERSION, CLUSTERS_ANALYSIS_VERSION
+from mddb_workflow.utils.constants import APL_ANALYSIS_VERSION, CHANNELS_ANALYSIS_VERSION, CLUSTERS_ANALYSIS_VERSION
+from mddb_workflow.utils.constants import DENSITY_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import ENERGIES_ANALYSIS_VERSION, HBONDS_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import INTERACTIONS_ANALYSIS_VERSION, LIPID_INTERACTIONS_ANALYSIS_VERSION, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import POCKETS_ANALYSIS_VERSION
@@ -17,13 +18,16 @@ from mddb_workflow.utils.constants import SASA_ANALYSIS_VERSION, THICKNESS_ANALY
 from mddb_workflow.utils.database import Database, get_available_nodes
 from mddb_workflow.utils.loader import Loader
 from mddb_workflow.utils.tasks import Task
+from mddb_workflow.tools.membrane_mapping import MEMBRANE_MAPPING_VERSION
 from mddb_workflow.mwf import workflow, md_requestables
 
 # Set the current version of every versioned analysis, by its workflow task flag
 # Analyses with no version here are considered to be version 0.0.0
 ANALYSIS_VERSIONS = {
+    'apl': APL_ANALYSIS_VERSION,
     'channels': CHANNELS_ANALYSIS_VERSION,
     'clusters': CLUSTERS_ANALYSIS_VERSION,
+    'density': DENSITY_ANALYSIS_VERSION,
     'energies': ENERGIES_ANALYSIS_VERSION,
     'hbonds': HBONDS_ANALYSIS_VERSION,
     'inter': INTERACTIONS_ANALYSIS_VERSION,
@@ -37,6 +41,10 @@ ANALYSIS_VERSIONS = {
     'thickness': THICKNESS_ANALYSIS_VERSION,
     'tmscore': TMSCORES_ANALYSIS_VERSION,
 }
+# Set the current version of every versioned project analysis (with no MD), by its workflow task flag
+PROJECT_ANALYSIS_VERSIONS = {
+    'memmap': MEMBRANE_MAPPING_VERSION,
+}
 # Analysis output files are named after the task flag (e.g. mda.rgyr.json) and the loader names the analysis after the file
 # Set here the legacy analyses whose output filename (mda.xxxx.json) does not match the task flag
 ANALYSIS_FILENAME_EXCEPTIONS = {
@@ -45,6 +53,7 @@ ANALYSIS_FILENAME_EXCEPTIONS = {
     'inter': 'interactions',
     'linter': 'lipid_inter',
     'lorder': 'lipid_order',
+    'memmap': 'mem_map',
     'pairwise': 'rmsd_pairwise',
     'perres': 'rmsd_perres',
     'rmsf': 'fluctuation',
@@ -59,6 +68,7 @@ ANALYSIS_TASKS = [ 'inter' ] + [ flag for flag, task in md_requestables.items()
 PROJECT_TASK_FILES = {
     'pmeta': [ OUTPUT_METADATA_FILENAME ],
     'stopology': [ f'stopology/{STANDARD_TOPOLOGY_FILENAME}' ],
+    'memmap': [ MEMBRANE_MAPPING_FILENAME ],
 }
 # Set the flags of all tasks whose version is tracked, so they may be updated
 UPDATABLE_TASKS = list(PROJECT_TASK_FILES) + ANALYSIS_TASKS
@@ -84,6 +94,15 @@ def get_analysis_database_names (flag : str) -> list[str]:
     return [ f'{name}-00', name ]
 
 
+def get_analysis_version (analyses : dict, flag : str) -> Version | None:
+    """Get the version of an analysis in the database, given the versions of the analyses and its task flag.
+    None is returned if the analysis is missing. Analyses with no version are considered to be version 0.0.0.
+    """
+    name = next((name for name in get_analysis_database_names(flag) if name in analyses), None)
+    if name is None: return None
+    return Version(analyses[name]) if analyses[name] else Version('0.0.0')
+
+
 def find_outdated_tasks (versions : dict, include : list[str] | None = None) -> dict[str, tuple[list[str], str]]:
     """Given the remote versions of a project, get the flags of the workflow tasks to be run again.
     Every flag comes with the outdated versions found in the database and the current version.
@@ -101,20 +120,24 @@ def find_outdated_tasks (versions : dict, include : list[str] | None = None) -> 
     topology_version = Version(raw_topology_version) if raw_topology_version else Version('0.0.0')
     if topology_version < Version(TOPOLOGY_VERSION):
         outdated_tasks['stopology'] = ([ str(topology_version) ], TOPOLOGY_VERSION)
+    # Check the project analyses (e.g. the membrane mapping)
+    for flag, updated_version in PROJECT_ANALYSIS_VERSIONS.items():
+        analysis_version = get_analysis_version(versions.get('analyses', {}), flag)
+        if analysis_version is None:
+            if include and flag in include:
+                outdated_tasks[flag] = ([ MISSING_VERSION ], updated_version)
+        elif analysis_version < Version(updated_version):
+            outdated_tasks[flag] = ([ str(analysis_version) ], updated_version)
     # Check the analyses of every MD
     for flag in ANALYSIS_TASKS:
-        names = get_analysis_database_names(flag)
         updated_version = ANALYSIS_VERSIONS.get(flag, '0.0.0')
         outdated_versions = []
         for md in versions.get('mds', []):
-            md_analyses = md.get('analyses', {})
-            name = next((name for name in names if name in md_analyses), None)
-            if name is None:
+            analysis_version = get_analysis_version(md.get('analyses', {}), flag)
+            if analysis_version is None:
                 if include and flag in include and MISSING_VERSION not in outdated_versions:
                     outdated_versions.append(MISSING_VERSION)
                 continue
-            raw_analysis_version = md_analyses[name]
-            analysis_version = Version(raw_analysis_version) if raw_analysis_version else Version('0.0.0')
             if analysis_version < Version(updated_version) and str(analysis_version) not in outdated_versions:
                 outdated_versions.append(str(analysis_version))
         if len(outdated_versions) > 0:

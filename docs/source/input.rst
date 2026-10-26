@@ -276,6 +276,25 @@ In addition, an RMSD analysis is run for every defined ligand.
 	  - pubchem: 1986
 	  - drugbank: DB00945
 
+``forced_lipids``
+~~~~~~~~~~~~~~~~~
+
+Set residue names to be treated as lipids.
+Lipids are identified from their structure following the LIPID MAPS categories, synthetic lipids included
+(e.g. ionizable lipids), and then their InChI keys are searched in SwissLipids and LIPID MAPS.
+Add here the residue names of lipids whose structure is not recognised to treat them as lipids.
+Residues classified as fatty which are not recognised as lipids make the workflow fail when there are enough
+of them to be part of a membrane (24 molecules), use the flag "-m lipids" to bypass the check and not treat them as lipids.
+In coarse grained systems lipids are identified by residue name or by Martini bead names (e.g. C1A, D2A... tails),
+so these names are added to the known ones (e.g. for lipids of other force fields).
+
+
+
+::
+
+	forced_lipids:
+	  - OCA
+
 Simulation metadata
 -------------------
 

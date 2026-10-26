@@ -1,6 +1,7 @@
 from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json, load_json
-from mddb_workflow.utils.constants import OUTPUT_DENSITY_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_DENSITY_FILENAME, DENSITY_ANALYSIS_VERSION
+from mddb_workflow.tools.membrane_mapping import get_bilayers, get_bilayer_polar_atoms
 from mddb_workflow.utils.type_hints import *
 import pytraj as pt
 
@@ -16,8 +17,9 @@ def density(
     frames_limit=1000
 ):
     """Membrane density analysis."""
-    if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> No membranes found, skipping density analysis')
+    bilayers = get_bilayers(membrane_map)
+    if len(bilayers) == 0:
+        print('-> No flat bilayers found, skipping density analysis')
         return
 
     # Set the main output filepath
@@ -41,10 +43,7 @@ def density(
     # Parse selections to pytraj masks
     pytraj_masks = [component['selection'].to_pytraj() for component in components]
     # Add polar atoms selection
-    polar_atoms = []
-    for n in range(membrane_map['n_mems']):
-        polar_atoms.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
-        polar_atoms.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
+    polar_atoms = get_bilayer_polar_atoms(bilayers)
     components.append({
         'name': 'polar',
         'selection': polar_atoms,
@@ -68,7 +67,7 @@ def density(
         if component['name'] == 'polar': continue
         component['selection'] = component['selection'].atom_indices
     # Export results
-    data = {'data': {'comps': components, 'z': list(out['z'])}}
+    data = {'data': {'comps': components, 'z': list(out['z'])}, 'version': DENSITY_ANALYSIS_VERSION}
     save_json(data, output_analysis_filepath)
 
 

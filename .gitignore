@@ -17,6 +17,7 @@ atommass.dat
 .pytest_cache/
 test/data/output/
 test/data/source_*
+test/benchmarks/*/downloads/
 atommass.dat
 **/tmp/
 **/docs/*/*dataset

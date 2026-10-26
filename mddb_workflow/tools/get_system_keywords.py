@@ -140,9 +140,8 @@ def get_system_keywords(
             keywords.append(LIGAND_ONLY_KEYWORD)
         # If there is only other then we issue no additional keyword
 
-    # Set if a membrane was found
-    membrane_count = membrane_map['n_mems']
-    has_membrane = membrane_count > 0
+    # Set if a membrane was found, any amphiphilic aggregate (bilayer, vesicle or micelle) counts
+    has_membrane = membrane_map['n_mems'] > 0
     if has_membrane:
         keywords.append(MEMBRANE_KEYWORD)
 
