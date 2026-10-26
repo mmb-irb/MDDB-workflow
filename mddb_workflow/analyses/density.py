@@ -1,7 +1,7 @@
 from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.constants import OUTPUT_DENSITY_FILENAME, DENSITY_ANALYSIS_VERSION
-from mddb_workflow.tools.membrane_mapping import get_bilayers
+from mddb_workflow.tools.membrane_mapping import get_bilayers, get_bilayer_polar_atoms
 from mddb_workflow.utils.type_hints import *
 import pytraj as pt
 
@@ -43,10 +43,7 @@ def density(
     # Parse selections to pytraj masks
     pytraj_masks = [component['selection'].to_pytraj() for component in components]
     # Add polar atoms selection
-    polar_atoms = []
-    for bilayer in bilayers:
-        polar_atoms.extend(bilayer['polar_atoms']['top'])
-        polar_atoms.extend(bilayer['polar_atoms']['bot'])
+    polar_atoms = get_bilayer_polar_atoms(bilayers)
     components.append({
         'name': 'polar',
         'selection': polar_atoms,

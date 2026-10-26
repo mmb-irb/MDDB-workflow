@@ -311,21 +311,17 @@ def make_inchikey_reference(
     References of lipids made while the lipid databases were not available get an incomplete version,
     so they are not reused from the MDDB database and they are remade later.
     """
-    lipid = None
-    version = INCHI_REFERENCE_VERSION
-    if lipid_reference:
-        lipid = {'category': lipid_reference.get('category'), 'forced': lipid_reference.get('forced', False)}
-        if lipid_reference.get('version') == INCOMPLETE_REFERENCE_VERSION:
-            version = INCOMPLETE_REFERENCE_VERSION
     lipid_reference = lipid_reference or {}
+    incomplete = lipid_reference.get('version') == INCOMPLETE_REFERENCE_VERSION
     reference = {
         'inchikey': inchikey,
         'inchi': inchi,
-        'lipid': lipid,
+        'lipid': {'category': lipid_reference.get('category'), 'forced': lipid_reference.get('forced', False)}
+            if lipid_reference else None,
         'swisslipids': lipid_reference.get('swisslipids'),
         'lipidmaps': lipid_reference.get('lipidmaps'),
         'ligand': ligand_reference,
-        'version': version
+        'version': INCOMPLETE_REFERENCE_VERSION if incomplete else INCHI_REFERENCE_VERSION
     }
     # Sort dictionary entries for consistency when uploading to database
     return {k: dict(sorted(v.items())) if type(v) is dict else v for k, v in reference.items()}

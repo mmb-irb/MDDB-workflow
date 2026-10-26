@@ -1,5 +1,5 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
+from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn, ranger
 from mddb_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names
 from mddb_workflow.tools.cg_lipids import coarse_grain_tail_chains
@@ -57,7 +57,7 @@ def lipid_order(
         ua_residues_set = set(int(resindex) for resindex in ua_residues)
         is_united_atom = any(residue.resindex in ua_residues_set for residue in lipids)
         # gorder atom numbers start at 1
-        selection = f'@membrane and atomnum {atom_number_ranges(bilayer_atoms + 1)}'
+        selection = f'@membrane and atomnum {ranger((bilayer_atoms + 1).tolist(), " ")}'
         if is_united_atom:
             order_parameters_dict = ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids, selection)
         else:
@@ -80,14 +80,6 @@ def lipid_order(
     data = {'data': order_parameters_dict, 'version': LIPID_ORDER_ANALYSIS_VERSION}
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
     save_json(data, output_analysis_filepath)
-
-
-def atom_number_ranges(atom_numbers: np.ndarray) -> str:
-    """Write sorted atom numbers as ranges for the groan selection language (e.g. '1-3 7-9')."""
-    breaks = np.where(np.diff(atom_numbers) > 1)[0]
-    starts = np.concatenate([atom_numbers[:1], atom_numbers[breaks + 1]])
-    ends = np.concatenate([atom_numbers[breaks], atom_numbers[-1:]])
-    return ' '.join(f'{start}-{end}' for start, end in zip(starts, ends))
 
 
 def aa_lipid_order(universe, snapshots, frame_step, lipids):

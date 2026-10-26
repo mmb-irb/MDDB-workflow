@@ -1,7 +1,7 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.constants import OUTPUT_THICKNESS_FILENAME, THICKNESS_ANALYSIS_VERSION
-from mddb_workflow.tools.membrane_mapping import get_bilayers
+from mddb_workflow.tools.membrane_mapping import get_bilayers, get_bilayer_polar_atoms
 from mddb_workflow.utils.type_hints import *
 from lipyphilic.analysis.z_positions import ZPositions
 import numpy as np
@@ -44,10 +44,7 @@ def thickness(
         return
 
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
-    head_sel = []
-    for bilayer in bilayers:
-        head_sel.extend(bilayer['polar_atoms']['top'])
-        head_sel.extend(bilayer['polar_atoms']['bot'])
+    head_sel = get_bilayer_polar_atoms(bilayers)
     head_sel_mda = 'index ' + " ".join(map(str, (head_sel)))
     # Run the analysis on the whole membrane
     print(' Running LiPyphilic ZPositions')

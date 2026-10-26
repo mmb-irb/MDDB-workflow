@@ -233,10 +233,15 @@ def all_atom_tails(atoms: 'AtomGroup') -> Optional['AtomGroup']:
     hydrophobic[bonds[heteroatoms[bonds[:, 0]], 1]] = False
     # Group hydrophobic carbons into chains
     chain_bonds = bonds[hydrophobic[bonds[:, 0]] & hydrophobic[bonds[:, 1]]]
-    graph = coo_matrix((np.ones(len(chain_bonds)), (chain_bonds[:, 0], chain_bonds[:, 1])), shape=(len(atoms), len(atoms)))
-    _, chains = connected_components(graph, directed=False)
+    chains = connected_labels(chain_bonds[:, 0], chain_bonds[:, 1], len(atoms))
     chain_sizes = np.bincount(chains[hydrophobic], minlength=len(atoms))
     return atoms[hydrophobic & (chain_sizes[chains] >= MIN_TAIL_CARBONS)]
+
+
+def connected_labels(first: np.ndarray, second: np.ndarray, n_nodes: int) -> np.ndarray:
+    """Get the connected component label of every node of a graph given the nodes of its edges."""
+    graph = coo_matrix((np.ones(len(first)), (first, second)), shape=(n_nodes, n_nodes))
+    return connected_components(graph, directed=False)[1]
 
 
 def lipid_centers(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup']) -> np.ndarray:
@@ -275,11 +280,8 @@ def hydrophobic_cores(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup'], d
     if tails is None or np.isin(resindices, tails.resindices).mean() < MIN_TAIL_FRACTION:
         return None, []
     pairs = capped_distance(tails.positions, tails.positions, distance, box=dimensions, return_distances=False)
-    n_residues = len(headgroup_ag.universe.residues)
-    graph = coo_matrix((np.ones(len(pairs)), (tails.resindices[pairs[:, 0]], tails.resindices[pairs[:, 1]])),
-        shape=(n_residues, n_residues))
-    _, labels = connected_components(graph, directed=False)
-    labels = labels[resindices]
+    labels = connected_labels(tails.resindices[pairs[:, 0]], tails.resindices[pairs[:, 1]],
+        len(headgroup_ag.universe.residues))[resindices]
     sizes = np.bincount(labels)
     cores = [headgroup_ag[labels == label] for label in np.argsort(-sizes, kind='stable') if sizes[label] >= MIN_LEAFLET_LIPIDS]
     out_of_cores = resindices[sizes[labels] < MIN_LEAFLET_LIPIDS].tolist()
@@ -436,7 +438,7 @@ def classify_leaflets(descriptions: list[dict], box: np.ndarray | None) -> tuple
     return aggregates, [desc for desc in descriptions if id(desc) not in used]
 
 
-def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, tails: Optional['AtomGroup'] = None,
+def find_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tails: Optional['AtomGroup'] = None,
         core_distance: float = CG_CORE_CONTACT_DISTANCE) -> dict:
     """Find leaflets from the local normals of lipids and classify them into amphiphilic aggregates.
 
@@ -474,8 +476,7 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, tails: O
     first, second = pairs[:, 0], pairs[:, 1]
     linked = (core_of[first] == core_of[second]) & (core_of[first] >= 0) & \
         ((normals[first] * normals[second]).sum(axis=1) >= np.cos(np.radians(MAX_NORMAL_ANGLE)))
-    graph = coo_matrix((np.ones(linked.sum()), (first[linked], second[linked])), shape=(len(headgroup_ag),) * 2)
-    _, leaflet_labels = connected_components(graph, directed=False)
+    leaflet_labels = connected_labels(first[linked], second[linked], len(headgroup_ag))
     aggregates = []
     no_mem_lipids = []
     for indices in core_indices:
@@ -528,7 +529,6 @@ def classify_core(headgroup_ag: 'AtomGroup', indices: np.ndarray, leaflet_labels
     in_aggregates = [index for _, groups in aggregates for group in groups.values() for index in group.indices]
     remaining = headgroup_ag[indices]
     remaining = remaining[~np.isin(remaining.indices, in_aggregates)].resindices.tolist()
-    if len(aggregates) == 0: return [], remaining
     return aggregates, assign_lipids_by_contact(aggregates, remaining, headgroup_ag[indices], dimensions)
 
 
@@ -571,8 +571,7 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
         # Rank the leaflets of every lipid by contacts
         ranking = np.argsort(-contacts, axis=1, kind='stable')
         first, second = ranking[:, 0], ranking[:, 1]
-        first_contacts = np.take_along_axis(contacts, ranking[:, :1], axis=1)[:, 0]
-        second_contacts = np.take_along_axis(contacts, ranking[:, 1:2], axis=1)[:, 0]
+        first_contacts, second_contacts = np.take_along_axis(contacts, ranking[:, :2], axis=1).T
         dominant = first_contacts >= CONTACT_DOMINANCE * second_contacts
         # Lipids touching two leaflets of the same bilayer or vesicle alike are in its midplane
         same_aggregate = (midplanes[first] == midplanes[second]) & (midplanes[first] >= 0)
@@ -597,6 +596,11 @@ def get_bilayers(membrane_map: dict | None) -> list[dict]:
     """Get the flat bilayers of a membrane mapping. Mappings before version 0.3.0 only have bilayers and no type."""
     if membrane_map is None: return []
     return [mem for mem in membrane_map['mems'].values() if mem.get('type', BILAYER) == BILAYER]
+
+
+def get_bilayer_polar_atoms(bilayers: list[dict]) -> list[int]:
+    """Get the polar atoms of the top and bottom leaflets of bilayers (see get_bilayers)."""
+    return [atom for bilayer in bilayers for name in ('top', 'bot') for atom in bilayer['polar_atoms'][name]]
 
 
 def display_membrane_mapping(mem_map: str, pdb: str, mem: str = '0'):
