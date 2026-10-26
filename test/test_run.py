@@ -66,7 +66,7 @@ class TestRunAll(TestBase):
                 'A01IP': ['protein', 'ligand', 'lipid', 'carbohydrate', 'membrane', 'dimer', 'heterodimer', 'all-atom (aa)'],
                 'A025N': ['ligand', 'ligand only', 'all-atom (aa)'],
                 'A02F9': ['lipid', 'solvent', 'lipid only', 'membrane', 'all-atom (aa)'],
-                'A05T5': ['rna', 'lipid', 'other', 'membrane', 'coarse grained (cg)']
+                'A05T5': ['rna', 'lipid', 'membrane', 'coarse grained (cg)']
             }
             assert metadata['SYSKEYS'] == syskeys[project.accession]
 

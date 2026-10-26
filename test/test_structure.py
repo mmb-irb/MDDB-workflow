@@ -121,10 +121,17 @@ class TestCoarseGrainClassification:
             ('M', 'ERGO', 'ROH R1 R2 R3 R4 R5 C1 C2'),
             ('M', 'BENZ', 'R1 R2 R3'),
             ('M', 'W', 'W'),
+            # Nucleic residue names used for both DNA and RNA, in chains with RNA, DNA and no other names
+            ('R', 'A', 'BB BB1 BB2 SC1 SC2 SC3 SC4'),
+            ('R', 'U', 'BB BB1 BB2 SC1 SC2 SC3'),
+            ('D', 'DT', 'BB1 BB2 BB3 SC1 SC2 SC3 SC4'),
+            ('D', 'G', 'BB1 BB2 BB3 SC1 SC2 SC3 SC4'),
+            ('N', 'C', 'BB BB1 BB2 SC1 SC2 SC3'),
         ])
 
     def test_classification(self, structure: 'Structure'):
-        assert [residue.classification for residue in structure.residues] == ['fatty', 'steroid', 'unknown', 'solvent']
+        assert [residue.classification for residue in structure.residues] == \
+            ['fatty', 'steroid', 'unknown', 'solvent', 'rna', 'rna', 'dna', 'dna', 'nucleic']
 
     def test_lipids(self, structure: 'Structure'):
         assert [structure.residues[index].name for index in structure.get_selection_residue_indices(structure.select_lipids())] == \

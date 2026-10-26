@@ -788,7 +788,7 @@ class Residue:
         if self.name in RNA_RESIDUE_NAME_LETTERS:
             return 'rna'
         if self.name in NUCLEIC_RESIDUE_NAME_LETTERS:
-            return 'nucleic'
+            return self.get_nucleic_classification_by_chain()
         if self.name in FATTY_RESIDUE_NAMES:
             return 'fatty'
         if self.name in STEROID_RESIDUE_NAMES:
@@ -802,6 +802,18 @@ class Residue:
             if lipid_classification: return lipid_classification
         # If we do not know what it is
         return 'unknown'
+
+    def get_nucleic_classification_by_chain(self) -> str:
+        """Classify a nucleic residue whose name is used for both DNA and RNA (e.g. A, C, G) by the names of the other
+        residues in its chain: it is DNA or RNA if they have only DNA or only RNA names, and 'nucleic' otherwise.
+        """
+        chain = self.chain
+        if not chain: return 'nucleic'
+        names = set(residue.name for residue in chain.residues)
+        has_dna = any(name in DNA_RESIDUE_NAME_LETTERS for name in names)
+        has_rna = any(name in RNA_RESIDUE_NAME_LETTERS for name in names)
+        if has_dna == has_rna: return 'nucleic'
+        return 'dna' if has_dna else 'rna'
 
     # The residue biochemistry classification (read only)
     classification = property(get_classification, None, None)
