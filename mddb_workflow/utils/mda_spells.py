@@ -5,7 +5,7 @@ import pickle
 
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
-from mddb_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS
+from mddb_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 
 import MDAnalysis
 from MDAnalysis.topology.TPRParser import TPRParser
@@ -44,6 +44,8 @@ def to_MDAnalysis_topology(standard_topology_path: str) -> 'Topology':
     # transform bond to non redundant tuples
     bonds = []
     for bond_from, bond_tos in enumerate(topology['atom_bonds']):
+        # Atoms with missing bonds have no bonds
+        if bond_tos == JSON_SERIALIZABLE_MISSING_BONDS: continue
         for bond_to in bond_tos:
             bond = tuple(sorted([bond_from, bond_to]))
             bonds.append(bond)

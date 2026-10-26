@@ -28,10 +28,14 @@ def generate_test_caches(cache_str: str, test_file: str, keep_refbonds: list = F
     save_json(cache.data, test_file, indent=None, separators=(',', ': '))
 
 
-# Expected aggregate type for the test accessions which are not flat bilayers
-EXPECTED_TYPES = {'A05SA': VESICLE, 'A05RV': MICELLE, 'A05Q3': VESICLE}
+# Expected aggregate types for the test accessions which are not a single bilayer
+EXPECTED_TYPES = {'A05SA': [VESICLE], 'A05RV': [MICELLE], 'A05Q3': [VESICLE], 'A05T5': [BILAYER, MICELLE]}
 # Expected number of unassigned lipids for the test accessions where it is known
-EXPECTED_UNASSIGNED = {'A01JD': 1}
+EXPECTED_UNASSIGNED = {'A01JD': 1, 'A05T5': 0}
+# Coarse grained residues of the test accessions
+CG_SELECTIONS = {'cg_test': 'resname DPPC', 'A01JD': 'resname DPPC', 'A05T5': 'all'}
+# Residue names which must be only in one membrane of the test accessions, by membrane index
+EXPECTED_MEMBRANE_RESNAMES = {'A05T5': ({'MC3', 'MC3H', 'DSPC', 'DPG2'}, '1')}
 
 
 def download_project(project: 'Project'):
@@ -51,13 +55,15 @@ class TestMembraneMapping:
     - OTRMG: no topology/charges, this should fail with the current implementation, leaflets are not similar size when they should
     - cg_test: coarse-grained system
     - cg_test_04: coarse-grained system with changing membranes
-    - A05SA: LNP-endosome fusion stalk vesicle, leaflets merge at the default LeafletFinder cutoff in the first frame, MC3 and MC3H forced as lipids
+    - A05SA: LNP-endosome fusion stalk vesicle, leaflets are close at the stalk in the first frame, MC3 and MC3H forced as lipids
     - A05RV: empty lipid nanoparticle micelle, no topology/charges, MC3H and DPG2 forced as lipids
     - A05Q3: LNP-endosome fusion stalk vesicle, no topology/charges, MC3T forced as lipid
     - A01JD: united atoms channel with a lipid inside the pore which must remain unassigned
+    - A05T5: coarse grained lipid nanoparticle touching a bilayer with its headgroups, both must be separate aggregates.
+      Half of the bilayer lipids (DPSM, PAPS, DIPE, PAPC, SAP6) and the PEG-lipid are only found by their bead names
 
     """
-    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A05SA', 'A05RV', 'A05Q3', 'A01JD'])
+    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A05SA', 'A05RV', 'A05Q3', 'A01JD', 'A05T5'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -86,7 +92,7 @@ class TestMembraneMapping:
             universe = get_mda_universe_from_stopology(top, trajectory_file.absolute_path)
         else:
             universe = mda.Universe(top, trajectory_file.absolute_path)
-        cg_selection = universe.select_atoms('resname DPPC').residues.resindices if test_accession in ['cg_test', 'A01JD'] else []
+        cg_selection = universe.select_atoms(CG_SELECTIONS[test_accession]).residues.resindices if test_accession in CG_SELECTIONS else []
         output_file = File((test_dir / f'{test_accession}_membrane_mapping_output.json').as_posix())
         if output_file.exists: output_file.remove()
         membrane_map = generate_membrane_mapping(
@@ -96,12 +102,16 @@ class TestMembraneMapping:
             cg_selection,
             output_file
         )
-        assert membrane_map['n_mems'] == 1
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == EXPECTED_TYPES.get(test_accession, [BILAYER])
         membrane = membrane_map['mems']['0']
-        assert membrane['type'] == EXPECTED_TYPES.get(test_accession, BILAYER)
         if test_accession in EXPECTED_UNASSIGNED:
             unassigned_lipids = len(set(universe.atoms[membrane_map['no_mem_lipid']].resindices))
             assert unassigned_lipids == EXPECTED_UNASSIGNED[test_accession]
+        if test_accession in EXPECTED_MEMBRANE_RESNAMES:
+            resnames, expected_key = EXPECTED_MEMBRANE_RESNAMES[test_accession]
+            for key, mem in membrane_map['mems'].items():
+                mem_resnames = set(universe.atoms[[atom for atoms in mem['leaflets'].values() for atom in atoms]].resnames)
+                assert resnames <= mem_resnames if key == expected_key else not resnames & mem_resnames
         # Compare number of lipids (one polar atom per lipid) instead of number of atoms
         if membrane['type'] == MICELLE:
             assert list(membrane['polar_atoms']) == ['outer']
@@ -299,7 +309,7 @@ class TestAggregateClassification:
         """
         import mddb_workflow.tools.membrane_mapping as membrane_mapping
         shell = sphere_points(20, spacing=6)
-        # Lipids pointing their tails to the micelle with heads 21 Å apart, so they are not LeafletFinder neighbours
+        # Lipids pointing their tails to the micelle with heads 21 Å apart, so they are not leaflet neighbours
         column = np.array([[41, 0, 0], [62, 0, 0], [83, 0, 0]], dtype=float)
         heads = np.concatenate([shell, column])
         directions = np.concatenate([-shell, np.tile([-1, 0, 0], (len(column), 1))])
@@ -316,7 +326,8 @@ class TestAggregateClassification:
         assert membrane_map['n_mems'] == 1
         assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(heads)
         assert membrane_map['no_mem_lipid'] == []
-        assert queried_atoms == [3 * len(shell), 3, 3]
+        # Contact queries come after the neighbour searches of polar atoms
+        assert queried_atoms[-3:] == [3 * len(shell), 3, 3]
 
     def test_midplane_lipid_stays_unassigned(self):
         """A lipid in the bilayer midplane touching both leaflets alike is not assigned to any of them."""
@@ -333,9 +344,9 @@ class TestAggregateClassification:
 
     def test_vesicle_midplane(self):
         """A lipid between both leaflets of a vesicle touching them alike is added to its midplane leaflet."""
-        # Tail ends are at 61 Å (outer) and 49 Å (inner) from the center, set the same tail end spacing in both
-        outer, inner = sphere_points(75), sphere_points(35, spacing=8 * 61 / 75 * 35 / 49)
-        midplane = np.array([[54.5, 0, 0]], dtype=float)
+        # Tail ends are at 61 Å (outer) and 59 Å (inner) from the center, set the same tail end spacing in both
+        outer, inner = sphere_points(75), sphere_points(45, spacing=8 * 61 / 75 * 45 / 59)
+        midplane = np.array([[60, 0, 0]], dtype=float)
         heads = np.concatenate([outer, inner, midplane])
         directions = np.concatenate([-outer, inner, [[0, 1, 0]]])
         universe, headgroups = build_lipids(heads, directions, [250, 250, 250])
@@ -346,7 +357,7 @@ class TestAggregateClassification:
         assert membrane_map['no_mem_lipid'] == []
 
     def test_vesicle(self):
-        outer, inner = sphere_points(75), sphere_points(35)
+        outer, inner = sphere_points(75), sphere_points(45)
         heads = np.concatenate([outer, inner])
         universe, headgroups = build_lipids(heads, np.concatenate([-outer, inner]), [250, 250, 250])
         membrane_map = find_leaflets(universe, headgroups)
@@ -371,8 +382,8 @@ class TestAggregateClassification:
         bot_z = universe.atoms[membrane['polar_atoms']['bot']].positions[:, 2].mean()
         assert top_z > bot_z
 
-    def test_merged_leaflets_retry(self):
-        """Leaflets 13 Å apart are merged at the default 15 Å cutoff and must be split with a smaller one."""
+    def test_close_leaflets_are_split(self):
+        """Leaflets 13 Å apart, closer than the leaflet cutoff, are split since their normals are opposite."""
         outer, inner = sphere_points(53), sphere_points(40)
         heads = np.concatenate([outer, inner])
         universe, headgroups = build_lipids(heads, np.concatenate([-outer, inner]), [200, 200, 200])
@@ -399,7 +410,7 @@ class TestAggregateClassification:
 
     def test_vesicle_across_box_boundary(self):
         """A vesicle split by the box boundary is a single vesicle."""
-        outer, inner = sphere_points(75), sphere_points(35)
+        outer, inner = sphere_points(75), sphere_points(45)
         universe, headgroups = build_lipids(np.concatenate([outer, inner]), np.concatenate([-outer, inner]), [250, 250, 250])
         shift_and_wrap(universe, [125, 0, 0])
         membrane_map = find_leaflets(universe, headgroups)
@@ -410,10 +421,8 @@ class TestAggregateClassification:
         assert len(membrane['polar_atoms']['inner']) == len(inner)
 
     def test_vesicle_with_lumen_micelle(self):
-        """The inner leaflet of a vesicle merges at 15 Å with a micelle in its lumen and they are split at 12 Å.
-        The outer leaflet must wait for the inner leaflet instead of becoming a micelle.
-        """
-        outer, inner, lumen = sphere_points(75), sphere_points(35), sphere_points(22)
+        """A micelle in the lumen of a vesicle is a separate aggregate, also without tails to tell their cores apart."""
+        outer, inner, lumen = sphere_points(75), sphere_points(45), sphere_points(22)
         heads = np.concatenate([outer, inner, lumen])
         universe, headgroups = build_lipids(heads, np.concatenate([-outer, inner, -lumen]), [250, 250, 250])
         membrane_map = find_leaflets(universe, headgroups)
@@ -437,9 +446,38 @@ class TestAggregateClassification:
         membrane_map = find_leaflets(universe, headgroups)
         assert all(mem['type'] != MICELLE for mem in membrane_map['mems'].values())
 
+    def test_undulating_bilayer(self):
+        """Leaflets of an undulating bilayer are not flat, but their local normals point to the same side,
+        so they are planar (e.g. large coarse grained membranes, buckled membranes or small boxes with big undulations).
+        """
+        grid = np.array([[x, y] for x in np.arange(-60, 60, 8) for y in np.arange(-60, 60, 8)], dtype=float)
+        # 20 Å high cosine wave along x, with tails along the local normal
+        height = 20 * np.cos(2 * np.pi * grid[:, 0] / 120)
+        slope = -20 * 2 * np.pi / 120 * np.sin(2 * np.pi * grid[:, 0] / 120)
+        normals = np.column_stack([-slope, np.zeros(len(grid)), np.ones(len(grid))])
+        bot = np.column_stack([grid, height - 20])
+        top = np.column_stack([grid, height + 20])
+        universe, headgroups = build_lipids(np.concatenate([bot, top]), np.concatenate([normals, -normals]), [120, 120, 200])
+        membrane_map = find_leaflets(universe, headgroups)
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [BILAYER]
+        membrane = membrane_map['mems']['0']
+        assert set(membrane['polar_atoms']['top']) == set(headgroups[len(grid):].indices)
+        assert set(membrane['polar_atoms']['bot']) == set(headgroups[:len(grid)].indices)
+
+    def test_lipid_nanoparticle_is_micelle(self):
+        """A lipid nanoparticle with an inner shell of lipids around an aqueous pocket is a micelle, not a vesicle,
+        since the pocket is narrower than the shell around it.
+        """
+        shell, pocket = sphere_points(50), sphere_points(20)
+        universe, headgroups = build_lipids(np.concatenate([shell, pocket]), np.concatenate([-shell, pocket]), [200, 200, 200])
+        # Tail ends of the shell and the pocket are 2 Å apart, and 6-14 Å apart within them
+        membrane_map = find_leaflets(universe, headgroups, universe.select_atoms('name C1 C2'), core_distance=15)
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+        assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(shell) + len(pocket)
+
     def test_micelle_on_bilayer(self):
         """A micelle touching a bilayer with its headgroups (e.g. a lipid nanoparticle) is not merged into the bilayer,
-        since their tails are in different hydrophobic cores, even if LeafletFinder merges their polar atoms.
+        since their tails are in different hydrophobic cores, even if their polar atoms are neighbours.
         """
         grid = np.array([[x, y] for x in np.arange(-96, 100, 8) for y in np.arange(-96, 100, 8)], dtype=float)
         bot = np.column_stack([grid, np.full(len(grid), -17)])
@@ -482,7 +520,7 @@ class TestAggregateClassification:
         grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
         bot = np.column_stack([grid, np.full(len(grid), -120)])
         top = np.column_stack([grid, np.full(len(grid), -80)])
-        outer, inner = sphere_points(75) + [0, 0, 60], sphere_points(35) + [0, 0, 60]
+        outer, inner = sphere_points(75) + [0, 0, 60], sphere_points(45) + [0, 0, 60]
         heads = np.concatenate([bot, top, outer, inner])
         directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1)),
             -(outer - [0, 0, 60]), inner - [0, 0, 60]])

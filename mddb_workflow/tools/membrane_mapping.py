@@ -3,10 +3,9 @@ import numpy as np
 from collections import Counter
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
-from MDAnalysis.analysis.leaflet import LeafletFinder
 from MDAnalysis.lib.distances import capped_distance
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
-from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, STEROID_RESIDUE_NAMES
+from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
 from mddb_workflow.utils.type_hints import *
 
 MEMBRANE_MAPPING_VERSION = '0.3.0'
@@ -20,14 +19,14 @@ AGGREGATE_TYPES = [BILAYER, VESICLE, MICELLE]
 MIDPLANE = 'midplane'
 # Minimum number of lipids in a leaflet, 24 lipids like in FATSLiM
 MIN_LEAFLET_LIPIDS = 24
-# A leaflet is flat when sqrt(smallest / largest eigenvalue) of its polar atom positions is below this
-FLATNESS_THRESHOLD = 0.3
-# Absolute cosine between the head to tail vector and the reference direction for a lipid to be clearly oriented
-STRONG_ORIENTATION = 0.5
-# Fraction of lipids clearly oriented against the majority from which a group is considered mixed (merged leaflets)
-MIXED_ORIENTATION = 0.25
-# Minimum fraction of lipids clearly oriented in the same direction to decide the orientation of a leaflet
-CLEAR_ORIENTATION = 0.5
+# Lipids closer than this distance (Å) define the local normal of a lipid, like in FATSLiM
+NORMAL_CUTOFF = 20
+# Lipids closer than this distance (Å) with local normals within this angle (degrees) are in the same leaflet
+LEAFLET_CUTOFF = 15
+MAX_NORMAL_ANGLE = 45
+# A leaflet is planar when its mean local normal is longer than this, like in FATSLiM (closed leaflets average out)
+# Curved leaflets point inwards or outwards when their mean radial normal is longer than this too
+PLANAR_MEAN_NORMAL = np.sqrt(0.1)
 # Minimum absolute cosine between normals of the two leaflets of a bilayer
 PARALLEL_NORMALS = 0.9
 # Maximum distance (Å) between the centroids of the two leaflets of a bilayer along the normal
@@ -94,8 +93,8 @@ def generate_membrane_mapping(
         - All atom lipids are the residues with lipid references (from their InChI keys), coarse grained lipids are
           found by residue and bead names (see coarse_grain_lipids).
         - Lipids are grouped into hydrophobic cores by tail contacts (see hydrophobic_cores).
-        - Leaflets are clusters of at least 24 lipid polar atoms of a core found by LeafletFinder.
-        - Leaflets are classified into aggregates from their shape and lipid orientation (see classify_leaflets).
+        - Leaflets are groups of at least 24 neighbour lipids of a core with similar local normals, like in FATSLiM
+          (see find_leaflets), classified into aggregates from their shape and orientation (see classify_core).
 
     """
     if not universe: raise RuntimeError('Missing universe')
@@ -363,18 +362,18 @@ def lipid_centers(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup']) -> np
 
 
 def hydrophobic_cores(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup'], distance: float,
-        dimensions: np.ndarray | None) -> tuple[list['AtomGroup'], list[int]]:
+        dimensions: np.ndarray | None) -> tuple[Optional[list['AtomGroup']], list[int]]:
     """Group lipids into hydrophobic cores: lipids whose tail atoms are closer than the given distance, directly or
     through other lipids.
 
     Aggregates touching each other only through their headgroups (e.g. a lipid nanoparticle on a bilayer) are in
     separate cores, while the two leaflets of a bilayer or fused aggregates (e.g. at a fusion stalk) share a core.
     Returns the polar atoms of every core with at least MIN_LEAFLET_LIPIDS lipids, biggest first, and the residue
-    indices of lipids out of them. All lipids are one core when less than MIN_TAIL_FRACTION of them have tail atoms.
+    indices of lipids out of them. There are no cores (None) when less than MIN_TAIL_FRACTION of lipids have tail atoms.
     """
     resindices = headgroup_ag.resindices
     if tails is None or np.isin(resindices, tails.resindices).mean() < MIN_TAIL_FRACTION:
-        return [headgroup_ag], []
+        return None, []
     pairs = capped_distance(tails.positions, tails.positions, distance, box=dimensions, return_distances=False)
     n_residues = len(headgroup_ag.universe.residues)
     graph = coo_matrix((np.ones(len(pairs)), (tails.resindices[pairs[:, 0]], tails.resindices[pairs[:, 1]])),
@@ -385,22 +384,6 @@ def hydrophobic_cores(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup'], d
     cores = [headgroup_ag[labels == label] for label in np.argsort(-sizes, kind='stable') if sizes[label] >= MIN_LEAFLET_LIPIDS]
     out_of_cores = resindices[sizes[labels] < MIN_LEAFLET_LIPIDS].tolist()
     return cores, out_of_cores
-
-
-def split_leaflet_groups(universe: 'Universe', headgroup_ag: 'AtomGroup', cutoff: float, pbc: bool) -> tuple[list, list]:
-    """Run LeafletFinder and split its groups into leaflets and residue indices of unassigned lipids.
-    With periodic boundary conditions leaflets crossing the box boundary (e.g. vesicles) are not split.
-    """
-    L = LeafletFinder(universe, headgroup_ag, cutoff=cutoff, pbc=pbc)
-    leaflets = []
-    no_mem_lipids = []
-    for group in L.groups():
-        # 24 lipids like in FATSLiM
-        if len(group) >= MIN_LEAFLET_LIPIDS:
-            leaflets.append(group)
-        else:
-            no_mem_lipids.extend(group.residues.resindices)
-    return leaflets, no_mem_lipids
 
 
 def pbc_center(positions: np.ndarray, box: np.ndarray | None) -> np.ndarray:
@@ -420,54 +403,71 @@ def minimum_image(vectors: np.ndarray, box: np.ndarray | None) -> np.ndarray:
     return vectors - box * np.round(vectors / box)
 
 
-def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None, centers: np.ndarray) -> dict:
-    """Get the shape and lipid orientation of a LeafletFinder group of polar atoms.
+def neighbour_pairs(positions: np.ndarray, cutoff: float, dimensions: np.ndarray | None) -> np.ndarray:
+    """Get the pairs of different positions closer than the cutoff, both ways, as position indices."""
+    pairs = capped_distance(positions, positions, cutoff, box=dimensions, return_distances=False)
+    return pairs[pairs[:, 0] != pairs[:, 1]]
 
-    The group is flat when its thinnest principal axis is much shorter than the longest one.
-    Lipid orientation is the head to tail vector (polar atom to lipid center, see lipid_centers) projected on
-    the leaflet normal when it is flat or on the radial direction from the leaflet center otherwise.
-    Lipids in a real leaflet are oriented in the same direction, while a group with many lipids
-    oriented in both directions is likely two leaflets merged by LeafletFinder.
-    The direction is undecided (0) when not enough lipids are clearly oriented in the same direction
-    (e.g. small or rough bilayer patches which are not flat, whose tails are not radial).
-    Sterols are ignored for the orientation since they are short and they may be not oriented
-    (e.g. cholesterol in the core of lipid nanoparticles), unless there are only sterols.
+
+def local_normals(positions: np.ndarray, directions: np.ndarray, pairs: np.ndarray, box: np.ndarray | None) -> np.ndarray:
+    """Get the local normal of every lipid like FATSLiM, from the polar atom positions and the head to tail directions.
+
+    It is the thinnest principal axis of the polar atoms of the lipid and its neighbours (pairs) oriented like it
+    (positive dot product of directions), going to the side of their mean direction. Lipids with less than two
+    such neighbours keep their own direction.
+    """
+    pairs = pairs[np.argsort(pairs[:, 0], kind='stable')]
+    starts = np.searchsorted(pairs[:, 0], np.arange(len(positions) + 1))
+    normals = directions.copy()
+    for i in range(len(positions)):
+        neighbours = pairs[starts[i]:starts[i + 1], 1]
+        neighbours = np.concatenate([[i], neighbours[directions[neighbours] @ directions[i] > 0]])
+        if len(neighbours) < 3: continue
+        relative = minimum_image(positions[neighbours] - positions[i], box)
+        relative -= relative.mean(axis=0)
+        normal = np.linalg.eigh(relative.T @ relative)[1][:, 0]
+        normals[i] = normal if normal @ directions[neighbours].mean(axis=0) > 0 else -normal
+    return normals
+
+
+def describe_leaflet(leaflet: 'AtomGroup', normals: np.ndarray, box: np.ndarray | None) -> dict:
+    """Get the shape and orientation of a leaflet from the local normals of its lipids, which point to their tails.
+
+    The leaflet is planar when its mean normal is long (see PLANAR_MEAN_NORMAL), like in FATSLiM, since the normals
+    of closed leaflets point to all sides, while the ones of flat or undulating sheets point to the same side.
+    A planar leaflet has its mean normal as normal, with tails along (+1) or against (-1) it.
+    A curved leaflet has tails outwards (+1) or inwards (-1) when the mean projection of its normals on the radial
+    direction from its center (radial orientation) is long enough, otherwise its direction is undecided (0).
     """
     positions = leaflet.positions
     center = pbc_center(positions, box)
     relative = minimum_image(positions - center, box)
     shift = relative.mean(axis=0)
     relative -= shift
-    eigenvalues, eigenvectors = np.linalg.eigh(np.cov(relative.T))
-    flat = np.sqrt(max(eigenvalues[0], 0) / eigenvalues[2]) < FLATNESS_THRESHOLD
-    normal = eigenvectors[:, 0]
-    # Make the normal point to the positive side of its main axis so top and bottom are consistent
-    if normal[np.argmax(np.abs(normal))] < 0: normal = -normal
     radii = np.linalg.norm(relative, axis=1)
-    tails = minimum_image(centers[leaflet.resindices] - positions, box)
-    tails /= np.maximum(np.linalg.norm(tails, axis=1), 1e-6)[:, None]
-    reference = normal if flat else relative / np.maximum(radii, 1e-6)[:, None]
-    cosines = (tails * reference).sum(axis=1)
-    not_sterols = ~np.isin(leaflet.resnames, list(STEROID_RESIDUE_NAMES))
-    if np.any(not_sterols): cosines = cosines[not_sterols]
-    positive = np.mean(cosines > STRONG_ORIENTATION)
-    negative = np.mean(cosines < -STRONG_ORIENTATION)
-    direction = 0
-    if max(positive, negative) >= CLEAR_ORIENTATION: direction = 1 if positive > negative else -1
+    radial = (normals * relative / np.maximum(radii, 1e-6)[:, None]).sum(axis=1).mean()
+    mean_normal = normals.mean(axis=0)
+    planar = np.linalg.norm(mean_normal) > PLANAR_MEAN_NORMAL
+    normal, direction = np.zeros(3), 0
+    if planar:
+        normal, direction = mean_normal / np.linalg.norm(mean_normal), 1
+        # Make the normal point to the positive side of its main axis so top and bottom are consistent
+        if normal[np.argmax(np.abs(normal))] < 0: normal, direction = -normal, -1
+    elif abs(radial) > PLANAR_MEAN_NORMAL:
+        direction = int(np.sign(radial))
     return {
         'group': leaflet,
-        'flat': flat,
+        'planar': planar,
         'centroid': center + shift,
         'normal': normal,
         'radius': radii.mean(),
-        'coherent': min(positive, negative) < MIXED_ORIENTATION,
-        # Flat: tails along (+1) or against (-1) the normal. Curved: tails outwards (+1) or inwards (-1). Undecided: 0
+        'radial': radial,
         'direction': direction,
     }
 
 
 def facing_separation(first: dict, second: dict, box: np.ndarray | None) -> np.ndarray | None:
-    """Get the separation from a flat leaflet to the closest periodic image of another one where their tails face each other.
+    """Get the separation from a planar leaflet to the closest periodic image of another one where their tails face each other.
 
     In-plane components follow the minimum image convention. Along the normal, the closest image may be back to back
     (e.g. leaflets 40 Å apart in a 70 Å high box are 30 Å apart through the box boundary), so the images of the box
@@ -490,26 +490,23 @@ def facing_separation(first: dict, second: dict, box: np.ndarray | None) -> np.n
     return best
 
 
-def classify_leaflets(leaflets: list, box: np.ndarray | None, centers: np.ndarray) -> tuple[list[tuple[str, dict]], list, list]:
-    """Group leaflets into amphiphilic aggregates: flat bilayers and vesicles.
+def classify_leaflets(descriptions: list[dict], box: np.ndarray | None) -> tuple[list[tuple[str, dict]], list[dict]]:
+    """Group leaflets (see describe_leaflet) into amphiphilic aggregates: bilayers and vesicles.
 
-    - Vesicle: a curved leaflet with tails inwards (outer) and a smaller concentric curved leaflet with tails outwards (inner).
-    - Bilayer: two flat leaflets with parallel normals whose tails face each other.
+    - Vesicle: a curved leaflet with tails inwards (outer) and a smaller concentric curved leaflet with tails outwards
+      (inner) whose lumen is wider than the bilayer (inner radius over half the outer radius). Otherwise the inner
+      leaflet is a pocket of a micelle-like aggregate (e.g. the aqueous core of a lipid nanoparticle).
+    - Bilayer: two planar leaflets with parallel normals whose tails face each other.
 
-    Leaflets with an undecided lipid orientation are not classified.
-    Returns the aggregates as (type, leaflets by name), the leaflets which could not be classified and the curved
-    leaflets with tails inwards and no partner. These are micelles, unless their partner is found later (see classify_core_lipids).
+    Returns the aggregates as (type, leaflets by name) and the descriptions of the leaflets out of them.
     """
-    descriptions = [describe_leaflet(leaflet, box, centers) for leaflet in leaflets]
-    coherent = [desc for desc in descriptions if desc['coherent']]
-    unclassified = [desc['group'] for desc in descriptions if not desc['coherent']]
     used = set()
     aggregates = []
 
-    curved_in = [desc for desc in coherent if not desc['flat'] and desc['direction'] < 0]
-    curved_out = [desc for desc in coherent if not desc['flat'] and desc['direction'] > 0]
+    curved_in = [desc for desc in descriptions if not desc['planar'] and desc['direction'] < 0]
+    curved_out = [desc for desc in descriptions if not desc['planar'] and desc['direction'] > 0]
     for outer in curved_in:
-        candidates = [inner for inner in curved_out if id(inner) not in used and inner['radius'] < outer['radius']
+        candidates = [inner for inner in curved_out if id(inner) not in used and outer['radius'] / 2 < inner['radius'] < outer['radius']
             and np.linalg.norm(minimum_image(inner['centroid'] - outer['centroid'], box)) < VESICLE_CENTER_TOLERANCE * inner['radius']]
         if len(candidates) == 0: continue
         inner = min(candidates, key=lambda desc: np.linalg.norm(minimum_image(desc['centroid'] - outer['centroid'], box)))
@@ -517,11 +514,11 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None, centers: np.ndarra
         empty = outer['group'].universe.atoms[[]]
         aggregates.append((VESICLE, {'outer': outer['group'], 'inner': inner['group'], MIDPLANE: empty}))
 
-    flats = [desc for desc in coherent if desc['flat'] and desc['direction'] != 0]
-    for first in flats:
+    planars = [desc for desc in descriptions if desc['planar']]
+    for first in planars:
         if id(first) in used: continue
         best, best_distance, best_separation = None, None, None
-        for second in flats:
+        for second in planars:
             if second is first or id(second) in used: continue
             if abs(np.dot(first['normal'], second['normal'])) < PARALLEL_NORMALS: continue
             separation = facing_separation(first, second, box)
@@ -535,22 +532,21 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None, centers: np.ndarra
         top, bot = (best, first) if np.dot(best_separation, first['normal']) > 0 else (first, best)
         aggregates.append((BILAYER, {'top': top['group'], 'bot': bot['group']}))
 
-    lone_curved_in = [desc['group'] for desc in curved_in if id(desc) not in used]
-    used.update(id(desc) for desc in curved_in)
-    unclassified += [desc['group'] for desc in coherent if id(desc) not in used]
-    return aggregates, unclassified, lone_curved_in
+    return aggregates, [desc for desc in descriptions if id(desc) not in used]
 
 
 def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, tails: Optional['AtomGroup'] = None,
-        core_distance: float = CG_CORE_CONTACT_DISTANCE, cutoffs: tuple[float, ...] = (15.0, 12.0, 10.0)) -> dict:
-    """Find leaflets using MDAnalysis LeafletFinder and classify them into amphiphilic aggregates.
+        core_distance: float = CG_CORE_CONTACT_DISTANCE) -> dict:
+    """Find leaflets from the local normals of lipids and classify them into amphiphilic aggregates.
 
-    Lipids are first grouped into hydrophobic cores by the contacts of their tail atoms (see hydrophobic_cores),
-    and the lipids of every core are classified separately (see classify_core_lipids), so aggregates touching each
-    other only through their headgroups (e.g. a lipid nanoparticle on a bilayer) are not merged.
-    Lipids out of cores join the leaflet they are in contact with, if any.
-    When too few lipids have tail atoms all lipids are classified together, and lipids without tail atoms point
-    to their residue center.
+    Lipids are grouped into hydrophobic cores by the contacts of their tail atoms (see hydrophobic_cores), so
+    aggregates touching each other only through their headgroups (e.g. a lipid nanoparticle on a bilayer) are
+    classified separately, while fused aggregates share a core. Inside every core, leaflets are lipids closer than
+    LEAFLET_CUTOFF whose local normals (see local_normals) differ less than MAX_NORMAL_ANGLE, directly or through other
+    lipids, like in FATSLiM, so leaflets touching each other with opposite orientations are not merged.
+    Then leaflets are classified by core (see classify_core) and lipids out of cores join the leaflet they touch, if any.
+    Without enough lipids with tail atoms there are no cores: all lipids are classified together and lipids without
+    tail atoms point to their residue center.
     """
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': MEMBRANE_MAPPING_VERSION}
     if not headgroup_ag:
@@ -559,16 +555,31 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, tails: O
     box = universe.dimensions[:3].copy() if universe.dimensions is not None else None
     if box is not None and not np.all(box > 0): box = None
     dimensions = universe.dimensions if box is not None else None
-    centers = lipid_centers(headgroup_ag, tails)
+    # Head to tail directions and local normals of lipids
+    positions = headgroup_ag.positions
+    directions = minimum_image(lipid_centers(headgroup_ag, tails)[headgroup_ag.resindices] - positions, box)
+    directions /= np.maximum(np.linalg.norm(directions, axis=1), 1e-6)[:, None]
+    normals = local_normals(positions, directions, neighbour_pairs(positions, NORMAL_CUTOFF, dimensions), box)
     cores, out_of_cores = hydrophobic_cores(headgroup_ag, tails, core_distance, dimensions)
-    if len(cores) > 1 or len(out_of_cores) > 0:
+    if cores is not None:
         print(f" Found {len(cores)} hydrophobic cores with {', '.join(str(len(core)) for core in cores)} lipids"
             f" and {len(out_of_cores)} lipids out of them")
-    print(' Running MDAnalysis LeafletFinder')
+    # Leaflets: neighbours of the same core with similar local normals
+    core_indices = [np.arange(len(headgroup_ag))] if cores is None else \
+        [np.flatnonzero(np.isin(headgroup_ag.indices, core.indices)) for core in cores]
+    core_of = np.full(len(headgroup_ag), -1)
+    for k, indices in enumerate(core_indices): core_of[indices] = k
+    pairs = neighbour_pairs(positions, LEAFLET_CUTOFF, dimensions)
+    first, second = pairs[:, 0], pairs[:, 1]
+    linked = (core_of[first] == core_of[second]) & (core_of[first] >= 0) & \
+        ((normals[first] * normals[second]).sum(axis=1) >= np.cos(np.radians(MAX_NORMAL_ANGLE)))
+    graph = coo_matrix((np.ones(linked.sum()), (first[linked], second[linked])), shape=(len(headgroup_ag),) * 2)
+    _, leaflet_labels = connected_components(graph, directed=False)
     aggregates = []
     no_mem_lipids = []
-    for core in cores:
-        core_aggregates, core_unassigned = classify_core_lipids(universe, core, box, centers, cutoffs)
+    for indices in core_indices:
+        core_aggregates, core_unassigned = classify_core(headgroup_ag, indices, leaflet_labels, normals, box, dimensions,
+            whole_aggregate=cores is not None)
         aggregates.extend(core_aggregates)
         no_mem_lipids.extend(core_unassigned)
     no_mem_lipids += assign_lipids_by_contact(aggregates, out_of_cores, headgroup_ag, dimensions)
@@ -594,46 +605,37 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, tails: O
     return membrane_map
 
 
-def classify_core_lipids(universe: 'Universe', headgroup_ag: 'AtomGroup', box: np.ndarray | None, centers: np.ndarray,
-        cutoffs: tuple[float, ...]) -> tuple[list[tuple[str, dict]], list[int]]:
-    """Find the leaflets of a hydrophobic core with LeafletFinder and classify them into amphiphilic aggregates.
+def classify_core(headgroup_ag: 'AtomGroup', indices: np.ndarray, leaflet_labels: np.ndarray, normals: np.ndarray,
+        box: np.ndarray | None, dimensions: np.ndarray | None, whole_aggregate: bool) -> tuple[list[tuple[str, dict]], list[int]]:
+    """Classify the leaflets of a hydrophobic core (lipid positions in the headgroups) into amphiphilic aggregates.
 
-    When some leaflets can not be classified (e.g. two leaflets too close at a fusion stalk are
-    merged by LeafletFinder) only their lipids are retried with the next smaller cutoff,
-    so aggregates already classified with a larger cutoff are kept.
-    Curved leaflets with tails inwards and no partner are micelles once there is nothing left to retry,
-    since their partner may be found with a smaller cutoff (e.g. the inner leaflet of a vesicle merged
-    with lipids in its lumen). Unassigned lipids only join leaflets of the same core by contact.
+    Leaflets (with at least MIN_LEAFLET_LIPIDS lipids) form bilayers and vesicles (see classify_leaflets).
+    A core without them is a micelle with all its lipids when they point inwards on average (e.g. a lipid nanoparticle,
+    whose disordered core lipids split it into several groups). Without real cores (whole_aggregate is False) the lipids
+    of different aggregates are classified together, so every other curved leaflet with tails inwards is a micelle.
+    Lipids out of aggregates join a leaflet of the same core by contact, if any.
     Returns the aggregates and the residue indices of the lipids which remain unassigned.
     """
-    aggregates = []
-    no_mem_lipids = []
-    lone_curved_in = []
-    pending_headgroups = headgroup_ag
-    for i, cutoff in enumerate(cutoffs):
-        if i > 0:
-            print(f' {len(unclassified)} leaflets could not be classified, retrying their lipids with a {cutoff} Å cutoff')
-        leaflets, small_group_lipids = split_leaflet_groups(universe, pending_headgroups, cutoff, pbc=box is not None)
-        no_mem_lipids.extend(small_group_lipids)
-        found_aggregates, unclassified, lone_curved_in = classify_leaflets(leaflets + lone_curved_in, box, centers)
-        aggregates.extend(found_aggregates)
-        if len(unclassified) == 0: break
-        pending_headgroups = sum(unclassified[1:], unclassified[0])
-    aggregates.extend((MICELLE, {'outer': group}) for group in lone_curved_in)
-    if len(unclassified) > 0:
-        warn(f"Could not classify {len(unclassified)} leaflet(s) with {', '.join(str(len(group)) for group in unclassified)} lipids, they will be unassigned")
-        for group in unclassified:
-            no_mem_lipids.extend(group.residues.resindices)
-    dimensions = universe.dimensions if box is not None else None
-    no_mem_lipids = assign_lipids_by_contact(aggregates, no_mem_lipids, headgroup_ag, dimensions)
-    return aggregates, no_mem_lipids
+    groups = [indices[leaflet_labels[indices] == label] for label in np.unique(leaflet_labels[indices])]
+    descriptions = [describe_leaflet(headgroup_ag[group], normals[group], box) for group in groups if len(group) >= MIN_LEAFLET_LIPIDS]
+    aggregates, unpaired = classify_leaflets(descriptions, box)
+    if whole_aggregate and len(aggregates) == 0:
+        core = describe_leaflet(headgroup_ag[indices], normals[indices], box)
+        if not core['planar'] and core['radial'] < 0: return [(MICELLE, {'outer': headgroup_ag[indices]})], []
+    if not whole_aggregate:
+        aggregates.extend((MICELLE, {'outer': desc['group']}) for desc in unpaired if not desc['planar'] and desc['direction'] < 0)
+    in_aggregates = [index for _, groups in aggregates for group in groups.values() for index in group.indices]
+    remaining = headgroup_ag[indices]
+    remaining = remaining[~np.isin(remaining.indices, in_aggregates)].resindices.tolist()
+    if len(aggregates) == 0: return [], remaining
+    return aggregates, assign_lipids_by_contact(aggregates, remaining, headgroup_ag[indices], dimensions)
 
 
 def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindices: list[int],
         headgroup_ag: 'AtomGroup', dimensions: np.ndarray | None) -> list[int]:
     """Add unassigned lipids to the leaflet they are in contact with.
 
-    Lipids out of LeafletFinder groups (e.g. sterols in the core of lipid nanoparticles) are added to a leaflet
+    Lipids out of leaflets (e.g. lipids at the edge of a fusion stalk) are added to a leaflet
     when they have clearly more atom contacts with it than with any other leaflet. It is repeated until no more
     lipids are added, so lipids only touching other added lipids (e.g. sterol clusters) are also added.
     Lipids in contact with both leaflets of a vesicle alike (e.g. cholesterol between leaflets) are added to its
@@ -642,7 +644,7 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
     """
     if len(aggregates) == 0 or len(lipid_resindices) == 0: return lipid_resindices
     universe = headgroup_ag.universe
-    # Unassigned lipids come from LeafletFinder groups, so all of them have a polar atom
+    # Unassigned lipids come from the headgroups, so all of them have a polar atom
     polar_atoms = np.full(len(universe.residues), -1)
     polar_atoms[headgroup_ag.resindices] = headgroup_ag.indices
     remaining = np.array(lipid_resindices, dtype=int)
