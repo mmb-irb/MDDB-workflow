@@ -622,7 +622,33 @@ class TestLipidOrder:
         topology_file = types.SimpleNamespace(format='tpr')
         self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], [], snapshots=1)
         # Atom numbers of the bilayer lipids, 3 atoms per lipid
-        assert self.calls == [f'@membrane and atomnum 1-{3 * len(self.bilayer_residues)}']
+        assert self.calls == [f'atomnum 1-{3 * len(self.bilayer_residues)}']
+
+    def test_coarse_grain_selection_in_gorder(self, tmp_path):
+        """gorder selects every bilayer lipid, also the ones whose residue names are not in its list of common lipids."""
+        import gorder
+        import types
+        import yaml
+        self.universe.residues.resnames = ['MC3X'] * len(self.universe.residues)
+        self.universe.add_TopologyAttr('resids', np.arange(1, len(self.universe.residues) + 1))
+        topology_file = types.SimpleNamespace(format='gro')
+        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], [], snapshots=1)
+        self.universe.atoms.write(tmp_path / 'structure.gro')
+        self.universe.atoms.write(tmp_path / 'trajectory.xtc')
+        # Bonds of the 3 bead lipids, numbered from 1
+        bonds = '\n'.join(f'{3 * lipid + 1} {3 * lipid + 2}\n{3 * lipid + 2} {3 * lipid + 3}' for lipid in range(len(self.universe.residues)))
+        (tmp_path / 'bonds.bnd').write_text(bonds + '\n')
+        gorder.Analysis(
+            structure=str(tmp_path / 'structure.gro'),
+            trajectory=str(tmp_path / 'trajectory.xtc'),
+            bonds=str(tmp_path / 'bonds.bnd'),
+            analysis_type=gorder.analysis_types.CGOrder(self.calls[0]),
+            output_yaml=str(tmp_path / 'order.yaml'),
+            handle_pbc=False,
+            silent=True,
+        ).run().write()
+        order = yaml.safe_load((tmp_path / 'order.yaml').read_text())
+        assert len(order['MC3X']['order parameters']) == 2
 
     def test_coarse_grain_lipid_examples(self):
         """Tails of coarse grained lipids are read from one example residue of every lipid in the bilayers,
@@ -646,7 +672,7 @@ class TestLipidOrder:
             ua_calls.append(selection))
         topology_file = types.SimpleNamespace(format='tpr')
         self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [], self.bilayer_residues, snapshots=1)
-        assert ua_calls == [f'@membrane and atomnum 1-{3 * len(self.bilayer_residues)}']
+        assert ua_calls == [f'atomnum 1-{3 * len(self.bilayer_residues)}']
         assert self.calls == []
 
     def test_no_bilayers(self):

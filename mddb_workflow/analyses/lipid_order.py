@@ -57,7 +57,8 @@ def lipid_order(
         ua_residues_set = set(int(resindex) for resindex in ua_residues)
         is_united_atom = any(residue.resindex in ua_residues_set for residue in lipids)
         # gorder atom numbers start at 1
-        selection = f'@membrane and atomnum {ranger((bilayer_atoms + 1).tolist(), " ")}'
+        # Do not add '@membrane', since it only matches gorder's list of common lipid residue names
+        selection = f'atomnum {ranger((bilayer_atoms + 1).tolist(), " ")}'
         if is_united_atom:
             order_parameters_dict = ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids, selection)
         else:
