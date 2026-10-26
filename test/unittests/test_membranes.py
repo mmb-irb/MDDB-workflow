@@ -697,6 +697,18 @@ def test_coarse_grain_order_parameters():
     }}
 
 
+def test_coarse_grain_order_parameters_no_tails():
+    """Residues with no tail beads (e.g. united atom lipids passed as coarse grained) get no empty entries,
+    so lipid_order finds no order parameters and writes no output.
+    """
+    from mddb_workflow.analyses.lipid_order import cg_order_parameters
+    gorder_data = {
+        'average order': {'total': {'mean': 0.3}},
+        'DPPC': {'order parameters': {'DPPC C15 (15) - DPPC C17 (17)': {'total': {'mean': 0.2, 'error': 0.01}}}},
+    }
+    assert cg_order_parameters(gorder_data, {'DPPC': []}) == {}
+
+
 class TestLipidInteractions:
 
     def test_coarse_grain_lipids_from_membrane_map(self, monkeypatch):

@@ -195,7 +195,7 @@ def cg_order_parameters(gorder_data: dict, tails: dict[str, list[list[str]]]) ->
             continue
 
         # Map beads to pre-built chains
-        order_parameters_dict[resname] = {}
+        chains = {}
         for chain_idx, chain_beads in enumerate(tails.get(resname, [])):
             chain_atoms, chain_avgs, chain_stds = [], [], []
             for bead_name in chain_beads:
@@ -205,11 +205,13 @@ def cg_order_parameters(gorder_data: dict, tails: dict[str, list[list[str]]]) ->
                     chain_avgs.append(val)
                     chain_stds.append(err)
             if chain_atoms:
-                order_parameters_dict[resname][str(chain_idx)] = {
+                chains[str(chain_idx)] = {
                     'atoms': chain_atoms,
                     'avg': chain_avgs,
                     'std': chain_stds,
                 }
+        # Residues with no tail beads (e.g. united atom lipids passed as coarse grained) are left out
+        if chains: order_parameters_dict[resname] = chains
     return order_parameters_dict
 
 
@@ -271,7 +273,7 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
         if not parsed:
             continue
 
-        order_parameters_dict[resname] = {}
+        chains = {}
         for chain_idx, tail_atoms in enumerate(tails.get(resname, [])):
             chain_atoms, chain_avgs, chain_stds = [], [], []
             for atom_name in tail_atoms:
@@ -281,11 +283,13 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
                     chain_avgs.append(val)
                     chain_stds.append(err)
             if chain_atoms:
-                order_parameters_dict[resname][str(chain_idx)] = {
+                chains[str(chain_idx)] = {
                     'atoms': chain_atoms,
                     'avg': chain_avgs,
                     'std': chain_stds,
                 }
+        # Residues with no acyl chain atoms are left out
+        if chains: order_parameters_dict[resname] = chains
 
     return order_parameters_dict
 
