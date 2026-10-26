@@ -31,7 +31,7 @@ def coarse_grain_lipids(universe: 'Universe', cg_residues: list[int], forced_lip
     Lipids are residues with a known or forced lipid residue name, and coarse grained residues whose bead names follow
     the Martini lipid conventions (see coarse_grain_lipid_tails), which also give the tail beads.
     """
-    lipid_names = list(set(LIPIDS_RESIDUE_NAMES) | set(forced_lipids or []))
+    lipid_names = list(LIPIDS_RESIDUE_NAMES | set(forced_lipids or []))
     named = np.isin(universe.residues.resnames, lipid_names)
     coarse_grained = np.zeros(len(universe.residues), dtype=bool)
     coarse_grained[np.asarray(cg_residues, dtype=int)] = True
@@ -92,13 +92,22 @@ def coarse_grain_lipid_tails(names: list[str]) -> Optional[np.ndarray]:
     if not tails.all() and any(chain[0] in 'AB' and length >= 2 for chain, length in started):
         lengths = sorted((length for _, length in started), reverse=True)
         if lengths[0] >= 3 or (len(lengths) >= 2 and lengths[1] >= 2 and len(chains) <= 3): return tails
-    rings = np.array([bool(CG_RING_BEAD.match(name)) for name in names])
     singles = np.array([bool(CG_SINGLE_TAIL_BEAD.match(name)) for name in names])
-    sterol_rings = rings & ~np.isin(names, CG_STEROL_HEADS)
-    if any(head in names for head in CG_STEROL_HEADS) and sterol_rings.sum() >= 3: return sterol_rings | singles
+    sterol = sterol_rings(names)
+    if sterol is not None: return sterol | singles
     numbers = [int(CG_SINGLE_TAIL_BEAD.match(name).group(2)) for name in np.array(names)[singles]]
-    if len(numbers) >= 3 and min(numbers) == 1 and CG_SINGLE_TAIL_HEADS & set(names) and not rings.any() and 'BB' not in names:
+    if len(numbers) >= 3 and min(numbers) == 1 and CG_SINGLE_TAIL_HEADS & set(names) and 'BB' not in names \
+        and not any(CG_RING_BEAD.match(name) for name in names):
         return singles
+    return None
+
+
+def sterol_rings(names: list[str]) -> Optional[np.ndarray]:
+    """Get the ring beads of a coarse grained sterol (with an ROH or R0 head bead and at least 3 ring beads) as a mask,
+    or None if it is not a sterol.
+    """
+    rings = np.array([bool(CG_RING_BEAD.match(name)) and name not in CG_STEROL_HEADS for name in names], dtype=bool)
+    if any(head in names for head in CG_STEROL_HEADS) and rings.sum() >= 3: return rings
     return None
 
 
@@ -109,8 +118,7 @@ def coarse_grain_lipid_classification(names: tuple[str]) -> Optional[str]:
     a lipid. Bead names must be a tuple, since results are cached.
     """
     if coarse_grain_lipid_tails(names) is None: return None
-    rings = sum(1 for name in names if CG_RING_BEAD.match(name) and name not in CG_STEROL_HEADS)
-    return 'steroid' if any(head in names for head in CG_STEROL_HEADS) and rings >= 3 else 'fatty'
+    return 'fatty' if sterol_rings(names) is None else 'steroid'
 
 
 def coarse_grain_head(names: list[str], tails: Optional[np.ndarray]) -> int:
