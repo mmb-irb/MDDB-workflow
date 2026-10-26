@@ -8,7 +8,8 @@ from mddb_workflow.utils.auxiliar import load_json, save_json, load_yaml, InputE
 from mddb_workflow.utils.constants import PROJECT_METADATA_VERSION, TOPOLOGY_VERSION
 from mddb_workflow.utils.constants import OUTPUT_METADATA_FILENAME, STANDARD_TOPOLOGY_FILENAME
 from mddb_workflow.utils.constants import RED_HEADER, GREEN_HEADER, COLOR_END
-from mddb_workflow.utils.constants import CHANNELS_ANALYSIS_VERSION, CLUSTERS_ANALYSIS_VERSION
+from mddb_workflow.utils.constants import APL_ANALYSIS_VERSION, CHANNELS_ANALYSIS_VERSION, CLUSTERS_ANALYSIS_VERSION
+from mddb_workflow.utils.constants import DENSITY_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import ENERGIES_ANALYSIS_VERSION, HBONDS_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import INTERACTIONS_ANALYSIS_VERSION, LIPID_INTERACTIONS_ANALYSIS_VERSION, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import POCKETS_ANALYSIS_VERSION
@@ -22,8 +23,10 @@ from mddb_workflow.mwf import workflow, md_requestables
 # Set the current version of every versioned analysis, by its workflow task flag
 # Analyses with no version here are considered to be version 0.0.0
 ANALYSIS_VERSIONS = {
+    'apl': APL_ANALYSIS_VERSION,
     'channels': CHANNELS_ANALYSIS_VERSION,
     'clusters': CLUSTERS_ANALYSIS_VERSION,
+    'density': DENSITY_ANALYSIS_VERSION,
     'energies': ENERGIES_ANALYSIS_VERSION,
     'hbonds': HBONDS_ANALYSIS_VERSION,
     'inter': INTERACTIONS_ANALYSIS_VERSION,

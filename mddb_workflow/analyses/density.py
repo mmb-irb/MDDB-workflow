@@ -1,6 +1,6 @@
 from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json, load_json
-from mddb_workflow.utils.constants import OUTPUT_DENSITY_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_DENSITY_FILENAME, DENSITY_ANALYSIS_VERSION
 from mddb_workflow.tools.membrane_mapping import get_bilayers
 from mddb_workflow.utils.type_hints import *
 import pytraj as pt
@@ -70,7 +70,7 @@ def density(
         if component['name'] == 'polar': continue
         component['selection'] = component['selection'].atom_indices
     # Export results
-    data = {'data': {'comps': components, 'z': list(out['z'])}}
+    data = {'data': {'comps': components, 'z': list(out['z'])}, 'version': DENSITY_ANALYSIS_VERSION}
     save_json(data, output_analysis_filepath)
 
 
