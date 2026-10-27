@@ -27,6 +27,11 @@ HIGHLIGHTED_BONDS = 5
 # Number of jumps of each group to be shown in the VMD script when jumps are split in two groups
 SHOWN_JUMPS_PER_GROUP = 10
 
+# With fewer jumps than this the test is not done
+MIN_JUMPS = 3
+# With fewer jumps than this the bimodality check is not done, since two groups of jumps can not be told apart
+MIN_BIMODALITY_JUMPS = 10
+
 # Number of jumps along the trajectory used to find how much every pair of atoms usually changes its distance
 SCALE_SAMPLED_JUMPS = 100
 
@@ -85,8 +90,8 @@ def check_trajectory_integrity (
     if register.tests.get(TRAJECTORY_INTEGRITY_FLAG, None):
         return True
 
-    # If the trajectory has only 1 or 2 frames then there is no test to do
-    if snapshots < 3:
+    # If the trajectory has very few frames then there is no test to do
+    if snapshots - 1 < MIN_JUMPS:
         register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
         return True
 
@@ -180,6 +185,8 @@ def check_trajectory_integrity (
         all_fragments[META_FRAGMENT_NAME] = meta_fragment
 
     print(f'Checking trajectory integrity ({len(all_fragments)} fragments)')
+    check_bimodal = snapshots - 1 >= MIN_BIMODALITY_JUMPS
+    if not check_bimodal: print(f' There are less than {MIN_BIMODALITY_JUMPS} jumps, so the bimodality is not checked')
 
     # Read the trajectory frame by frame with boxes as they are in the file
     # MDtraj would rebuild them not rotated, which is wrong for fitted trajectories
@@ -349,10 +356,12 @@ def check_trajectory_integrity (
         # So we also check if two groups of jumps fit the jumps much better than one
         # Jumps are not in the same order than in time, so a region which jumps and comes back repeatedly is also caught
         scaled_jumps = fragment_scaled_jumps[fragment_name]
-        bimodality_score, bigger_probabilities, group_means = check_bimodality(scaled_jumps)
-        separation = math.sqrt(group_means[1] / group_means[0])
+        bimodality_score, bigger_probabilities, group_means, separation = None, None, None, None
+        if check_bimodal:
+            bimodality_score, bigger_probabilities, group_means = check_bimodality(scaled_jumps)
+            separation = math.sqrt(group_means[1] / group_means[0])
         bimodal_frames = 0
-        if bimodality_score > BIMODALITY_BIC_CUTOFF and separation > BIMODALITY_SEPARATION_CUTOFF:
+        if check_bimodal and bimodality_score > BIMODALITY_BIC_CUTOFF and separation > BIMODALITY_SEPARATION_CUTOFF:
             # Find the frames in the group of bigger jumps
             bigger_group_frames = np.where(bigger_probabilities > 0.5)[0] + 1
             # If bigger jumps are all in the first frames then these frames are not equilibrated
@@ -413,10 +422,12 @@ def check_trajectory_integrity (
             # If the fragment failed to pass the test
             if shown_count == SHOWN_FAILED_FRAGMENTS: continue
             shown_count += 1
+            bimodality_text = '' if report['bimodality'] is None else (
+                f', a bimodality score of {round_to_hundredths(report["bimodality"])}'
+                f' and a separation of {round_to_hundredths(report["separation"])}')
             fail(f'Fragment "{name}" FAILED with a maximum z-score of {max_z_score}'
                  f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}'
-                 f', a bimodality score of {round_to_hundredths(report["bimodality"])}'
-                 f' and a separation of {round_to_hundredths(report["separation"])}{COLOR_END}')
+                 f'{bimodality_text}{COLOR_END}')
             if outliers > 0: print(f' Outliers: {outliers}')
             if bimodal_frames > 0: print(f' Frames in the group of bigger jumps: {bimodal_frames}')
             if bypassed_frames > 0: print(f' Bypassed frames: {bypassed_frames}')
