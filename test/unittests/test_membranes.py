@@ -8,6 +8,7 @@ from mddb_workflow.utils.file import File
 import MDAnalysis as mda
 import numpy as np
 import pathlib
+import types
 import pytest
 import shutil
 
@@ -1013,15 +1014,17 @@ class TestInChIKeys:
         residues = [types.SimpleNamespace(name=f'M{index}', classification='other') for index in range(len(smiles))]
         return universe, types.SimpleNamespace(residues=residues), Selection([])
 
-    def test_single_residue_without_pool(self):
+    def test_single_residue_without_pool(self, tmp_path):
         universe, structure, cg_selection = self.molecules(['CCO'])
-        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, cg_selection, parallel=True)
+        structure_file = types.SimpleNamespace(path=str(tmp_path / 'structure.pdb'))
+        inchikeys = self.generate_inchikeys(universe, structure, structure_file, cg_selection, cg_selection, parallel=True)
         assert list(inchikeys) == ['LFQSCWFLJHTTHZ-UHFFFAOYSA-N']
         assert self.processes == []
 
-    def test_pool_processes_capped(self):
+    def test_pool_processes_capped(self, tmp_path):
         universe, structure, cg_selection = self.molecules(['CCO', 'CC(=O)O'])
-        inchikeys = self.generate_inchikeys(universe, structure, cg_selection, cg_selection, parallel=True)
+        structure_file = types.SimpleNamespace(path=str(tmp_path / 'structure.pdb'))
+        inchikeys = self.generate_inchikeys(universe, structure, structure_file, cg_selection, cg_selection, parallel=True)
         assert len(inchikeys) == 2
         assert self.processes == [2]
 
