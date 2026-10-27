@@ -689,12 +689,15 @@ def _get_error_retry_after(error: Exception) -> Optional[float]:
     return None
 
 
-def retry_request(func):
+def retry_request(func=None, *, retry_not_found: bool = False):
     """Decorator to retry HTTP requests with exponential backoff.
 
     Network errors, server errors (5xx) and too many requests errors (429) are retried.
     Other HTTP errors (e.g. 404) are raised directly since retrying would give the same result.
+    Not found errors (404) are also retried with 'retry_not_found', for things which should exist,
+    since a server may answer 404 for a while (e.g. when it is restarting).
     """
+    if func is None: return lambda func: retry_request(func, retry_not_found=retry_not_found)
     @wraps(func)
     def wrapper(*args, **kwargs):
         attempt = 0
@@ -704,11 +707,12 @@ def retry_request(func):
             # Catch network-related exceptions for retry
             except (RateLimitError,
                     requests.exceptions.RequestException,
-                    http.client.RemoteDisconnected,
-                    TimeoutError, URLError) as error:
+                    http.client.RemoteDisconnected, http.client.IncompleteRead,
+                    ConnectionError, TimeoutError, URLError) as error:
                 status = _get_http_status(error)
                 # Errors in our request would fail again, except for too many requests
-                if status is not None and status < 500 and status != 429:
+                retried_status = status == 429 or (retry_not_found and status == 404)
+                if status is not None and status < 500 and not retried_status:
                     raise
                 rate_limited = isinstance(error, RateLimitError) or status == 429
                 max_attempts = RATE_LIMIT_RETRIES if rate_limited else MAX_RETRIES

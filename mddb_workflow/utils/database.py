@@ -1,4 +1,5 @@
 import urllib.request
+import http.client
 import urllib.parse
 import urllib.error
 import ssl
@@ -38,11 +39,33 @@ def workflow_urlopen(url, *args, **kwargs):
     req.add_header(WORKFLOW_REQUEST_SOURCE_HEADER, WORKFLOW_REQUEST_SOURCE_VALUE)
     return urllib.request.urlopen(req, *args, **kwargs)
 
+
+def read_url(request_url: str, output_file: Optional['File'] = None, show_progress: bool = False) -> Optional[bytes]:
+    """Get the content of a request, or write it in a file by chunks if a file is passed.
+    The whole request is in here so it is fully repeated when retried, even if it failed in the middle of a download.
+    """
+    response = workflow_urlopen(request_url)
+    if output_file is None: return response.read()
+    pbar = tqdm(unit='B', unit_scale=True, unit_divisor=1024, miniters=1, desc=' Progress', leave=False) if show_progress else None
+    with open(output_file.path, 'wb') as file:
+        while True:
+            chunk = response.read(CHUNK_SIZE)
+            if not chunk: break
+            if pbar is not None: pbar.update(len(chunk))
+            file.write(chunk)
+    # Reading by chunks does not complain if the connection is closed before the end, so we check it here
+    # The length is the number of bytes still expected and it is None when the server does not say the size
+    if response.length: raise http.client.IncompleteRead(b'', response.length)
+
+# Read URLs retrying when there are network or server problems
+read_url_retried = retry_request(read_url)
+# Read URLs of things which must exist, so they are also retried if not found
+read_existing_url_retried = retry_request(read_url, retry_not_found=True)
+
 def get_available_nodes() -> dict[str, str]:
     nodes_url = f'{GLOBAL_SERVER_URL}rest/current/nodes'
     try:
-        response = workflow_urlopen(nodes_url)
-        nodes_data = json.loads(response.read())
+        nodes_data = json.loads(read_url_retried(nodes_url))
         return {node['alias']: {'name': node['name'], 'url': node['api_url']} for node in nodes_data}
     except Exception as error:
         raise Exception(f'Something went wrong when requesting nodes data ({nodes_url}) with error "{error}"')
@@ -83,8 +106,7 @@ class Remote:
             raise RemoteServiceError('Database not available')
         # Otherwise request the project data to the API
         try:
-            response = workflow_urlopen(self.project_url)
-            self._project_data = json.loads(response.read())
+            self._project_data = json.loads(read_existing_url_retried(self.project_url))
             return self._project_data
         except urllib.error.HTTPError as error:
             # Try to provide comprehensive error logs depending on the error
@@ -110,13 +132,8 @@ class Remote:
         file_str = '' if output_file is None else f' ({output_file.path})'
         print(f'Downloading {description}{file_str}\n')
         try:
-            response = workflow_urlopen(request_url)
-            if output_file:
-                with open(output_file.path, 'wb') as file:
-                    file.write(response.read())
-            else:
-                content = json.loads(response.read())
-                return content
+            content = read_url_retried(request_url, output_file)
+            if output_file is None: return json.loads(content)
         except Exception as error:
             raise Exception(f'Something went wrong when downloading {description}: {request_url} with error: {error}')
 
@@ -136,12 +153,7 @@ class Remote:
         request_url = f'{self.project_url}/files/{target_filename}'
         print(f'Downloading file "{target_filename}" in {output_file.path}\n')
         try:
-            response = workflow_urlopen(request_url)
-            with open(output_file.path, 'wb') as file:
-                while True:
-                    chunk = response.read(CHUNK_SIZE)
-                    if not chunk: break
-                    file.write(chunk)
+            read_url_retried(request_url, output_file)
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 raise Exception(f'Missing remote file "{target_filename}"')
@@ -196,15 +208,7 @@ class Remote:
         # If we have a previous incomplete trajectory then remove it
         if incomplete_trajectory.exists: incomplete_trajectory.remove()
         try:
-            response = workflow_urlopen(request_url)
-            pbar = tqdm(unit='B', unit_scale=True, unit_divisor=1024,
-                        miniters=1, desc=' Progress', leave=False)
-            with open(incomplete_trajectory.path, 'wb') as file:
-                while True:
-                    chunk = response.read(CHUNK_SIZE)
-                    if chunk: pbar.update(len(chunk))
-                    else: break
-                    file.write(chunk)
+            read_url_retried(request_url, incomplete_trajectory, show_progress=True)
         except Exception as error:
             raise Exception(f'Something went wrong when downloading the main trajectory: {request_url} with error: {error}')
         # Once the trajectory is fully downloaded we change its filename
@@ -280,7 +284,6 @@ class Database:
     def __str__(self) -> str:
         return f'< Database {self.url} >'
 
-    @retry_request
     def is_alive(self) -> bool:
         """Check if the database is alive.
 
@@ -288,8 +291,7 @@ class Database:
         WARNING: Do not run in by default.
         """
         try:
-            response = workflow_urlopen(self.url)
-            response.read(1)
+            read_url_retried(self.url)
             return True
         except urllib.error.HTTPError as error:
             # Server error
@@ -328,8 +330,7 @@ class Database:
         # Request the specific data
         request_url = f'{self.url}rest/v1/references/{reference_type}/{reference_id}'
         try:
-            with workflow_urlopen(request_url) as response:
-                return json.loads(response.read().decode("utf-8", errors='ignore'))
+            return json.loads(read_url_retried(request_url).decode("utf-8", errors='ignore'))
         # Handle possible errors
         except urllib.error.HTTPError as error:
             # If the reference is not found in MDposit
@@ -346,8 +347,7 @@ class Database:
         if verbose: print() # Print an empty line for the further reprint
         try:
             if verbose: reprint(f'Requesting first page -> {first_request_url}')
-            with workflow_urlopen(first_request_url) as response:
-                first_response = json.loads(response.read().decode("utf-8", errors='ignore'))
+            first_response = json.loads(read_url_retried(first_request_url).decode("utf-8", errors='ignore'))
         # Handle possible errors
         except urllib.error.HTTPError as error:
             raise RuntimeError(f'Something went wrong with the MDposit request {first_request_url} with error: {error}')
@@ -363,9 +363,8 @@ class Database:
             following_request_url = first_request_url + f'&page={page}'
             try:
                 if verbose: reprint(f'Requesting page {page}/{n_pages} -> {following_request_url}')
-                with workflow_urlopen(following_request_url) as response:
-                    following_response = json.loads(response.read().decode("utf-8", errors='ignore'))
-                    references += following_response['references']
+                following_response = json.loads(read_url_retried(following_request_url).decode("utf-8", errors='ignore'))
+                references += following_response['references']
             # Handle possible errors
             except urllib.error.HTTPError as error:
                 raise RuntimeError(f'Something went wrong with the MDposit request {following_request_url} with error: {error}')
@@ -389,8 +388,7 @@ class Database:
         if verbose: print() # Print an empty line for the further reprint
         try:
             if verbose: reprint(f'Requesting first page -> {first_request_url}')
-            with workflow_urlopen(first_request_url) as response:
-                first_response = json.loads(response.read().decode("utf-8", errors='ignore'))
+            first_response = json.loads(read_url_retried(first_request_url).decode("utf-8", errors='ignore'))
         except Exception as error:
             raise RuntimeError(f'Something went wrong with the MDposit request {first_request_url} with error: {error}')
         # Calculate how many pages we will need to have the whole content
@@ -407,8 +405,7 @@ class Database:
                 following_request_url = first_request_url + f'&page={page}'
                 try:
                     if verbose: print(f'Requesting page {page}/{n_pages} -> {following_request_url}')
-                    with workflow_urlopen(following_request_url) as response:
-                        following_response = json.loads(response.read().decode("utf-8", errors='ignore'))
+                    following_response = json.loads(read_url_retried(following_request_url).decode("utf-8", errors='ignore'))
                 except Exception as error:
                     raise RuntimeError(f'Something went wrong with the MDposit request {following_request_url} with error: {error}')
                 for project in following_response['projects']:
@@ -423,7 +420,6 @@ class Database:
         """Get the versions of the project metadata, topology and analyses in the MDDB database."""
         request_url = f'{self.url}rest/v1/projects/{accession}/versions'
         try:
-            with workflow_urlopen(request_url) as response:
-                return json.loads(response.read().decode("utf-8", errors='ignore'))
+            return json.loads(read_url_retried(request_url).decode("utf-8", errors='ignore'))
         except Exception as error:
             raise RuntimeError(f'Something went wrong with the MDposit request {request_url} with error: {error}')
