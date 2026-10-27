@@ -1,13 +1,17 @@
 import os
 import shutil
 import pathlib
+import pytest
 from mddb_workflow.mwf import Project, MD, Structure
+from mddb_workflow.utils.auxiliar import TestFailure
 
 
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent/'data'
 dummy_dir = data_dir/'input/dummy'
 test_fld = data_dir/'output/test_inpro'
+# The box of the dummy Gromacs trajectory is smaller than the peptide, so it touches its own periodic image
+DUMMY_GROMACS_TRUST = ['pbcontacts']
 
 
 def regenerate_test_fld():
@@ -66,18 +70,30 @@ def test_mercy():
     Structure.check_incoherent_bonds = lambda _: [0]
     cwd = pathlib.Path.cwd()
     os.chdir(test_fld)
-    for mercy in [True, False]:
-        print(f"\nTesting mercy={mercy}\n")
-        # Initialize Project and process files
+    try:
+        # Without mercy the failed test stops the processing
+        print("\nTesting mercy=False\n")
         project = Project(
             input_topology_filepath=str("ala_ala.tpr"),
-            md_config=[['replica_1', '*xtc']],
-            mercy=mercy)
+            input_md_config=[['replica_1', '*xtc']],
+            mercy=False)
         md: MD = project.mds[0]
-        md.input_files_processing(md)
-    os.chdir(cwd)
-    # Restore original function in case there are further tests
-    Structure.check_incoherent_bonds = old_fn
+        with pytest.raises(TestFailure):
+            md.input_files_processing(md)
+        # With mercy the processing is completed although the test fails
+        # It is run twice so the second time the '*xtc' pattern also finds the output trajectory
+        for _ in range(2):
+            print("\nTesting mercy=True\n")
+            project = Project(
+                input_topology_filepath=str("ala_ala.tpr"),
+                input_md_config=[['replica_1', '*xtc']],
+                mercy=True)
+            md: MD = project.mds[0]
+            md.input_files_processing(md)
+    finally:
+        os.chdir(cwd)
+        # Restore original function in case there are further tests
+        Structure.check_incoherent_bonds = old_fn
 
 
 def test_mda_universe():
@@ -96,14 +112,16 @@ def test_mda_universe():
     project = Project(directory=str(test_fld),
                     input_topology_filepath=str(test_fld/"ala_ala.tpr"),
                     input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.xtc"),
-                    input_md_directories=['replica_1'])
+                    input_md_directories=['replica_1'],
+                    trust=DUMMY_GROMACS_TRUST)
     project.membrane_map
     # Second run to test cache loading
     print("\n ------ Second run to test cache loading ------ \n")
     project = Project(directory=str(test_fld),
                     input_topology_filepath=str(test_fld/"ala_ala.tpr"),
                     input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.xtc"),
-                    input_md_directories=['replica_1'])
+                    input_md_directories=['replica_1'],
+                    trust=DUMMY_GROMACS_TRUST)
     project.membrane_map
     os.chdir(cwd)
 

@@ -104,6 +104,18 @@ if not hasattr(sys, 'ps1') and 'pytest' not in sys.modules:
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
 
+def parse_input_glob(path: str, output_filenames: set[str]) -> list[str]:
+    """Parse a glob path into one or several results, leaving out the workflow output files.
+    A pattern such as '*xtc' would also catch the output trajectory once the workflow has run once.
+    If output files are the only results then they are kept, since the input file may have the output name.
+    """
+    parsed_paths = parse_glob(path)
+    if not is_glob(path): return parsed_paths
+    input_paths = [ parsed_path for parsed_path in parsed_paths if basename(parsed_path) not in output_filenames ]
+    if len(input_paths) == 0: return parsed_paths
+    return input_paths
+
+
 class MD:
     """A Molecular Dynamics (MD) is the union of a structure and a trajectory.
     Having this data several analyses are possible.
@@ -410,7 +422,7 @@ class MD:
                 return source_filepath
             # Check if it is an absolute path
             if isabs(input_filepath):
-                abs_glob_parse = parse_glob(input_filepath)
+                abs_glob_parse = parse_input_glob(input_filepath, {STRUCTURE_FILENAME})
                 # If we had multiple results then we complain
                 if len(abs_glob_parse) > 1:
                     raise InputError(f'Multiple structures found with "{input_filepath}": {", ".join(abs_glob_parse)}')
@@ -428,7 +440,7 @@ class MD:
             available_contexts = unique([self.directory, self.project_directory, '.'])
             for available_context in available_contexts:
                 context_filepath = normpath(f'{available_context}/{input_filepath}')
-                glob_parse = parse_glob(context_filepath)
+                glob_parse = parse_input_glob(context_filepath, {STRUCTURE_FILENAME})
                 if len(glob_parse) > 1:
                     raise InputError(f'Multiple structures found with "{context_filepath}": {", ".join(glob_parse)}')
                 parsed_filepath = glob_parse[0] if len(glob_parse) == 1 else None
@@ -548,7 +560,7 @@ class MD:
                 """Glob-parse and merge all paths."""
                 parsed_paths = []
                 for path in paths:
-                    parsed_paths += parse_glob(path)
+                    parsed_paths += parse_input_glob(path, {TRAJECTORY_FILENAME, TRAJECTORY_SAMPLE_FILENAME})
                 return parsed_paths
             # In case trajectory paths are absolute
             if abs_count > 0:
