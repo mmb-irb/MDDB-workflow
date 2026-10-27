@@ -5,6 +5,7 @@ from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.mda_spells import get_mda_universe, get_mda_universe_from_stopology
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
+from mddb_workflow.utils.structures import Structure
 import MDAnalysis as mda
 import numpy as np
 import pathlib
@@ -89,7 +90,7 @@ class TestMembraneMapping:
         if top.endswith('.top'):
             universe = mda.Universe(top, trajectory_file.absolute_path, topology_format='ITP')
         elif top.endswith('.json') and 'refbonds_task_output' in cache.data:
-            universe = get_mda_universe(structure_file, trajectory_file, cache.data['refbonds_task_output'], charges=None)
+            universe = get_mda_universe(structure_file, trajectory_file, Structure.from_pdb_file(structure_file.path), cache.data['refbonds_task_output'], charges=None)
         elif top.endswith('.json'):
             # Bonds are read from the standard topology, too big to be cached for large systems
             universe = get_mda_universe_from_stopology(top, trajectory_file.absolute_path)

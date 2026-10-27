@@ -12,11 +12,14 @@ from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.core.universe import Universe
 from MDAnalysis.core.topology import Topology
 from MDAnalysis.core.topologyattrs import (
+    AtomAttr,
+    Atomindices,
     Atomnames,
     Bonds,
     ChainIDs,
     Charges,
     Elements,
+    ICodes,
     Resids,
     Resnames,
     Resnums,
@@ -89,14 +92,45 @@ def get_mda_universe_from_stopology(
     return Universe(mda_topology, coordinates_file)
 
 
+def set_structure_residues(universe: 'Universe', structure: 'Structure', trajectory_file: 'File') -> 'Universe':
+    """Make a new universe whose residues are the residues in the structure.
+
+    MDAnalysis groups atoms in residues by their residue number in the PDB.
+    When there are more than 9999 residues we write hexadecimal numbers, which MDAnalysis
+    can not read, so it sets them all to 1 and joins consecutive residues with the same name.
+    """
+    topology = universe._topology
+    # Keep all atom values (names, elements, etc.) as they are
+    attrs = [attr for attr in topology.attrs if isinstance(attr, AtomAttr) and not isinstance(attr, Atomindices)]
+    # Each residue stays in the segment of its first atom
+    residue_first_atoms = [residue.atom_indices[0] for residue in structure.residues]
+    residue_numbers = [residue.number for residue in structure.residues]
+    attrs += [
+        Resids(np.array(residue_numbers)),
+        Resnums(np.array(residue_numbers)),
+        Resnames(np.array([residue.name for residue in structure.residues], dtype=object)),
+        ICodes(np.array([residue.icode or '' for residue in structure.residues], dtype=object)),
+        Segids(universe.segments.segids),
+    ]
+    new_topology = Topology(n_atoms=len(universe.atoms),
+                            n_res=len(structure.residues),
+                            n_seg=len(universe.segments),
+                            attrs=attrs,
+                            atom_resindex=np.array([atom.residue_index for atom in structure.atoms]),
+                            residue_segindex=universe.atoms.segindices[residue_first_atoms])
+    return Universe(new_topology, trajectory_file.path)
+
+
 def get_mda_universe(structure_file: 'File',               # To load in MDAnalysis
                      trajectory_file: 'File',              # To load in MDAnalysis
+                     structure: 'Structure',               # To set the residues
                      reference_bonds: list[list[int]],     # To set the bonds
                      charges: list[float]) -> 'Universe':  # To set the charges
     """Create a MDAnalysis universe using data in the workflow."""
     # Make MDAnalysis warnings and logs grey
     print(GREY_HEADER, end='\r')
     universe = Universe(structure_file.path, trajectory_file.path)
+    universe = set_structure_residues(universe, structure, trajectory_file)
     # Set the atom bonds
     bonds = []
     for bond_from, bond_tos in enumerate(reference_bonds):
