@@ -32,8 +32,8 @@ UPLOAD_FIELDS = {
 FAILED_INTERACTION_FLAG = 'failed'
 
 # Set the fields where agent atom selections are kept while processing interactions
-# These fields are removed at the end, since they can not be saved in the cache
-AGENT_SELECTION_FIELDS = ['atom_selection_1', 'atom_selection_2']
+# At the end they are replaced by the same selections in VMD syntax, so they can be saved and reproduced
+AGENT_SELECTION_FIELDS = {'atom_selection_1': 'vmd_selection_1', 'atom_selection_2': 'vmd_selection_2'}
 
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
@@ -342,10 +342,10 @@ def process_interactions(
     # Write the summary to disk
     save_json(output_summary, output_analysis_filepath, indent=4)
 
-    # Remove the agent selections before returning the processed interactions
+    # Replace the agent selections by the same selections in VMD syntax
     for interaction in valid_interactions:
-        for field in AGENT_SELECTION_FIELDS:
-            del interaction[field]
+        for field, vmd_field in AGENT_SELECTION_FIELDS.items():
+            interaction[vmd_field] = interaction.pop(field).to_vmd()
 
     # Finally return the processed interactions
     return valid_interactions
