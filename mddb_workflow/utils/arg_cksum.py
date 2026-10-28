@@ -42,8 +42,8 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     if isinstance(value, File): return value.get_cksum(unsafe=True)
     # For the parsed structure
     if isinstance(value, Structure):
-        pdb_content = value.generate_pdb()
-        return get_cksum_id(pdb_content)
+        mmcif_content = value.generate_mmcif()
+        return get_cksum_id(mmcif_content)
     # For a MDAnalysis universe
     if isinstance(value, Universe): return get_mda_universe_cksum(value)
     # For the parsed structure

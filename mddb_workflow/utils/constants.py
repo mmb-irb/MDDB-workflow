@@ -132,26 +132,28 @@ RAW_CHARGES_FILENAME = 'charges.txt'
 INCOMPLETE_PREFIX = 'incomplete_'
 
 CONVERTED = 'converted'
-CONVERTED_STRUCTURE = 'converted.pdb'
+CONVERTED_STRUCTURE = 'converted.cif'
 CONVERTED_TRAJECTORY = 'converted.xtc'
 
 SKIPPED_TRAJECTORY = 'skipped.xtc'
 
 FILTERED = 'filtered'
-FILTERED_STRUCTURE = 'filtered.pdb'
+FILTERED_STRUCTURE = 'filtered.cif'
 FILTERED_TRAJECTORY = 'filtered.xtc'
 
 IMAGED = 'imaged'
-IMAGED_STRUCTURE = 'imaged.pdb'
+IMAGED_STRUCTURE = 'imaged.cif'
 IMAGED_TRAJECTORY = 'imaged.xtc'
 
 CORRECTED = 'corrected'
-CORRECTED_STRUCTURE = 'corrected.pdb'
+CORRECTED_STRUCTURE = 'corrected.cif'
 CORRECTED_TRAJECTORY = 'corrected.xtc'
 
 # Output core files
 STANDARD_TOPOLOGY_FILENAME = 'topology.json'
-STRUCTURE_FILENAME = 'structure.pdb'
+STRUCTURE_FILENAME = 'structure.cif'
+# Output structure filename in older versions of the workflow
+LEGACY_STRUCTURE_FILENAME = 'structure.pdb'
 TRAJECTORY_FILENAME = 'trajectory.xtc'
 
 # Set a different name for the main trajectory when we use the 'smp' argument
@@ -338,7 +340,7 @@ NICE_NAMES = {
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = {'tpr', 'top', 'prmtop', 'psf'}
 TRAJECTORY_SUPPORTED_FORMATS = {'xtc', 'trr', 'nc', 'dcd', 'crd', 'pdb', 'rst7'}
-STRUCTURE_SUPPORTED_FORMATS = {*TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro'}
+STRUCTURE_SUPPORTED_FORMATS = {*TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'cif', 'gro'}
 GROMACS_TRAJECTORY_SUPPORTED_FORMATS = {'xtc', 'trr'}
 
 # Set the "standard" file format of every possible file extension
@@ -382,7 +384,7 @@ EXTENSION_FORMATS = {
 # Topology and trajectory file formats supported by PyTraj
 PYTRAJ_SUPPORTED_FORMATS = set([
     # Topologies
-    'prmtop', 'top', 'psf', 'pdb',
+    'prmtop', 'top', 'psf', 'pdb', 'cif',
     # Trajectories
     'nc', 'crd', 'dcd', 'trr', 'xtc'
 ])
@@ -405,7 +407,8 @@ PYTRAJ_PARM_FORMAT = {
     'prmtop': 'AMBERPARM',
     'psf': 'CHARMMPSF',
     'top': 'GMXTOP',
-    'pdb': 'PDBFILE'
+    'pdb': 'PDBFILE',
+    'cif': 'CIFFILE'
 }
 
 # Set letters in the alphabet

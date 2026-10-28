@@ -13,6 +13,9 @@ from mddb_workflow.utils.auxiliar import save_json, InputError, EnvironmentError
 from mddb_workflow.utils.constants import OUTPUT_HELICAL_PARAMETERS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
+# Set the name of the PDB given to Curves+
+CURVES_STRUCTURE_FILENAME = '.curves_structure.pdb'
+
 from mddb_workflow.tools.nassa_loaders import load_sequence2
 from mddb_workflow.tools.nassa_loaders import load_serfile
 
@@ -169,13 +172,17 @@ def helical_parameters (
         structure_file,
     )
 
+    # Curves+ can not read mmCIF so we give it a PDB
+    curves_structure_filepath = os.path.abspath(f'{output_directory}/{CURVES_STRUCTURE_FILENAME}')
+    structure.generate_pdb_file(curves_structure_filepath, show_warnings=False, accept_limitations=True)
     terminal_execution(
         trajectory_file.path,
-        structure_file.path,
+        curves_structure_filepath,
         residue_index_ranges,
         sequences[0],
         output_directory
     )
+    os.remove(curves_structure_filepath)
     # Save in a dictionary all the computations done by the different functions called by send_files function
     dictionary_information = send_files(sequences[0], frames_limit, output_directory)
     # Set the path into the original directory outside the folder helicalparameters

@@ -10,10 +10,10 @@ from bisect import bisect
 
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
-from mddb_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
+from mddb_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds, VMD_MMCIF_ELEMENTS
 from mddb_workflow.utils.mdt_spells import sort_trajectory_atoms
 from mddb_workflow.utils.gmx_spells import make_index, read_ndx
-from mddb_workflow.utils.auxiliar import InputError, RemoteServiceError, MISSING_BONDS
+from mddb_workflow.utils.auxiliar import InputError, ToolError, RemoteServiceError, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn, protein_residue_name_to_letter
 from mddb_workflow.utils.auxiliar import get_auxiliar_filepath, download_mmcif
 from mddb_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
@@ -34,8 +34,20 @@ def get_auxiliar_pdb_filepath() -> str:
     return get_auxiliar_filepath('.auxiliar_structure.pdb')
 
 
+def get_auxiliar_vmd_filepath(vmd_format: str) -> str:
+    """Get the path of the auxiliar structure file to be read by VMD
+    Note that this must be requested from a function, or the globals may be not updated"""
+    return get_auxiliar_filepath(f'.auxiliar_structure.{vmd_format}')
+
+
 # Set some specific constants
 ATOMS_PER_AMINOACID_LIMIT = 30
+
+# Set the limits to warn about chains which are probably wrongly assigned
+# Number of chains made of a single residue with the same residue name
+SUSPICIOUS_SINGLE_RESIDUE_CHAINS = 10
+# Ratio between the number of chains and residues
+SUSPICIOUS_CHAINS_PER_RESIDUE = 0.5
 
 # Set letters to be found in alphanumerical bases
 hexadecimal_letters    = set(AVAILABLE_CAPS[:6] + AVAILABLE_LOWS[:6])
@@ -65,6 +77,15 @@ pdb_last_decimal_residue_index = 9998
 
 # Set the flag mmCIF uses to state missing files
 MMCIF_MISSING_VALUE = '?'
+# Set the flag mmCIF uses to state values which do not apply
+MMCIF_INAPPLICABLE_VALUE = '.'
+# Set the mmCIF atom site fields we write, in order
+MMCIF_ATOM_FIELDS = [ 'group_PDB', 'id', 'type_symbol', 'label_atom_id', 'label_alt_id', 'label_comp_id',
+    'label_asym_id', 'label_entity_id', 'label_seq_id', 'pdbx_PDB_ins_code', 'Cartn_x', 'Cartn_y', 'Cartn_z',
+    'occupancy', 'B_iso_or_equiv', 'pdbx_formal_charge', 'auth_seq_id', 'auth_comp_id', 'auth_asym_id',
+    'auth_atom_id', 'pdbx_PDB_model_num' ]
+# Set the prefix of atom field names in the header of the mmCIF atom table
+MMCIF_ATOM_FIELD_PREFIX = '_atom_site.'
 # Set the mmCIF line headers of lines with atom data
 MMCIF_ATOM_HEADERS = {'ATOM', 'HETATM', 'ANISOU'}
 
@@ -1621,15 +1642,32 @@ class Structure:
 
     # https://biopandas.github.io/biopandas/tutorials/Working_with_mmCIF_Structures_in_DataFrames/
     @classmethod
-    def from_mmcif(cls, mmcif_content: str, model: int = -1, author_notation: bool = False):
+    def from_mmcif(cls, mmcif_content: str, model: int = -1, author_notation: bool = True):
         """Set the structure from mmcif.
         You may filter the content for a specific model. If the target model is -1 then the first model will be used.
-        You may ask for the author notation instead of the standarized notation for legacy reasons.
+        By default the author notation is used, which is the one used in the PDB format.
+        Otherwise the standarized (label) notation is used.
         This may have an effect in atom names, residue names, residue numbers and chain names.
-        Read the pdb content line by line and set the parsed atoms, residues and chains.
+        Read the mmcif content line by line and set the parsed atoms, residues and chains.
         """
+        # Find the position of every atom field in the atom lines
+        field_indices = get_mmcif_atom_field_indices(mmcif_content)
+        # Set the fields to be read, which depend on the notation
+        # If an author field is missing then the label field is used
+        def get_field_index(label_field: str, author_field: str) -> int:
+            if author_notation and author_field in field_indices: return field_indices[author_field]
+            return field_indices[label_field]
+        element_index = field_indices['type_symbol']
+        atom_name_index = get_field_index('label_atom_id', 'auth_atom_id')
+        residue_name_index = get_field_index('label_comp_id', 'auth_comp_id')
+        residue_number_index = get_field_index('label_seq_id', 'auth_seq_id')
+        chain_name_index = get_field_index('label_asym_id', 'auth_asym_id')
+        icode_index = field_indices.get('pdbx_PDB_ins_code', None)
+        x_index = field_indices['Cartn_x']
+        y_index = field_indices['Cartn_y']
+        z_index = field_indices['Cartn_z']
         # Filter the content of the desired model
-        mmcif_filtered_content = filter_mmcif_model(mmcif_content, model)
+        mmcif_filtered_content = filter_mmcif_model(mmcif_content, model, field_indices)
         # Store the parsed atoms, residue and chains to ensamble the final structure
         parsed_atoms = []
         parsed_residues = []
@@ -1647,40 +1685,21 @@ class Structure:
             # Values are separated by spaces
             values = line.split()
             # Mine atom data
-            # Mine the atom element
-            element = values[2]
-            # Mine the atom name
-            atom_name = values[3].replace('"','')
-            # Next value is a place holder to indicate alternate conformation, according to the docs
-            # I don't know what this is but we do not need it
-            # idk = values[4]
-            # Mine the residue name
-            residue_name = values[5]
-            # Mine the chain name
-            chain_name = values[6]
-            # Next value is the chain number, we do not need it
-            # chain_number = values[7]
-            # Residue number is '.' for chains with only one residue
-            residue_number = 1 if values[8] == '.' else int(values[8])
-            icode = '' if values[9] == MMCIF_MISSING_VALUE else values[9]
-            x_coord = float(values[10])
-            y_coord = float(values[11])
-            z_coord = float(values[12])
-            # Next value is the occupancy, we do not need it
-            # occupancy = float(values[13])
-            # Next value is the isotropic displacement, we do not need it
-            # isotropic = float(values[14])
-            # Next value is the charge, we do not need it
-            # charge = None if values[15] == MMCIF_MISSING_VALUE else float(values[15])
-            # The rest of values are alternative author values
-            if author_notation:
-                residue_number_string = values[16]
-                if residue_number_string == MMCIF_MISSING_VALUE:
-                    raise RuntimeError('Missing author residue numeration in mmCIF file.')
-                residue_number = int(residue_number_string)
-                residue_name = values[17]
-                chain_name = values[18]
-                atom_name = values[19].replace('"','')
+            element = values[element_index]
+            atom_name = values[atom_name_index].replace('"','')
+            residue_name = values[residue_name_index]
+            chain_name = values[chain_name_index]
+            # In the label notation, the residue number is '.' for residues which are not in a polymer
+            residue_number_string = values[residue_number_index]
+            if residue_number_string == MMCIF_MISSING_VALUE:
+                raise RuntimeError('Missing residue numeration in mmCIF file.')
+            residue_number = 1 if residue_number_string == MMCIF_INAPPLICABLE_VALUE else int(residue_number_string)
+            icode = '' if icode_index is None or values[icode_index] == MMCIF_MISSING_VALUE else values[icode_index]
+            x_coord = float(values[x_index])
+            y_coord = float(values[y_index])
+            z_coord = float(values[z_index])
+            # Blank chains are written as inapplicable values
+            if chain_name == MMCIF_INAPPLICABLE_VALUE: chain_name = ' '
             # Set the parsed atom
             parsed_atom = Atom(name=atom_name, element=element, coords=(x_coord, y_coord, z_coord))
             # Add the parsed atom to the list and update the current atom index
@@ -1713,7 +1732,7 @@ class Structure:
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
 
     @classmethod
-    def from_mmcif_file(cls, mmcif_filepath: str, model: int = -1, author_notation: bool = False):
+    def from_mmcif_file(cls, mmcif_filepath: str, model: int = -1, author_notation: bool = True):
         """Set the structure from a mmcif file."""
         mmcif_file = File(mmcif_filepath)
         if not mmcif_file.exists:
@@ -1727,7 +1746,7 @@ class Structure:
         return cls.from_mmcif(mmcif_content, model, author_notation)
 
     @classmethod
-    def from_pdb_id(cls, pdb_id: str, model: int = -1, author_notation: bool = False):
+    def from_pdb_id(cls, pdb_id: str, model: int = -1, author_notation: bool = True):
         """Download and parse the structure from a PDB entry."""
         # Download the structure
         # Download the mmcif instead of the PDB to avoid having problems
@@ -1944,43 +1963,54 @@ class Structure:
         return self._dummy_atom_indices
     dummy_atom_indices = property(get_dummy_atom_indices, None, None, "Atom indices for what we consider dummy atoms")
 
-    def generate_pdb(self, show_warnings: bool = True):
-        """Generate a pdb file content with the current structure."""
+    def get_pdb_chain_names_map(self, show_warnings: bool = True, accept_limitations: bool = False) -> dict[str, str]:
+        """Get a map between current chain names and chain names which fit in the PDB format.
+        Chain names in PDB format are limited to 1 character, so longer chain names are renamed to fit in.
+        If there are more chains than letters in the alphabet then chains can not be renamed and an error is raised.
+        If limitations are accepted then all chains are named 'X' instead.
+        """
+        # Get chain names in order of appearance, so renamed chains follow the same order
+        chain_names = list(dict.fromkeys(chain.name for chain in self.chains))
+        long_chain_names = [chain_name for chain_name in chain_names if len(chain_name) > 1]
+        # Keep short chain names as they are
+        chain_names_map = { chain_name: chain_name for chain_name in chain_names if len(chain_name) <= 1 }
+        if len(long_chain_names) == 0: return chain_names_map
+        # If there are more chains than letters then we can not rename them
+        if len(chain_names) > len(AVAILABLE_LETTERS):
+            if not accept_limitations:
+                raise InputError(f'There are {len(chain_names)} chains in the structure but the PDB format supports only' + \
+                    f' {len(AVAILABLE_LETTERS)} chains (one letter per chain).\n' + \
+                    '  Use the mmCIF format instead, or accept the PDB limitations and then all chains will be named "X".')
+            return { chain_name: 'X' for chain_name in chain_names }
+        used_chain_names = set(chain_names_map.values())
+        # Issue new chain names for those which are too long
+        # Try to make them coherent, but if it is not possible then just get the next available letter
+        for chain_name in long_chain_names:
+            # Atempt to use the first letter as chain name
+            shorten_chain_name = chain_name[0]
+            # If this is already in use then simply get the next available letter in the alphabet
+            # Note that there are always available letters since there are less chains than letters
+            if shorten_chain_name in used_chain_names:
+                shorten_chain_name = next(name for name in AVAILABLE_LETTERS if name not in used_chain_names)
+            # Add the shorten name to the map and set it as already used
+            used_chain_names.add(shorten_chain_name)
+            chain_names_map[chain_name] = shorten_chain_name
+        # Warn the user about the chain renaming
+        if show_warnings:
+            warn(f'Chain names with more than 1 character (e.g. "{long_chain_names[0]}")' + \
+            ' are not supported in PDB format. Chains will be renamed to fit in.')
+            for chain_name in long_chain_names:
+                print(f' Chain {chain_name} will be renamed as {chain_names_map[chain_name]}')
+        return chain_names_map
+
+    def generate_pdb(self, show_warnings: bool = True, accept_limitations: bool = False):
+        """Generate a pdb file content with the current structure.
+        Chain names longer than 1 character are renamed to fit in the PDB format (see get_pdb_chain_names_map).
+        """
         content = 'REMARK workflow generated pdb file\n'
         if len(self.residues) >= 65536:
             if show_warnings: warn('More than 65536 residues found. Cycling residue numeration to fit to PDB 4-character limit.')
-        # If any chain name has mote than 1 character then we can not write it as is in the PDB
-        # We must decide a plan before proceeding and warn the user about this
-        chain_names_map = None
-        chain_names = set([chain.name for chain in self.chains])
-        long_chain_name = next((chain_name for chain_name in chain_names if len(chain_name) > 1), None)
-        if long_chain_name:
-            # Keep short chain names as they are
-            short_chain_names = [chain_name for chain_name in chain_names if len(chain_name) == 1]
-            chain_names_map = {chain_name: chain_name for chain_name in short_chain_names}
-            used_chain_names = set(chain_names_map.values())
-            # Issue new chain names for those which are too long
-            # Try to make them coherent, but if it is not possible then just get the next available letter
-            long_chain_names = [chain_name for chain_name in chain_names if len(chain_name) > 1]
-            for chain_name in long_chain_names:
-                # Atempt to use the first letter as chain name
-                shorten_chain_name = chain_name[0]
-                # If this is already in use then simply get the next available letter in the alphabet
-                # If we run out of letters then leave chain names blank
-                if shorten_chain_name in used_chain_names:
-                    shorten_chain_name = next((name for name in AVAILABLE_LETTERS if name not in used_chain_names), ' ')
-                # Add the shorten name to the map and set it as already used
-                used_chain_names.add(shorten_chain_name)
-                chain_names_map[chain_name] = shorten_chain_name
-            # Warn the user about the chain renaming
-            if show_warnings:
-                warn(f'Chain names with more than 1 character (e.g. "{long_chain_name}")' + \
-                ' are not supported in PDB format. Chains will be renamed to fit in.')
-                for original_chain, shortened_chain in chain_names_map.items():
-                    print(f' Chain {original_chain} will be renamed as {shortened_chain}')
-            if len(chain_names) > len(AVAILABLE_LETTERS):
-                if show_warnings: warn('There are more chains in the structure than letters in the alphabet.' + \
-                    ' Some chain names will be left blank.')
+        chain_names_map = self.get_pdb_chain_names_map(show_warnings=show_warnings, accept_limitations=accept_limitations)
         # Iterate atoms as we write them to the output content
         for a, atom in enumerate(self.atoms):
             residue = atom.residue
@@ -1989,8 +2019,7 @@ class Structure:
             residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
             chain = atom.chain
             if chain is None: raise RuntimeError(f'Residue {residue.label} has no chain')
-            # Set the chain name using the chain names map, if any
-            chain_name = chain_names_map[chain.name] if chain_names_map else chain.name
+            chain_name = chain_names_map[chain.name]
             residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
             # If residue number is longer than 4 characters then we must parse to hexadecimal
             if len(residue_number) > 4:
@@ -2011,22 +2040,73 @@ class Structure:
             content += atom_line
         return content
 
-    def generate_pdb_file(self, pdb_filepath: str, show_warnings: bool = True):
+    def generate_pdb_file(self, pdb_filepath: str, show_warnings: bool = True, accept_limitations: bool = False):
         """Generate a pdb file with current structure."""
-        pdb_content = self.generate_pdb(show_warnings=show_warnings)
+        pdb_content = self.generate_pdb(show_warnings=show_warnings, accept_limitations=accept_limitations)
         with open(pdb_filepath, "w") as file:
             file.write(pdb_content)
+
+    def generate_mmcif(self) -> str:
+        """Generate a mmCIF file content with the current structure.
+        Only the atom site table is written, which is enough for other tools to read the structure.
+        Chain names are written both as label and author chains since some tools (e.g. VMD) read only the label chain.
+        """
+        lines = ['data_structure', '#', 'loop_']
+        lines += [ MMCIF_ATOM_FIELD_PREFIX + field for field in MMCIF_ATOM_FIELDS ]
+        for a, atom in enumerate(self.atoms):
+            residue = atom.residue
+            chain = atom.chain
+            if chain is None: raise RuntimeError(f'Residue {residue.label} has no chain')
+            # Make sure we have atom coordinates
+            if atom.coords == None:
+                raise InputError('Trying to write a mmCIF file from a structure with atoms without coordinates')
+            name = mmcif_value(atom.name)
+            residue_name = mmcif_value(residue.name)
+            residue_number = str(residue.number)
+            icode = mmcif_value(residue.icode)
+            # Blank chains are written as inapplicable values since mmCIF values can not be blank
+            chain_name = MMCIF_INAPPLICABLE_VALUE if chain.name == ' ' else mmcif_value(chain.name)
+            x_coord, y_coord, z_coord = ["{:.3f}".format(coord) for coord in atom.coords]
+            values = [ 'ATOM', str(a + 1), mmcif_value(atom.element), name, MMCIF_INAPPLICABLE_VALUE, residue_name,
+                chain_name, MMCIF_MISSING_VALUE, residue_number, icode, x_coord, y_coord, z_coord, '1.00', '0.00',
+                MMCIF_MISSING_VALUE, residue_number, residue_name, chain_name, name, '1' ]
+            lines.append(' '.join(values))
+        lines.append('#')
+        return '\n'.join(lines) + '\n'
+
+    def generate_mmcif_file(self, mmcif_filepath: str):
+        """Generate a mmCIF file with current structure."""
+        mmcif_content = self.generate_mmcif()
+        with open(mmcif_filepath, "w") as file:
+            file.write(mmcif_content)
+
+    def generate_file(self, filepath: str, show_warnings: bool = True, accept_limitations: bool = False):
+        """Generate a structure file in the format set by the file extension (pdb or cif)."""
+        file_format = File(filepath).format
+        if file_format == 'pdb':
+            return self.generate_pdb_file(filepath, show_warnings=show_warnings, accept_limitations=accept_limitations)
+        if file_format == 'cif':
+            return self.generate_mmcif_file(filepath)
+        raise InputError(f'Not supported format ({file_format}) to write a structure file')
+
+    def get_vmd_format(self) -> str:
+        """Get the format to write this structure for VMD to read it.
+        VMD reads our chains from mmCIF, but it fails to load a mmCIF file with elements it does not know.
+        In this case we use PDB, where chain names may be changed.
+        """
+        if all(atom.element in VMD_MMCIF_ELEMENTS for atom in self.atoms): return 'cif'
+        return 'pdb'
 
     def get_pytraj_topology(self):
         """Get the structure equivalent pytraj topology."""
         # In we do not have pytraj in our environment then we cannot proceed
         if not is_imported('pytraj'):
             raise InputError('Missing dependency error: pytraj')
-        # Generate a pdb file from the current structure to feed pytraj
-        pdb_filepath = get_auxiliar_filepath('.structure.pdb')
-        self.generate_pdb_file(pdb_filepath)
-        pytraj_topology = pytraj.load_topology(filename = pdb_filepath)
-        os.remove(pdb_filepath)
+        # Generate a mmCIF file from the current structure to feed pytraj
+        mmcif_filepath = get_auxiliar_filepath('.structure.cif')
+        self.generate_mmcif_file(mmcif_filepath)
+        pytraj_topology = pytraj.load_topology(filename = mmcif_filepath)
+        os.remove(mmcif_filepath)
         return pytraj_topology
 
     SUPPORTED_SELECTION_SYNTAXES = {'vmd', 'pytraj', 'gmx'}
@@ -2038,12 +2118,18 @@ class Structure:
         - pytraj
         """
         if syntax == 'vmd':
-            # Generate a pdb for vmd to read it
-            auxiliar_pdb_filepath = get_auxiliar_pdb_filepath()
-            self.generate_pdb_file(auxiliar_pdb_filepath)
+            vmd_format = self.get_vmd_format()
+            # Chain names may be changed in the PDB so selections by chain could select the wrong atoms
+            if vmd_format == 'pdb' and 'chain' in selection_string.lower():
+                raise ToolError(f'Selection "{selection_string}" can not use chains with this structure.\n'
+                    '  VMD can not read mmCIF files with non-standard elements (e.g. coarse grain) so it is given a PDB,\n'
+                    '  where chain names may be changed. Please select atoms by other means (e.g. residue numbers).')
+            # Generate a structure file for vmd to read it
+            auxiliar_vmd_filepath = get_auxiliar_vmd_filepath(vmd_format)
+            self.generate_file(auxiliar_vmd_filepath, show_warnings=False)
             # Use vmd to find atom indices
-            atom_indices = get_vmd_selection_atom_indices(auxiliar_pdb_filepath, selection_string)
-            os.remove(auxiliar_pdb_filepath)
+            atom_indices = get_vmd_selection_atom_indices(auxiliar_vmd_filepath, selection_string)
+            os.remove(auxiliar_vmd_filepath)
             if len(atom_indices) == 0:
                 return Selection()
             return Selection(atom_indices)
@@ -2059,8 +2145,9 @@ class Structure:
             return Selection(atom_indices)
         if syntax == 'gmx':
             # Generate a pdb strucutre to feed gmx
+            # Note that gmx can not read mmCIF files, but chains do not matter here
             auxiliar_pdb_filepath = get_auxiliar_pdb_filepath()
-            self.generate_pdb_file(auxiliar_pdb_filepath)
+            self.generate_pdb_file(auxiliar_pdb_filepath, accept_limitations=True)
             auxiliar_pdb_file = File(auxiliar_pdb_filepath)
             # Create the index file with the current atom selection
             index_filepath = '.structure.ndx'
@@ -2488,7 +2575,7 @@ class Structure:
         # However, in case there are more molecules, we have already set them all as a single chain ('X')
         # Here we do not apply the chain per fragment logic since it may be dangerous
         # Note that we may have a lot of independent residues (and thus a los of small fragments)
-        # This would make us run out of letters in the alphabet and thus there would be no more chains
+        # This would make a huge number of meaningless chains
         # As the last step, fix repeated chains
         # RUBEN: sacar esta parte ya que se hace luego en el structure_corrector?
         self.check_repeated_chains(fix_chains=True)
@@ -2537,53 +2624,47 @@ class Structure:
             residue = self.residues[residue_index]
             residue.set_chain_index(chain.index)
 
-    def check_available_chains(self):
-        """Check if there are more chains than available letters."""
-        n_chains = len(self.chains)
-        n_available_letters = len(AVAILABLE_LETTERS)
-        if n_chains <= n_available_letters: return
-        raise InputError(f'There are {n_chains} chains in the structure so far. If this is not expected then there may be a problem.\n' +
-            f'  If this is expected then unfortunatelly there is a limit of {n_available_letters} available chain letters.\n' +
-            '  Please manually set the chains from scratch or merge together some chains to reduce the number.\n' +
-            '  Customize a PDB file using the command "mwf chainer". Then use the customized PDB as input structure (-stru).')
-
-    def get_available_chain_name(self) -> str | None:
+    def get_available_chain_name(self) -> str:
         """Get an available chain name.
-        Find alphabetically the first letter which is not yet used as a chain name.
-        If all letters in the alphabet are used already then raise an error.
+        Find the first name in the A, B, ..., Z, AA, AB, ... sequence which is not yet used as a chain name.
         """
-        self.check_available_chains()
-        current_chain_names = [chain.name for chain in self.chains]
-        next_available_chain_name = next((name for name in AVAILABLE_LETTERS if name not in current_chain_names), None)
-        return next_available_chain_name
+        current_chain_names = set(chain.name for chain in self.chains)
+        index = 0
+        while get_chain_name(index) in current_chain_names: index += 1
+        return get_chain_name(index)
 
     def get_next_available_chain_name(self, anterior: str) -> str:
-        """Get the next available chain name.
+        """Get the next available chain name after the anterior in the A, B, ..., Z, AA, AB, ... sequence.
+        If the anterior is not part of the sequence (e.g. a lower case letter) then the first available name is returned.
 
         Args:
-            anterior (str): The last chain name used, which is expected to be a single letter
-
-        Raises:
-            ValueError: If the anterior is not a letter or if there are more chains than available
+            anterior (str): The last chain name used
 
         """
-        self.check_available_chains()
-        current_chain_names = set([chain.name for chain in self.chains])
-        # If anterior is cap then try caps first, if anterior is lower then try lowers first
-        if anterior.isupper():
-            first_group, second_group = AVAILABLE_CAPS, AVAILABLE_LOWS
-        elif anterior.islower():
-            first_group, second_group = AVAILABLE_LOWS, AVAILABLE_CAPS
-        else: raise ValueError(f'Is "{anterior}" even a letter?')
-        # Reorder letters in the first group, so the anterior is the last letter
-        anterior_position = first_group.index(anterior)
-        next_position = anterior_position + 1
-        reordered_group = first_group[next_position:] + first_group[0:next_position]
-        next_letter = next((letter for letter in reordered_group if letter not in current_chain_names), None)
-        if next_letter: return next_letter
-        # If there is not available letters is the first group then return the first available in the second
-        next_letter = next((letter for letter in second_group if letter not in current_chain_names), None)
-        return next_letter
+        current_chain_names = set(chain.name for chain in self.chains)
+        anterior_index = get_chain_name_index(anterior)
+        index = 0 if anterior_index is None else anterior_index + 1
+        while get_chain_name(index) in current_chain_names: index += 1
+        return get_chain_name(index)
+
+    def check_suspicious_chains(self):
+        """Warn if chains look wrongly assigned.
+        This happens for instance when every lipid in a membrane has its own chain.
+        Note that this is just a warning and the chains are not modified.
+        """
+        # Count chains with a single residue by residue name
+        single_residue_chains_count = {}
+        for chain in self.chains:
+            if len(chain.residue_indices) != 1: continue
+            residue_name = self.residues[chain.residue_indices[0]].name
+            single_residue_chains_count[residue_name] = single_residue_chains_count.get(residue_name, 0) + 1
+        for residue_name, count in single_residue_chains_count.items():
+            if count < SUSPICIOUS_SINGLE_RESIDUE_CHAINS: continue
+            warn(f'There are {count} chains made of a single {residue_name} residue. Chains may be wrongly assigned.')
+        # Check the number of chains is not too high compared to the number of residues
+        chains_per_residue = self.chain_count / self.residue_count
+        if self.chain_count > len(AVAILABLE_CAPS) and chains_per_residue > SUSPICIOUS_CHAINS_PER_RESIDUE:
+            warn(f'There are {self.chain_count} chains for {self.residue_count} residues. Chains may be wrongly assigned.')
 
     def find_chain(self, name: str) -> Optional['Chain']:
         """Get a chain by its name."""
@@ -2640,9 +2721,6 @@ class Structure:
 
         Rename repeated chains or create new chains if the fix_chains argument is True.
 
-        WARNING: These fixes are possible only if there are less chains than the number of letters in the alphabet.
-        Although there is no limitation in this code for chain names, setting long chain names is not compatible with pdb format.
-
         Check splitted chains (a chains with non consecutive residues) and try to fix them if requested.
         Check repeated chains (two chains with the same name) and return True if there were any repeats.
         """
@@ -2668,16 +2746,8 @@ class Structure:
                         print(f'- Chain {chain_name} has {chains_count} repeats')
         # Rename repeated chains if requested
         if len(repeated_chains) > 0 and fix_chains:
-            self.check_available_chains()
-            current_letters = list(name_chains.keys())
             for repeated_chain in repeated_chains:
-                last_chain_letter = repeated_chain.name
-                while last_chain_letter in current_letters:
-                    last_chain_letter = get_next_letter(last_chain_letter)
-                    if last_chain_letter: continue
-                    last_chain_letter = self.get_available_chain_name()
-                repeated_chain.name = last_chain_letter
-                current_letters.append(last_chain_letter)
+                repeated_chain.name = self.get_next_available_chain_name(repeated_chain.name)
         # Check if there are splitted chains
         # RUBEN: sacar esta parte ya que esta self.check_splitted_chains
         for chain in self.chains:
@@ -3162,17 +3232,18 @@ class Structure:
         # It is important to fix elements before trying to fix bonds, since elements have an impact on bonds
         # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
         if safe_elements: self.fix_atom_elements(show_warnings=False)
-        # Generate a pdb strucutre to feed vmd
-        auxiliar_pdb_filepath = get_auxiliar_pdb_filepath()
-        self.generate_pdb_file(auxiliar_pdb_filepath, show_warnings=False)
+        # Generate a structure file to feed vmd
+        # Atoms are selected by their index so chains do not matter
+        auxiliar_vmd_filepath = get_auxiliar_vmd_filepath(self.get_vmd_format())
+        self.generate_file(auxiliar_vmd_filepath, show_warnings=False, accept_limitations=True)
         # Get covalent bonds between both residue atoms
-        covalent_bonds = get_covalent_bonds(auxiliar_pdb_filepath, selection)
+        covalent_bonds = get_covalent_bonds(auxiliar_vmd_filepath, selection)
         # For every atom in CG, replace its bonds with a class which will raise and error when read
         # Thus we make sure using these wrong bonds anywhere further will result in failure
         for atom_index in self.select_cg().atom_indices:
             covalent_bonds[atom_index] = MISSING_BONDS
-        # Remove the auxiliar pdb file
-        os.remove(auxiliar_pdb_filepath)
+        # Remove the auxiliar structure file
+        os.remove(auxiliar_vmd_filepath)
         return covalent_bonds
 
     def copy_bonds(self) -> list[list[int]]:
@@ -3426,6 +3497,26 @@ def calculate_torsion(atom_1: Atom, atom_2: Atom, atom_3: Atom, atom_4: Atom) ->
 # =========================
 
 
+def get_chain_name(index: int) -> str:
+    """Get the chain name in a given position of the PDB style sequence: A, B, ..., Z, AA, AB, ..., ZZ, AAA, ..."""
+    name = ''
+    index += 1
+    while index > 0:
+        index, remainder = divmod(index - 1, len(AVAILABLE_CAPS))
+        name = AVAILABLE_CAPS[remainder] + name
+    return name
+
+
+def get_chain_name_index(name: str) -> Optional[int]:
+    """Get the position of a chain name in the PDB style sequence: A, B, ..., Z, AA, AB, ...
+    Return None if the name is not part of the sequence (e.g. lower case letters or numbers)."""
+    if not name or not all(character in AVAILABLE_CAPS for character in name): return None
+    index = 0
+    for character in name:
+        index = index * len(AVAILABLE_CAPS) + AVAILABLE_CAPS.index(character) + 1
+    return index - 1
+
+
 def get_next_letter(letter: str) -> Optional[str]:
     """Set a function to get the next letter from an input letter in alphabetic order."""
     if not letter: return 'A'
@@ -3518,9 +3609,52 @@ def filter_pdb_model(pdb_content: str, model: int) -> str:
     # If we did not find the footer then stop here
     raise RuntimeError(f'Could not find model "{model}" footer')
 
-def filter_mmcif_model(mmcif_content: str, model: int) -> str:
+def mmcif_value(value: str) -> str:
+    """Format a value to be written in a mmCIF file.
+    Empty values are written as missing and values with quotes or spaces are quoted."""
+    if not value: return MMCIF_MISSING_VALUE
+    if "'" in value: return f'"{value}"'
+    if ' ' in value or '"' in value: return f"'{value}'"
+    return value
+
+
+def get_mmcif_atom_field_indices(mmcif_content: str) -> dict[str, int]:
+    """Get the position of every atom field in the atom lines of mmCIF content.
+    Fields are listed in the header of the atom table (e.g. '_atom_site.Cartn_x')."""
+    field_indices = {}
+    for line in mmcif_content.split('\n'):
+        if line.startswith(MMCIF_ATOM_FIELD_PREFIX):
+            field_name = line.split()[0][len(MMCIF_ATOM_FIELD_PREFIX):]
+            field_indices[field_name] = len(field_indices)
+        # Fields are all together so we are done once we find something else after them
+        elif len(field_indices) > 0: break
+    if len(field_indices) == 0:
+        raise RuntimeError('No atom table found. Is this mmCIF empty?')
+    return field_indices
+
+
+def filter_mmcif_model(mmcif_content: str, model: int, field_indices: dict[str, int]) -> str:
     """Set a function to filter lines in mmCIF content for a specific model.
-    If the model is -1 then simply return the first model we find."""
+    If the model is -1 then simply return the first model we find.
+    If there is no model field then all atoms are considered to belong to model 1."""
+    field_count = len(field_indices)
+    atom_number_index = field_indices['id']
+    model_index = field_indices.get('pdbx_PDB_model_num', None)
+    # Check if a line has atom data
+    def is_atom_line(values: list[str]) -> bool:
+        if len(values) != field_count or values[0] not in MMCIF_ATOM_HEADERS: return False
+        # WARNING: The atom header is not safe enought
+        # Some other header data are free texts which may include these words
+        # To make it a bit safer we check that the atom number is present as well, although we don't need it
+        return values[atom_number_index].isnumeric()
+    # Get the model number of an atom line
+    def get_model_number(values: list[str]) -> int:
+        if model_index is None: return 1
+        # In a few rare cases the model may be '?' (e.g. 1DOW, 1DQJ)
+        model_string = values[model_index]
+        if model_string == MMCIF_MISSING_VALUE:
+            raise RuntimeError('Missing model number in mmCIF')
+        return int(model_string)
     # Keep track of the models found, for the logs
     found_models = set()
     # If a model was passed then it means we must filter the content
@@ -3531,21 +3665,9 @@ def filter_mmcif_model(mmcif_content: str, model: int) -> str:
         # Values are separated by spaces
         values = line.split()
         # If this is not atom line then skip it
-        if len(values) == 0 or values[0] not in MMCIF_ATOM_HEADERS: continue
-        # WARNING: The atom header is not safe enought
-        # Some other header data are free texts which may include these words
-        # To make it a bit safer we check that the atom number is present as well, although we don't need it
-        atom_number = values[1]
-        if not atom_number.isnumeric(): continue
-        # Get the atom model number if a model number was passed
-        # Note that then model is a number greater than 0
-        # In a few rare cases the model may be '?' (e.g. 1DOW, 1DQJ)
-        # In this scenario we assume it is the model 1 and keep going
-        model_string = values[20]
-        if model_string == MMCIF_MISSING_VALUE:
-            raise RuntimeError('Missing model number in mmCIF')
-        found_models.add(model_string)
-        model_number = int(model_string)
+        if not is_atom_line(values): continue
+        model_number = get_model_number(values)
+        found_models.add(str(model_number))
         # If the model is -1 then the model is the frist encountered model
         if model == -1: model = model_number
         # If the model number does not match then skip it
@@ -3566,22 +3688,9 @@ def filter_mmcif_model(mmcif_content: str, model: int) -> str:
         # Values are separated by spaces
         values = line.split()
         # If this is not atom line then we are done
-        if len(values) == 0 or values[0] not in MMCIF_ATOM_HEADERS: break
-        # WARNING: The atom header is not safe enought
-        # Some other header data are free texts which may include these words
-        # To make it a bit safer we check that the atom number is present as well, although we don't need it
-        atom_number = values[1]
-        if not atom_number.isnumeric(): break
-        # Get the atom model number if a model number was passed
-        # Note that then model is a number greater than 0
-        # In a few rare cases the model may be '?' (e.g. 1DOW, 1DQJ)
-        # In this scenario we assume it is the model 1 and keep going
-        model_string = values[20]
-        if model_string == MMCIF_MISSING_VALUE:
-            raise RuntimeError('Missing model number in mmCIF')
-        model_number = int(model_string)
+        if not is_atom_line(values): break
         # If the model has changed then we are done
-        if model_number != model: break
+        if get_model_number(values) != model: break
         # If we are still in the same model then keep adding the content
         filtered_content += '\n' + line
     # Return the mined content

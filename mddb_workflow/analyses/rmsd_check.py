@@ -729,7 +729,7 @@ def write_view_script(
             xyz, _, _, boxes = reader.read(n_frames=1)
             writer.write(xyz, box=boxes)
     commands = [
-        f'mol new {{{abspath(structure_filename)}}} type pdb waitfor all',
+        f'mol new {{{abspath(structure_filename)}}} waitfor all',
         # The frame from the structure file is removed so only the shown frames remain
         'animate delete all',
         f'mol addfile {{{abspath(frames_filename)}}} type xtc waitfor all',

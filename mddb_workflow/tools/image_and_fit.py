@@ -20,23 +20,6 @@ from mddb_workflow.analyses.mindist import find_frame_cross_contacts
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
 from mddb_workflow.utils.type_hints import *
 
-# Set a pair of independent auxiliar functions to save and recover chains from a pdb file
-# WARNING: These functions must be used only when the pdb has not changed in number of atoms
-
-
-def get_chains(pdb_filename: str) -> list:
-    """Get a list with each atom chain from a PDB."""
-    structure = Structure.from_pdb_file(pdb_filename)
-    chains = structure.chains
-    return chains
-
-
-def set_chains(pdb_filename: str, chains: list):
-    """Set the chains for a PDB file."""
-    structure = Structure.from_pdb_file(pdb_filename)
-    structure.chains = chains
-    structure.generate_pdb_file(pdb_filename)
-
 # Set some constant values to handle NDX atom index selections
 SYSTEM_SELECTION_NAME = 'system'
 CENTER_SELECTION_NAME = 'center'
@@ -106,9 +89,12 @@ def image_and_fit(
     # LORE: However now we always run a no-jump followed by a '-pbc res' step thus recovering PBC atoms
     has_pbc_atoms = bool(pbc_selection)
 
-    # First of all save chains
-    # Gromacs will delete chains so we need to recover them after
-    chains_backup = get_chains(input_structure_file.path)
+    # Gromacs can not read mmCIF so we work with PDB files, where chains do not matter
+    # At the end, the output structure is written with the input structure data and the new coordinates
+    input_structure = Structure.from_file(input_structure_file.path)
+    gromacs_input_structure_file = output_structure_file.get_prefixed_file('input.').get_reformated_file('pdb')
+    input_structure.generate_pdb_file(gromacs_input_structure_file.path, show_warnings=False, accept_limitations=True)
+    gromacs_structure_file = output_structure_file.get_reformated_file('pdb')
 
     # Set a custom index file (.ndx) to select reference atoms for centering and fitting steps
     # We will use as center all atoms which are not under PBC
@@ -129,11 +115,11 @@ def image_and_fit(
 
     # Use the first frame of the trajectory as structure
     # The input structure may be a different frame, but gromacs uses it as reference for the no-jump and the fit
-    reset_structure(input_structure_file.path, input_trajectory_file.path, output_structure_file.path)
+    reset_structure(gromacs_input_structure_file.path, input_trajectory_file.path, gromacs_structure_file.path)
 
     # Set the latest structure and trajectory files
     # They are the ones to be used as inputs for the following steps
-    latest_structure = output_structure_file
+    latest_structure = gromacs_structure_file
     latest_trajectory = input_trajectory_file
 
     # Imaging --------------------------------------------------------------------------------------
@@ -163,8 +149,8 @@ def image_and_fit(
             reset_structure(
                 latest_structure.path,
                 latest_trajectory.path,
-                output_structure_file.path)
-            latest_structure = output_structure_file
+                gromacs_structure_file.path)
+            latest_structure = gromacs_structure_file
 
         # Run an intial -pbc res step just to keep residue atoms together before the no-jump step
         # Note that this can be done only if we have the TPR file
@@ -179,8 +165,8 @@ def image_and_fit(
             reset_structure(
                 latest_structure.path,
                 latest_trajectory.path,
-                output_structure_file.path)
-            latest_structure = output_structure_file
+                gromacs_structure_file.path)
+            latest_structure = gromacs_structure_file
 
         # !!! We assume that at this point (after a possible translation) the first frame is "correct"
         # This means that the different molecules are placed as desired
@@ -226,8 +212,8 @@ def image_and_fit(
         # If there is no center and no PBC then do nothing, but this should never happen
 
         # Select the first frame of the recently imaged trayectory as the new structure
-        reset_structure(latest_structure.path, latest_trajectory.path, output_structure_file.path)
-        latest_structure = output_structure_file
+        reset_structure(latest_structure.path, latest_trajectory.path, gromacs_structure_file.path)
+        latest_structure = gromacs_structure_file
 
     # Fitting --------------------------------------------------------------------------------------
 
@@ -263,12 +249,16 @@ def image_and_fit(
         # Note that the input structure is not necessarily the output structure in this scenario
         # The fit may have been done using the topology and there may be an offset, so better dump it
         reset_structure(
-            input_structure_file.path,
+            gromacs_input_structure_file.path,
             output_trajectory_file.path,
-            output_structure_file.path)
+            gromacs_structure_file.path)
 
-    # Recover chains
-    set_chains(output_structure_file.path, chains_backup)
+    # Write the output structure with the new coordinates
+    output_coordinates = [ atom.coords for atom in Structure.from_pdb_file(gromacs_structure_file.path).atoms ]
+    input_structure.set_new_coordinates(output_coordinates)
+    input_structure.generate_file(output_structure_file.path)
+    gromacs_input_structure_file.remove()
+    gromacs_structure_file.remove()
 
     # Clean up the index file
     # if exists(INDEX_FILEPATH):

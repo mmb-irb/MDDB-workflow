@@ -1,8 +1,9 @@
+import os
 import itertools
 import shlex
 
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from mddb_workflow.utils.auxiliar import InputError, TestFailure, save_json, warn, reprint
+from mddb_workflow.utils.auxiliar import InputError, TestFailure, save_json, warn, reprint, get_auxiliar_filepath
 from mddb_workflow.utils.auxiliar import numerate_filename, get_analysis_name
 from mddb_workflow.utils.constants import STABLE_INTERACTIONS_FLAG, OUTPUT_INTERACTIONS_FILENAME
 from mddb_workflow.utils.constants import AUTOMATIC_FLAG, INTERACTIONS_ANALYSIS_VERSION
@@ -38,7 +39,6 @@ FAILED_INTERACTION_FLAG = 'failed'
 # In addition, this file may be used to force interactions with custom interface residues manually
 def process_interactions(
     input_interactions: Optional[list],
-    structure_file: 'File',
     trajectory_file: 'File',
     structure: 'Structure',
     inchikey_map: list[dict],
@@ -176,6 +176,11 @@ def process_interactions(
     # Set if we are to have mercy when an interaction fails
     have_mercy = STABLE_INTERACTIONS_FLAG in mercy
 
+    # Write the structure for VMD to read it
+    # Agents are selected by their atom indices so chains do not matter
+    vmd_structure_filepath = get_auxiliar_filepath(f'.interactions_structure.{structure.get_vmd_format()}')
+    structure.generate_file(vmd_structure_filepath, show_warnings=False, accept_limitations=True)
+
     # Iterate over each defined interaction
     for interaction in explicit_interactions:
         interaction_name = interaction["name"]
@@ -194,10 +199,10 @@ def process_interactions(
             f'  You may need to manually specify the distance cutoff in the inputs file for interaction "{interaction_name}"')
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_results = get_interface_atom_indices(
-            structure_file.path,
+            vmd_structure_filepath,
             reduced_trajectory_filepath,
-            interaction['selection_1'],
-            interaction['selection_2'],
+            agent_1_selection.to_vmd(),
+            agent_2_selection.to_vmd(),
             distance_cutoff
         )
         # Check if the interaction is respecting the frames percent cutoff and if it fails then kill it
@@ -249,7 +254,7 @@ def process_interactions(
 
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
-        strong_bonds = get_covalent_bonds_between(structure_file.path, interaction['selection_1'], interaction['selection_2'])
+        strong_bonds = get_covalent_bonds_between(vmd_structure_filepath, agent_1_selection, agent_2_selection)
         interaction['strong_bonds'] = strong_bonds
 
         # If one of the agents is fully made of strong bonds then the interaction is not valid
@@ -266,6 +271,8 @@ def process_interactions(
         interface_residue_indices = sorted(interaction["interface_residue_indices_1"]
             + interaction["interface_residue_indices_2"])
         print(f'{interaction_name} (time: {pretty_frames_percent} %) -> {interface_residue_indices}')
+
+    os.remove(vmd_structure_filepath)
 
     # Filter away interactions which have failed
     valid_interactions = [inte for inte in explicit_interactions if not inte.get(FAILED_INTERACTION_FLAG, False)]

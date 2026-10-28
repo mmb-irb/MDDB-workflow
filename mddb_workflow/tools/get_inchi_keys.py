@@ -139,7 +139,7 @@ def report_inchi_failure(failure: InChIFailure, structure: 'Structure', structur
     molecule_atoms = Selection(sorted(atom.index for atom in atoms))
     commands = [
         '# Molecule whose InChI could not be found',
-        f'mol new {{{abspath(structure_file.path)}}} type pdb waitfor all',
+        f'mol new {{{abspath(structure_file.path)}}} waitfor all',
         'set main [molinfo top]',
         'mol representation Licorice 0.2',
         'mol color Name',

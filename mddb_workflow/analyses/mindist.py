@@ -334,7 +334,7 @@ def write_view_script(
     Note that the VMD periodic display is not used since VMD would misplace images and the box if the box is rotated.
     """
     load_commands = [
-        f'mol new {{{abspath(structure_filename)}}} type pdb waitfor all',
+        f'mol new {{{abspath(structure_filename)}}} waitfor all',
         # Frames from the structure file are removed so frame numbers match the trajectory
         'animate delete all',
         f'mol addfile {{{abspath(trajectory_filename)}}} type xtc first {frame} last {frame} waitfor all',

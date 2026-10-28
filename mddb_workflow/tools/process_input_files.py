@@ -92,6 +92,11 @@ def process_input_files(
 
     # If the faith argument was passed then set input files as output files and exit
     if faith:
+        # Faith is only meant for inputs which are outputs of an up to date workflow
+        # These structures are always mmCIF files written by us
+        if input_structure_file.format != 'cif':
+            raise InputError('The --faith argument requires an input structure in mmCIF format (.cif) '
+                'since it is only meant for outputs of an up to date workflow')
         self.register.add_warning(FAITH_BYPASS, 'All processing steps and tests were skipped')
         output_structure_file.set_symlink_to(input_structure_file, force=True)
         if len(input_trajectory_files) > 1: raise InputError('Please do not use the --faith argument')
@@ -150,15 +155,9 @@ def process_input_files(
 
     # --- CONVERTING AND MERGING ------------------------------------------------------------
 
-    # Set the output format for the already converted structure
-    input_structure_format = input_structure_file.format
-    output_structure_format = output_structure_file.format
     # Set the output file for the already converted structure
-    # If input structure already matches the output format then avoid the renaming
-    if input_structure_format == output_structure_format:
-        converted_structure_file = input_structure_file
-    else:
-        converted_structure_file = File(f'{output_directory}/{CONVERTED_STRUCTURE}')
+    # Note that the structure is always converted, since our mmCIF files are always written by us
+    converted_structure_file = File(f'{output_directory}/{CONVERTED_STRUCTURE}')
     # Set the output format for the already converted trajectory
     input_trajectories_format = list(input_trajectory_formats)[0]
     output_trajectory_format = output_trajectory_file.format
@@ -205,10 +204,10 @@ def process_input_files(
 
     # --- provisional reference structure ---
 
-    # Now that we MUST have a PDB file we can set a provisional structure instance
+    # Now that we MUST have a structure file we can set a provisional structure instance
     # Note that this structure is not yet corrected so it must be used with care
     # Otherwise we could have silent errors
-    provisional_structure = Structure.from_pdb_file(converted_structure_file.path)
+    provisional_structure = Structure.from_file(converted_structure_file.path)
     # Now we can set a provisional coarse grain selection
     # This selection is useful to avoid problems with CG atom elements
     # Since this is proviosonal we will make it silent
@@ -268,10 +267,10 @@ def process_input_files(
 
     # --- provisional reference structure ---
 
-    # Now that we have a filtered PDB file we have to update provisional structure instance
+    # Now that we have a filtered structure file we have to update provisional structure instance
     # Note that this structure is not yet corrected so it must be used with care
     # Otherwise we could have silent errors
-    provisional_structure = Structure.from_pdb_file(filtered_structure_file.path)
+    provisional_structure = Structure.from_file(filtered_structure_file.path)
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
     # Logs are shown only here, since this structure is already filtered
@@ -339,7 +338,7 @@ def process_input_files(
         # Update the cache
         self.cache.update(IMAGED, [image, fit, translation])
         # Update the provisional strucutre coordinates
-        imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
+        imaged_structure = Structure.from_file(imaged_structure_file.path)
         imaged_structure_coords = [atom.coords for atom in imaged_structure.atoms]
         provisional_structure.set_new_coordinates(imaged_structure_coords)
 
@@ -494,7 +493,7 @@ def process_input_files(
     # Now that we have the corrected structure we can set the definitive atom selections
 
     # Set the final structure
-    final_structure = Structure.from_pdb_file(output_structure_file.path)
+    final_structure = Structure.from_file(output_structure_file.path)
     self._set_cg_selection(final_structure, output_trajectory_file, output_topology_file, verbose=False)
     final_cg_selection = self.cg_selection
 

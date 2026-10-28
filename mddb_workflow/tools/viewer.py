@@ -7,12 +7,13 @@ from subprocess import call
 from tempfile import TemporaryDirectory
 from mddb_workflow.mwf import Project, MD
 from mddb_workflow.utils.auxiliar import InputError, parse_glob, unique, warn
-from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, STRUCTURE_FILENAME, TRAJECTORY_FILENAME, TRAJECTORY_SAMPLE_FILENAME
+from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, STRUCTURE_FILENAME, LEGACY_STRUCTURE_FILENAME, TRAJECTORY_FILENAME, TRAJECTORY_SAMPLE_FILENAME
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, IMAGED_STRUCTURE, FILTERED_STRUCTURE, CONVERTED_STRUCTURE
 from mddb_workflow.utils.constants import CORRECTED_TRAJECTORY, IMAGED_TRAJECTORY, FILTERED_TRAJECTORY, CONVERTED_TRAJECTORY
 from mddb_workflow.utils.constants import MD_INPUT_STRUCTURE_FILEPATH, MD_INPUT_TRAJECTORY_FILEPATHS, MD_INPUT_TOPOLOGY_FILEPATH, MD_REMOVED_FLAG
 from mddb_workflow.utils.constants import ACCEPTED_INPUT_FILENAMES, CACHE_FILENAME
 from mddb_workflow.utils.file import File
+from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.vmd_spells import VMD_FORMAT, vmd_supported_trajectory_formats
 from mddb_workflow.tools.atom_counters import get_topology_and_trajectory_atoms, get_structure_and_trajectory_atoms
@@ -36,7 +37,7 @@ CONVERTIBLE_TOPOLOGY_FORMATS = {'tpr'}
 
 # Formats which can be filtered when they have more atoms than the trajectory
 FILTERABLE_TOPOLOGY_FORMATS = {'tpr', 'prmtop'}
-FILTERABLE_STRUCTURE_FORMATS = {'pdb', 'gro'}
+FILTERABLE_STRUCTURE_FORMATS = {'pdb', 'cif', 'gro'}
 
 # Minimum size in Angstroms of the focused region, to avoid zooming too much on a few atoms
 MIN_FOCUS_SIZE = 10
@@ -53,6 +54,7 @@ INPRO_DIRECTORY = INCOMPLETE_PREFIX + 'inpro'
 # Files to be searched in the MD directory, from the most processed to the least processed
 STRUCTURE_CANDIDATES = [
     STRUCTURE_FILENAME,
+    LEGACY_STRUCTURE_FILENAME,
     f'{INPRO_DIRECTORY}/{CORRECTED_STRUCTURE}',
     f'{INPRO_DIRECTORY}/{IMAGED_STRUCTURE}',
     f'{INPRO_DIRECTORY}/{FILTERED_STRUCTURE}',
@@ -199,7 +201,7 @@ def sort_input_files(input_filepaths: list[str]) -> tuple[File | None, File | No
     if len(input_files) == 1:
         structure_file = input_files[0]
         if structure_file.format not in supported_structure_formats and structure_file.format in vmd_supported_trajectory_formats:
-            raise InputError(f'{structure_file.path} is a trajectory. Pass also a structure, e.g. mwf view structure.pdb {structure_file.path}')
+            raise InputError(f'{structure_file.path} is a trajectory. Pass also a structure, e.g. mwf view structure.cif {structure_file.path}')
         return structure_file, None
     first_file, second_file = input_files
     def is_valid(structure_file: File, trajectory_file: File) -> bool:
@@ -255,6 +257,14 @@ def view_project(
         print(f'Converting {structure_file.path} to gro')
         run_gromacs(f'editconf -f {structure_file.path} -o {converted_structure_file.path}')
         structure_file = converted_structure_file
+    # VMD fails to load mmCIF files with elements it does not know (e.g. coarse grain) so we give it a PDB
+    if structure_file.format == 'cif':
+        structure = Structure.from_file(structure_file.path)
+        if structure.get_vmd_format() == 'pdb':
+            pdb_structure_file = structure_file.get_reformated_file('pdb').get_relocated_file(temporary_directory.name)
+            print(f'Converting {structure_file.path} to pdb')
+            structure.generate_pdb_file(pdb_structure_file.path, accept_limitations=True)
+            structure_file = pdb_structure_file
     if structure_file.format not in VMD_STRUCTURE_FORMATS:
         raise InputError(f'Structure format "{structure_file.format}" is not supported')
     if not trajectory_file and structure_file.format in NO_COORDINATES_FORMATS:

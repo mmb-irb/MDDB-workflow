@@ -29,6 +29,9 @@ from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
 from mddb_workflow.utils.constants import OUTPUT_CHEMICAL_SHIFTS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
+# LEGOLAS needs a PDB structure
+LEGOLAS_STRUCTURE_FILENAME = 'structure.pdb'
+
 # DANI: Esto es provisional hasta que LEGOLAS esté en conda
 LEGOLAS_COMMAND = 'source ~/miniforge3/bin/activate ~/miniforge3/envs/legolas; python ~/libraries/legolas/test/legolas.py {} -t {} -o csv'
 
@@ -98,8 +101,9 @@ def chemical_shifts(
         residue.name = get_legolas_residue_name(residue.name)
         residue.number = r + 1
         residue.icode = ''
-    legolas_structure_filepath = f'{legolas_directory}/{structure_file.filename}'
-    legolas_structure.generate_pdb_file(legolas_structure_filepath)
+    legolas_structure_filepath = f'{legolas_directory}/{LEGOLAS_STRUCTURE_FILENAME}'
+    # Note that residues are renumbered so chains are not needed to keep them apart
+    legolas_structure.generate_pdb_file(legolas_structure_filepath, accept_limitations=True)
 
     # Write a reduced trajectory with only the analyzed residues atoms
     reduced_trajectory_filepath, reduced_step, _ = get_reduced_trajectory(
@@ -116,7 +120,7 @@ def chemical_shifts(
     # Run LEGOLAS
     print(' Running LEGOLAS')
     print(GREY_HEADER, end='')
-    command = LEGOLAS_COMMAND.format(trajectory_file.filename, structure_file.filename)
+    command = LEGOLAS_COMMAND.format(trajectory_file.filename, LEGOLAS_STRUCTURE_FILENAME)
     process = run(['bash', '-c', command], cwd=legolas_directory, stdout=PIPE, stderr=STDOUT)
     logs = process.stdout.decode()
     print(COLOR_END, end='')

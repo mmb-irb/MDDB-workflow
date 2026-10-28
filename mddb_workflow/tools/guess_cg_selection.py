@@ -100,13 +100,13 @@ def vote_by_atom_count(residues: list['Residue']) -> Optional[str]:
 
 def get_frames_coordinates(structure: 'Structure', trajectory_file: 'File') -> np.ndarray:
     """Get atom coordinates in a few frames along the trajectory."""
-    # Write the structure in a PDB file to be used as topology for pytraj
-    auxiliar_pdb_filepath = get_auxiliar_filepath('.cg_guess.pdb')
-    structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings=False)
+    # Write the structure in a mmCIF file to be used as topology for pytraj
+    auxiliar_mmcif_filepath = get_auxiliar_filepath('.cg_guess.cif')
+    structure.generate_mmcif_file(auxiliar_mmcif_filepath)
     snapshots = count_xtc_frames(trajectory_file)
-    reduced_trajectory, _, _ = get_reduced_pytraj_trajectory(auxiliar_pdb_filepath, trajectory_file.path, snapshots, FRAMES_LIMIT)
+    reduced_trajectory, _, _ = get_reduced_pytraj_trajectory(auxiliar_mmcif_filepath, trajectory_file.path, snapshots, FRAMES_LIMIT)
     coordinates = np.array([ frame.xyz for frame in reduced_trajectory.iterframe() ])
-    os.remove(auxiliar_pdb_filepath)
+    os.remove(auxiliar_mmcif_filepath)
     return coordinates
 
 

@@ -9,7 +9,6 @@ from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
 def rgyr(
-    structure_file: 'File',
     trajectory_file: 'File',
     output_directory: str,
     snapshots: int,
@@ -41,9 +40,13 @@ def rgyr(
 
     # Set the output filepath
     rgyr_data_filepath = get_auxiliar_filepath('.rgyr_data.xvg')
+    # Gromacs can not read mmCIF so we give it a PDB, where chains do not matter
+    gromacs_structure_filepath = get_auxiliar_filepath('.rgyr_structure.pdb')
+    structure.generate_pdb_file(gromacs_structure_filepath, show_warnings=False, accept_limitations=True)
     # Run Gromacs
-    run_gromacs(f'gyrate -s {structure_file.path} -f {reduced_trajectory_filepath} \
+    run_gromacs(f'gyrate -s {gromacs_structure_filepath} -f {reduced_trajectory_filepath} \
         -o {rgyr_data_filepath} -n {ndx_filepath} -mode geometry', user_input=selection_name)
+    remove(gromacs_structure_filepath)
 
     # Read the output file and parse it
     raw_rgyr_data = xvg_parse(rgyr_data_filepath, ['times', 'rgyr', 'rgyrx', 'rgyry', 'rgyrz'])

@@ -33,6 +33,9 @@ from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
 from mddb_workflow.utils.constants import OUTPUT_ALLOSTERY_FILENAME
 from mddb_workflow.utils.type_hints import *
 
+# ComPASS needs a PDB structure
+COMPASS_STRUCTURE_FILENAME = 'structure.pdb'
+
 # DANI: Esto es provisional hasta que ComPASS esté en conda
 COMPASS_COMMAND = 'source ~/miniforge3/bin/activate ~/miniforge3/envs/compass; compass {}'
 
@@ -98,8 +101,9 @@ def allostery(
     for r, residue in enumerate(node_structure.residues):
         residue.number = r + 1
         residue.icode = ''
-    compass_structure_filepath = f'{compass_directory}/{structure_file.filename}'
-    node_structure.generate_pdb_file(compass_structure_filepath)
+    compass_structure_filepath = f'{compass_directory}/{COMPASS_STRUCTURE_FILENAME}'
+    # Note that residues are renumbered so chains are not needed to keep them apart
+    node_structure.generate_pdb_file(compass_structure_filepath, accept_limitations=True)
 
     # Write a reduced trajectory with only the node residues atoms
     reduced_trajectory_filepath, step, _ = get_reduced_trajectory(
@@ -119,7 +123,7 @@ def allostery(
     compass_config_filepath = f'{compass_directory}/{COMPASS_CONFIG_FILENAME}'
     with open(compass_config_filepath, 'w') as file:
         file.write(f"""[generals]
-topology = {structure_file.filename}
+topology = {COMPASS_STRUCTURE_FILENAME}
 trajectory = {trajectory_file.filename}
 output_dir = {COMPASS_OUTPUT_DIRECTORY}
 n_cores = {cpu_count()}

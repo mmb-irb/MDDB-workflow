@@ -187,8 +187,9 @@ RESIDUAL_AREA_FILENAME = '.residual_area.xvg'
 def calculate_knowledge_data(pdb_id: str, structure: 'Structure') -> dict:
     """Calculate the solvent accessible surface in the PDB structure as reference."""
     # Export the structure to PDB so gromacs can read it
+    # Note that gromacs does not care about chains, since chains are selected using an index file
     auxiliar_pdb_filepath = get_auxiliar_filepath(f'.{pdb_id}.pdb')
-    structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings=False)
+    structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings=False, accept_limitations=True)
     # Target only protein chains
     protein_selection = structure.select_protein()
     protein_chains = structure.get_selection_chains(protein_selection)

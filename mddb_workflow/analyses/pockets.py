@@ -35,6 +35,10 @@ from mddb_workflow.utils.type_hints import *
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE
+
+# Mdpocket can not read mmCIF so we give it a PDB
+# Note that pocket atoms are read by their number so chains do not matter
+MDPOCKET_STRUCTURE_FILENAME = '.mdpocket_structure.pdb'
 ERASE_4_PREVIOUS_LINES = ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + CURSOR_UP_ONE
 
 # Set some known error logs to check if we are having them
@@ -43,7 +47,7 @@ KNOWN_MDPOCKET_ERRORS = set([
 ])
 
 def pockets (
-    structure_file : 'File',
+    structure : 'Structure',
     trajectory_file : 'File',
     output_directory : str,
     pbc_selection : 'Selection',
@@ -92,7 +96,8 @@ def pockets (
     # HARDCODE: We asume the trajectory and structure files are in the current location
     # This is now true, but if this changes in the future this will fail, although the error will be obvious
     auxiliar_trajectory_filepath = f'./{pockets_trajectory_file.filename}'
-    auxiliar_structure_filepath = f'./{structure_file.filename}'
+    auxiliar_structure_filepath = f'./{MDPOCKET_STRUCTURE_FILENAME}'
+    structure.generate_pdb_file(auxiliar_structure_filepath, show_warnings=False, accept_limitations=True)
 
     # Run the mdpocket analysis to find new pockets
     mdpocket_output = output_directory_name + '/mdpout'
@@ -343,6 +348,7 @@ def pockets (
     if len(pockets) == 0:
         print(' No pockets were found')
         # Recover the original directory
+        remove(auxiliar_structure_filepath)
         chdir(recovery_path)
         return
     # Sort pockets by their number of points, biggest first
@@ -537,6 +543,7 @@ def pockets (
         output_analysis.append(output)
 
     # Recover the original directory
+    remove(auxiliar_structure_filepath)
     chdir(recovery_path)
 
     # By default, the starting frame is always 0

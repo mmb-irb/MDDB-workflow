@@ -351,7 +351,7 @@ def main():
     # In case the chainer tool was called
     elif subcommand == 'chainer':
         # Parse the structure
-        structure = Structure.from_pdb_file(args.input_structure)
+        structure = Structure.from_file(args.input_structure)
         # If there is a bonds source then mine bonds from it
         if args.bonds_source:
             bonds_source = File(args.bonds_source)
@@ -374,7 +374,7 @@ def main():
         # Run the chainer logic
         structure.chainer(selection, args.letter, args.whole_fragments)
         # Generate the output file from the modified structure
-        structure.generate_pdb_file(args.output_structure)
+        structure.generate_file(args.output_structure)
         print(f'Changes written to {args.output_structure}')
     elif subcommand in ['dataset', 'ds']:
         if not hasattr(args, 'dataset_subcommand') or not args.dataset_subcommand:
@@ -777,6 +777,7 @@ run_parser_checks_args = [
               "Available checkings:" + pretty_list(AVAILABLE_FAILURES))}),
     (['-f', '--faith'], {'default': False, 'action': 'store_true',
      'help': ("Use this flag to force-skip all data processing thus asuming inputs are already processed.\n"
+              "Inputs must be outputs of an up to date workflow and thus the input structure must be a mmCIF (.cif) file.\n"
               "WARNING: Do not use this flag if you don't know what you are doing.\n"
               "This may lead to several silent errors.")}),
 ]

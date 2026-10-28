@@ -35,6 +35,18 @@ def get_auxiliar_commands_filepath() -> str:
 vmd_supported_structure_formats = {'pdb', 'prmtop', 'psf', 'parm', 'gro'} # DANI: Esto lo he hecho rápido, hay muchas más
 vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf', 'pdb', 'rst7'}
 
+# Elements VMD can read from mmCIF files
+# VMD fails to load a mmCIF file if any atom has a different element (e.g. coarse grain beads)
+VMD_MMCIF_ELEMENTS = {
+    'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar',
+    'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr',
+    'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te', 'I', 'Xe',
+    'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu',
+    'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn',
+    'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr',
+    'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg'
+}
+
 # Set a vmd format translator
 VMD_FORMAT = {
     'pdb': 'pdb',
@@ -316,8 +328,12 @@ def get_vmd_selection_atom_indices(input_structure_filename: str, selection: str
     atom_indices_filename = get_auxiliar_filepath('.vmd_output.txt')
     commands_filepath = get_auxiliar_commands_filepath()
     with open(commands_filepath, "w") as file:
+        # If VMD could not load the structure it still creates the atoms, but with no coordinates
+        # In this case exit before writing the output file
+        file.write('if {[molinfo top get numframes] == 0} { puts "Failed to load the structure"; exit }\n')
         # Select the specified atoms
-        file.write(f'set selection [atomselect top "{escaped_selection}"]\n')
+        # If the selection is wrong then exit before writing the output file
+        file.write(f'if {{[catch {{atomselect top "{escaped_selection}"}} selection]}} {{ puts $selection; exit }}\n')
         # Save atom indices from the selection
         file.write('set indices [$selection list]\n')
         # Write atom indices to a file

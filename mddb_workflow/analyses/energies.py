@@ -190,6 +190,8 @@ def energies (
             atom.element = cmip_element
         # Write a special pdb which contains charges as CMIP expects to find them and dummy atoms flagged
         output_filepath = f'{output_directory}/{agent_name}_{"host" if host_file else "guest"}.cmip.pdb'
+        # Chain names must fit in 1 character
+        chain_names_map = selected_structure.get_pdb_chain_names_map(show_warnings=False, accept_limitations=True)
         with open(output_filepath, "w") as file:
             # Write a line for each atom
             for a, atom in enumerate(selected_structure.atoms):
@@ -200,7 +202,7 @@ def energies (
                 residue_name = residue.name.ljust(3)
                 if len(residue_name) > 3: residue_name = residue_name[0:3]
                 chain = atom.chain
-                chain_name = chain.name.rjust(1)
+                chain_name = chain_names_map[chain.name].rjust(1)
                 residue_number = str(residue.number).rjust(4)
                 icode = residue.icode.rjust(1)
                 coords = atom.coords

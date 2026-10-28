@@ -862,7 +862,7 @@ class MD:
                 f'{self.structure_file.path} does not exist yet. Are you trying '
                 'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
-        self._structure = Structure.from_pdb_file(self.structure_file.path)
+        self._structure = Structure.from_file(self.structure_file.path)
         # Always force reference bonds in the structure
         # Do not trust in the structure bonds even if they should belong to the reference structure
         # There are several scenarios where they may be wrong:

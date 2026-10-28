@@ -29,21 +29,21 @@ def get_pdb_frames (
     # Make a copy of the structure to be used as a template, so we do not modify the original coordinates
     reference_structure = structure.copy()
 
-    # Generate an auxiliar PDB to be used to reduce the trajectory
-    reference_structure_sample_pdb = get_auxiliar_filepath('.reference.pdb')
-    reference_structure.generate_pdb_file(reference_structure_sample_pdb)
+    # Generate an auxiliar structure file to be used to reduce the trajectory
+    reference_structure_sample = get_auxiliar_filepath('.reference.cif')
+    reference_structure.generate_mmcif_file(reference_structure_sample)
 
     # Set a maximum number of frames
     # If trajectory has more frames than the limit create a reduced trajectory
     reduced_trajectory, frames_step, frames_count = get_reduced_pytraj_trajectory(
-        reference_structure_sample_pdb,
+        reference_structure_sample,
         trajectory_filepath,
         snapshots,
         frames_limit
     )
 
-    # Delete the auxiliar PDB sine it is not needed anymore
-    os.remove(reference_structure_sample_pdb)
+    # Delete the auxiliar structure file sine it is not needed anymore
+    os.remove(reference_structure_sample)
 
     def frames_generator():
         # Create a progress bar
@@ -57,7 +57,8 @@ def get_pdb_frames (
             else: reprint(f'Frame {frame_number+1} ({frame_number} / {frames_count})')
             current_frame_filepath = get_auxiliar_filepath(f'{output_frames_prefix}{frame_number+1}.pdb')
             reference_structure.set_new_coordinates(frame.xyz)
-            reference_structure.generate_pdb_file(current_frame_filepath)
+            # Note that frames are used by tools which do not care about chains
+            reference_structure.generate_pdb_file(current_frame_filepath, show_warnings=False, accept_limitations=True)
             yield current_frame_filepath
             # Delete current frame file before going for the next frame
             os.remove(current_frame_filepath)
@@ -85,15 +86,15 @@ def get_starting_pdb_frames (
     # Make a copy of the structure to be used as a template, so we do not modify the original coordinates
     reference_structure = structure.copy()
 
-    # Generate an auxiliar PDB to be used to reduce the trajectory
-    reference_structure_sample_pdb = get_auxiliar_filepath('.reference.pdb')
-    reference_structure.generate_pdb_file(reference_structure_sample_pdb)
+    # Generate an auxiliar structure file to be used to reduce the trajectory
+    reference_structure_sample = get_auxiliar_filepath('.reference.cif')
+    reference_structure.generate_mmcif_file(reference_structure_sample)
 
     # Load the trajectory using pytraj
-    trajectory = get_pytraj_trajectory(reference_structure_sample_pdb, trajectory_filepath)
+    trajectory = get_pytraj_trajectory(reference_structure_sample, trajectory_filepath)
 
-    # Delete the auxiliar PDB sine it is not needed anymore
-    os.remove(reference_structure_sample_pdb)
+    # Delete the auxiliar structure file sine it is not needed anymore
+    os.remove(reference_structure_sample)
 
     def frames_generator():
         # Create a progress bar
@@ -114,7 +115,8 @@ def get_starting_pdb_frames (
                 current_frame_filepath = get_auxiliar_filepath(f'{output_frames_prefix}{frame_number}.pdb')
                 reference_structure.set_new_coordinates(frame.xyz)
                 try:
-                    reference_structure.generate_pdb_file(current_frame_filepath)
+                    # Note that frames are used by tools which do not care about chains
+                    reference_structure.generate_pdb_file(current_frame_filepath, show_warnings=False, accept_limitations=True)
                     yield current_frame_filepath
                 finally:
                     # Delete current frame file before going for the next frame

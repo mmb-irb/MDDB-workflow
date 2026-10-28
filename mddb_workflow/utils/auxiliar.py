@@ -131,16 +131,6 @@ JSON_SERIALIZABLE_MISSING_BONDS = 'MB'
 # Keep all exceptions in a set
 STANDARD_EXCEPTIONS = {MISSING_TOPOLOGY, MISSING_CHARGES, MISSING_BONDS}
 
-# Set a function to get the next letter from an input letter in alphabetic order
-# Return None if we run out of letters
-letters = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'}
-
-
-def get_new_letter(current_letters: set) -> Optional[str]:
-    return next((letter for letter in letters if letter not in current_letters), None)
-
-
 def all_cases(names: list[str] | set[str]) -> set[str]:
     """Given a list or set of names.
 

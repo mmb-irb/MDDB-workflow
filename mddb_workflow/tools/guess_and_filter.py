@@ -5,6 +5,7 @@ from mddb_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDA
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.gmx_spells import tpr_filter, get_tpr_atom_count
 from mddb_workflow.utils.structures import Structure
+from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
 
 # Set the atom selections to be tried
@@ -149,6 +150,11 @@ def guess_and_filter_structure (
         # WARNING: If the output structure is a symlink it will try to overwrite the origin
         # Remove it to avoid overwriting input data
         if output_structure_file.is_symlink(): output_structure_file.remove()
-        pt.write_traj(output_structure_file.path, structure[pt.AtomMask(kept_atoms)], overwrite=True)
+        # Pytraj can not write mmCIF files
+        if output_structure_file.format == 'cif':
+            filtered_structure = Structure.from_file(input_structure_file.path).filter(Selection(kept_atoms))
+            filtered_structure.generate_mmcif_file(output_structure_file.path)
+        else:
+            pt.write_traj(output_structure_file.path, structure[pt.AtomMask(kept_atoms)], overwrite=True)
         return True
     return False

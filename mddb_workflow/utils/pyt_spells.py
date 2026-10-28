@@ -156,7 +156,8 @@ filter_topology.format_sets = [
             'input_structure_file': pytraj_supported_structure_formats,
         },
         'outputs': {
-            'output_structure_file': pytraj_supported_structure_formats
+            # Pytraj can not write mmCIF files
+            'output_structure_file': pytraj_supported_structure_formats - {'cif'}
         }
     }
 ]

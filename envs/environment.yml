@@ -18,7 +18,9 @@ dependencies:
   # Gromacs is used for several processing and analysis steps
   - bioconda::gromacs_mddb=2025.3=he1b2d42_4
   # MDanalysis is used for some processing steps
-  - mdanalysis
+  # MDanalysis reads mmCIF files since version 2.11 and it needs gemmi to do so
+  - mdanalysis >=2.11.0
+  - gemmi
   # MDtraj is used for several processing and analysis steps
   # MDtraj 1.10 has a critical error: https://github.com/mdtraj/mdtraj/issues/1893
   - mdtraj >=1.11.0

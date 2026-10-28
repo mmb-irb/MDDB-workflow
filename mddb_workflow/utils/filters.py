@@ -52,11 +52,11 @@ def filter_atoms (
     elif not selection_syntax:
         raise InputError('Missing input selection syntax')
 
-    # We need a PDB to instantiate the reference structure
+    # We need a PDB or a mmCIF to instantiate the reference structure
     # The structure file may also be instantiated from some topology file formats but this is not much reliable
-    # If the input structure is not a PDB then we make a conversion to generate it
+    # If the input structure is not a PDB or a mmCIF then we make a conversion to generate it
     structure_filepath = input_structure_file.path
-    if input_structure_file.format != 'pdb':
+    if input_structure_file.format not in {'pdb', 'cif'}:
         # To do so we need coordinates so make sure they were passed
         if not input_trajectory_file:
             raise InputError('In order to filter we need coordinates since some atom selections may rely in close atoms.\n' +
@@ -103,7 +103,11 @@ def filter_atoms (
         symlink_files.append(input_trajectory_file)
 
     # Filter the structure if an output structure file was provided
-    if output_structure_file:
+    # Our mmCIF files are always written by us
+    if output_structure_file and output_structure_file.format == 'cif':
+        print(f'Filtering structure {input_structure_file.path} to {output_structure_file.path}')
+        structure.filter(selection).generate_mmcif_file(output_structure_file.path)
+    elif output_structure_file:
         print(f'Filtering structure {input_structure_file.path} to {output_structure_file.path}')
         # Find a suitable function according to the formats
         # Note than given the nature of this logic we may encounter a function which converts the file format
@@ -158,11 +162,15 @@ def filter_atoms (
     # Filter the trajectory if an output trajectory file was provided
     if output_trajectory_file:
         print(f'Filtering trajectory {input_trajectory_file.path} to {output_trajectory_file.path}')
-        # Otherwise, we must convert
+        # Gromacs can not read mmCIF so we give it a PDB, where chains do not matter
+        trajectory_structure_file = input_structure_file
+        if input_structure_file.format == 'cif':
+            trajectory_structure_file = AUXILIAR_PDB_FILE
+            structure.generate_pdb_file(AUXILIAR_PDB_FILE.path, show_warnings=False, accept_limitations=True)
         # Choose the right conversion function according to input and output formats
         request_format_set = {
             'inputs': {
-                'input_structure_file': { input_structure_file.format },
+                'input_structure_file': { trajectory_structure_file.format },
                 'input_trajectory_file': { input_trajectory_file.format }
             },
             'outputs': {
@@ -185,7 +193,7 @@ def filter_atoms (
         # If the function expects an input structure in any format then pass the structure
         if expected_input_structure_formats:
             filtering_function(
-                input_structure_file=input_structure_file,
+                input_structure_file=trajectory_structure_file,
                 input_trajectory_file=input_trajectory_file,
                 output_trajectory_file=output_trajectory_file,
                 input_selection=selection
@@ -205,6 +213,7 @@ def filter_atoms (
                 output_trajectory_file=output_trajectory_file,
                 input_selection=selection
             )
+        if AUXILIAR_PDB_FILE.exists: AUXILIAR_PDB_FILE.remove()
 
     # Remove generated symlinks, if any
     for symlink_file in symlink_files:

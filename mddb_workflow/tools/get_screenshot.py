@@ -49,21 +49,20 @@ def get_screenshot (
     # The main structure is always rendered normally; the reference structure, if any, is overlaid
     structures = [structure] + ([reference_structure] if reference_structure is not None else [])
 
-    # Set the auxiliar files, one PDB per overlaid structure
-    auxiliar_pdb_filepaths = [
-        get_auxiliar_filepath(f'.screenshot_structure_{i}.pdb') for i in range(len(structures))
-    ]
     auxiliar_tga_filepath = get_auxiliar_filepath('.transition_screenshot.tga')
 
     # Set the solvent selection and totally remove it from every structure
     # This way not only we hide it from the representation, but we also prevent the center to be far away from the camera
+    # Produce one structure file per overlaid structure to feed VMD
     filtered_structures = []
-    for struct, auxiliar_pdb_filepath in zip(structures, auxiliar_pdb_filepaths):
+    auxiliar_structure_filepaths = []
+    for i, struct in enumerate(structures):
         solvent_selection = struct.select_water_and_counter_ions()
         filtered_structure = struct.filter_away(solvent_selection)
         filtered_structures.append(filtered_structure)
-        # Produce a PDB file to feed VMD
-        filtered_structure.generate_pdb_file(auxiliar_pdb_filepath)
+        auxiliar_structure_filepath = get_auxiliar_filepath(f'.screenshot_structure_{i}.{filtered_structure.get_vmd_format()}')
+        filtered_structure.generate_file(auxiliar_structure_filepath, show_warnings=False, accept_limitations=True)
+        auxiliar_structure_filepaths.append(auxiliar_structure_filepath)
     # Keep the first filtered structure at hand: selections (cartoon, CG, etc.) are topology-based
     # so they are identical across overlaid frames and only need to be computed once
     filtered_structure = filtered_structures[0]
@@ -93,8 +92,8 @@ def get_screenshot (
     with open(commands_filename_1, "w") as file:
         # Molecule 0 is already loaded (it was passed as the VMD startup argument)
         # Load any further overlaid structures as additional molecules
-        for auxiliar_pdb_filepath in auxiliar_pdb_filepaths[1:]:
-            file.write(f'mol new {auxiliar_pdb_filepath} \n')
+        for auxiliar_structure_filepath in auxiliar_structure_filepaths[1:]:
+            file.write(f'mol new {auxiliar_structure_filepath} \n')
         # Export the center to a file
         file.write(f'set center_file [open {center_filename} w] \n')
         # Find and export the center of every loaded molecule, one line per molecule
@@ -108,7 +107,7 @@ def get_screenshot (
     # Run VMD
     process = run([
         "vmd",
-        auxiliar_pdb_filepaths[0],
+        auxiliar_structure_filepaths[0],
         "-e",
         commands_filename_1,
         "-dispdev",
@@ -355,8 +354,8 @@ def get_screenshot (
         file.write('axes location Off \n')
         # Molecule 0 is already loaded (it was passed as the VMD startup argument)
         # Load any further overlaid structures as additional molecules
-        for auxiliar_pdb_filepath in auxiliar_pdb_filepaths[1:]:
-            file.write(f'mol new {auxiliar_pdb_filepath} \n')
+        for auxiliar_structure_filepath in auxiliar_structure_filepaths[1:]:
+            file.write(f'mol new {auxiliar_structure_filepath} \n')
 
         # Add representations molecule by molecule
         # Molecule 0 (the main structure) keeps its normal, multi-colored look
@@ -457,7 +456,7 @@ def get_screenshot (
     # Run VMD
     process = run([
         "vmd",
-        auxiliar_pdb_filepaths[0],
+        auxiliar_structure_filepaths[0],
         "-e",
         commands_filename_2,
         "-dispdev",
@@ -478,7 +477,7 @@ def get_screenshot (
     rgb_im.save(output_file.path)
 
     # Remove trash files
-    trash_files = [ *auxiliar_pdb_filepaths, commands_filename_1, commands_filename_2, auxiliar_tga_filepath, center_filename ]
+    trash_files = [ *auxiliar_structure_filepaths, commands_filename_1, commands_filename_2, auxiliar_tga_filepath, center_filename ]
     for trash_file in trash_files:
         remove(trash_file)
 

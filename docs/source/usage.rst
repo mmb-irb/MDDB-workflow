@@ -57,15 +57,15 @@ If everything is fine after the processing, some *new files* may have been gener
     ├── raw_trajectory_part2.nc
     ├── topology.prmtop
     ├── replica_1/
-    │   ├── structure.pdb
+    │   ├── structure.cif
     │   └── trajectory.xtc
     └── replica_2/
-        ├── structure.pdb
+        ├── structure.cif
         └── trajectory.xtc
 
 Here we must explain a few things more.
 First of all, note that trajectory parts have been automatically merged and a structure have been generated for every MD directory.
-Note also that the not-raw (or just 'processed') topology is still in amber format (.prmtop) while the processed trajectory is converted to gromacs (.xtc) format. One of the standards in the workflow is that the trajectory is to be called 'trajectory.xtc' as well as the structure is to be called 'structure.pdb'. Thus the trajectory and the structure are to be in 'xtc' and 'pdb' formats respectively.
+Note also that the not-raw (or just 'processed') topology is still in amber format (.prmtop) while the processed trajectory is converted to gromacs (.xtc) format. One of the standards in the workflow is that the trajectory is to be called 'trajectory.xtc' as well as the structure is to be called 'structure.cif'. Thus the trajectory and the structure are to be in 'xtc' and 'mmCIF' formats respectively.
 
 .. note::
 

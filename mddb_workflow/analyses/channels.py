@@ -10,6 +10,9 @@ from mddb_workflow.utils.type_hints import *
 import json
 
 RESOURCES_DIR = str(Path(__file__).parent.parent / 'resources')
+# CHAP can not read mmCIF so we give it a PDB
+# Atoms are selected through an index file so chains do not matter
+CHAP_STRUCTURE_FILENAME = '.chap_structure.pdb'
 
 
 def _parse_chap_residue_fractions(pdb_file: Path) -> dict[str, list[float]]:
@@ -31,7 +34,9 @@ def _parse_chap_residue_fractions(pdb_file: Path) -> dict[str, list[float]]:
             insertion_code = line[26].strip()
             residue_key = f'{chain_id}:{residue_index}{insertion_code}' if insertion_code else f'{chain_id}:{residue_index}'
 
-            if residue_key in residue_keys:
+            # Atoms of the same residue are consecutive
+            # Note that chain names may be repeated in the PDB so the same key may appear in different residues
+            if len(residue_keys) > 0 and residue_key == residue_keys[-1]:
                 continue
 
             residue_keys.append(residue_key)
@@ -44,6 +49,7 @@ def _parse_chap_residue_fractions(pdb_file: Path) -> dict[str, list[float]]:
 def channels(
     membrane_map: dict,
     universe: 'Universe',
+    structure: 'Structure',
     output_directory: str,
     thickness_analysis: dict,
     cg_residues: list[int],
@@ -68,7 +74,8 @@ def channels(
         # This is explained in the Pathway-Mapping Parameters section of the docs
         ndx.write(universe.select_atoms('protein and not chainID X').atoms, name='Protein')
         ndx.write(TM_at, name='membrane_atoms')
-    pdb = Path(universe.filename).absolute()
+    pdb = Path(f'{output_directory}/{CHAP_STRUCTURE_FILENAME}').absolute()
+    structure.generate_pdb_file(str(pdb), show_warnings=False, accept_limitations=True)
     reduced_trajectory_file, frame_step, n_frames = get_reduced_trajectory(
         input_trajectory_file=File(universe.trajectory.filename),
         snapshots=snapshots,
@@ -97,10 +104,12 @@ def channels(
         failt_str = 'Pore radius at initial probe position is infinite'
         if failt_str in result.stderr:
             print('  -> No channels found.')
+            pdb.unlink()
             return
         # Temporal raise to detect and fix possible issues with CHAP execution,
         # but we should handle this more gracefully in the future
         raise RuntimeError(f'CHAP command failed with return code {result.returncode}. Stderr: {result.stderr}')
+    pdb.unlink()
     output = load_json(f'{output_directory}/output.json')
     stream = f'{output_directory}/stream_output.json'
     stream_data = []

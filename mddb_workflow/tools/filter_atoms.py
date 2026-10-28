@@ -6,7 +6,7 @@ import pytraj as pt
 
 from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS, InputError
+from mddb_workflow.utils.auxiliar import save_json, get_auxiliar_filepath, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS, InputError
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter
 from mddb_workflow.utils.vmd_spells import vmd_converter
 from mddb_workflow.utils.type_hints import *
@@ -71,15 +71,19 @@ def filter_atoms (
         # As long as indices are for atoms and not residues there should never be any incompatibility
         keep_selection.to_ndx_file(output_filepath = index_filename)
         # Filter the trajectory
-        xtc_filter(input_structure_file.path,
+        # Gromacs can not read mmCIF so we give it a PDB, where chains do not matter
+        input_structure = Structure.from_file(input_structure_file.path)
+        gromacs_structure_filepath = get_auxiliar_filepath('.filter_structure.pdb')
+        input_structure.generate_pdb_file(gromacs_structure_filepath, show_warnings=False, accept_limitations=True)
+        xtc_filter(gromacs_structure_filepath,
             input_trajectory_file.path,
             output_trajectory_file.path,
             index_filename,
             filter_group_name)
+        remove(gromacs_structure_filepath)
         # Filter the structure
-        input_structure = Structure.from_pdb_file(input_structure_file.path)
         output_structure = input_structure.filter(keep_selection)
-        output_structure.generate_pdb_file(output_structure_file.path)
+        output_structure.generate_file(output_structure_file.path)
 
     # Filter topology according to the file format
     if input_topology_file != MISSING_TOPOLOGY and input_topology_file.exists:
