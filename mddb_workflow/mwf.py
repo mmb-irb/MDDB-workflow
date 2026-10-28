@@ -1025,7 +1025,9 @@ class MD:
                 if verbose: print(' Guessing CG atoms')
                 parsed_selection = guess_cg_selection(reference_structure, trajectory_file, topology_file,
                     self.project.input_force_fields, verbose=verbose)
-                if verbose: print(f' Guessed CG selection has {len(parsed_selection)} atoms')
+                if verbose:
+                    if parsed_selection: print(f' Found {len(parsed_selection)} coarse grain atoms')
+                    else: print(' There are no coarse grain atoms')
                 return parsed_selection
             # Otherwise, process it
             # If we have a valid input value then use it
