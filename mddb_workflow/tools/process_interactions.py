@@ -31,6 +31,10 @@ UPLOAD_FIELDS = {
 # Set the flag used to label failed interactions
 FAILED_INTERACTION_FLAG = 'failed'
 
+# Set the fields where agent atom selections are kept while processing interactions
+# These fields are removed at the end, since they can not be saved in the cache
+AGENT_SELECTION_FIELDS = ['atom_selection_1', 'atom_selection_2']
+
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
@@ -98,6 +102,8 @@ def process_interactions(
         agent_2_selection = structure.select(input_agent_2_selection)
         if not agent_2_selection:
             raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
+        interaction['atom_selection_1'] = agent_1_selection
+        interaction['atom_selection_2'] = agent_2_selection
         # Make sure selections do not overlap at all
         # This makes not sense as interactions are implemented in this workflow
         overlap = agent_1_selection & agent_2_selection
@@ -143,6 +149,9 @@ def process_interactions(
                 if not parsed_selection:
                     raise InputError(f'Selection for automatic interaction "{selection}" is empty')
                 reference_structure = structure.filter(parsed_selection)
+            # Chains in the reference structure are found in the whole structure by their names
+            # Agents are selected by chain index so we do not rely on VMD chain selections
+            chain_indices = {chain.name: chain.index for chain in structure.chains}
             # Iterate possible combinations of chains
             for chain1, chain2 in itertools.combinations(reference_structure.chains, 2):
                 interaction = {
@@ -151,6 +160,8 @@ def process_interactions(
                     "agent_2": f"chain {chain2.name}",
                     "selection_1": f"chain {chain1.name}",
                     "selection_2": f"chain {chain2.name}",
+                    "atom_selection_1": structure.select_chain_indices([chain_indices[chain1.name]]),
+                    "atom_selection_2": structure.select_chain_indices([chain_indices[chain2.name]]),
                     AUTOMATIC_FLAG: True,
                 }
                 # Now add the explicit interaction to the list
@@ -187,8 +198,8 @@ def process_interactions(
         # Set the distance cutoff
         distance_cutoff = interaction.get('distance_cutoff', DEFAULT_DISTANCE_CUTOFF)
         # Find if this interaction has coarse grain atoms involved
-        agent_1_selection = structure.select(interaction['selection_1'])
-        agent_2_selection = structure.select(interaction['selection_2'])
+        agent_1_selection = interaction['atom_selection_1']
+        agent_2_selection = interaction['atom_selection_2']
         has_agent_1_cg = bool(agent_1_selection & cg_selection)
         has_agent_2_cg = bool(agent_2_selection & cg_selection)
         interaction['has_cg'] = has_agent_1_cg or has_agent_2_cg
@@ -288,8 +299,8 @@ def process_interactions(
     # Check input interactions to be correct
     for i, interaction in enumerate(valid_interactions, 1):
         name = interaction["name"]
-        agent_1_selection = structure.select(interaction['selection_1'])
-        agent_2_selection = structure.select(interaction['selection_2'])
+        agent_1_selection = interaction['atom_selection_1']
+        agent_2_selection = interaction['atom_selection_2']
         reprint(f' Finding interaction type in {name} ({i}/{interaction_count})')
         # Check if there was a type already assigned to the interaction
         # This is not supported anymore since the interaction type is set automatically
@@ -330,6 +341,11 @@ def process_interactions(
 
     # Write the summary to disk
     save_json(output_summary, output_analysis_filepath, indent=4)
+
+    # Remove the agent selections before returning the processed interactions
+    for interaction in valid_interactions:
+        for field in AGENT_SELECTION_FIELDS:
+            del interaction[field]
 
     # Finally return the processed interactions
     return valid_interactions
