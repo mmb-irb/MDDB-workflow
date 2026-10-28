@@ -1865,9 +1865,10 @@ class Project:
         self.trust = trust if trust else self.inputs.get('trust', trust)
         self.faith = faith if faith else self.inputs.get('faith', faith)
         # Convert boolean mercy and trust to their corresponding lists of values
-        if type(self.mercy) is bool:
+        # An empty field in the inputs file comes as None, which means nothing is set
+        if self.mercy is None or type(self.mercy) is bool:
             self.mercy = AVAILABLE_FAILURES if self.mercy else []
-        if type(self.trust) is bool:
+        if self.trust is None or type(self.trust) is bool:
             self.trust = AVAILABLE_CHECKINGS if self.trust else []
 
         # Set the number of frames to skip per MD index
