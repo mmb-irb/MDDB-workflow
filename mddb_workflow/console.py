@@ -553,6 +553,12 @@ def main():
                 loader_path=args.loader,
                 node=args.node,
                 overwrite=args.overwrite,
+                include=args.include_files,
+                exclude=args.exclude_files,
+                skip_trajectories=args.skip_trajectories,
+                skip_files=args.skip_files,
+                skip_analyses=args.skip_analyses,
+                md_directories=args.md_dirs,
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_message=args.query_message,
@@ -1042,6 +1048,13 @@ ds_load = dataset_subparsers.add_parser("load", formatter_class=CustomHelpFormat
 ds_load.add_argument("-ld", "--loader", type=str, help=ds_help['load']['loader_path'])
 ds_load.add_argument("-nd", "--node", type=str, help=ds_help['load']['node'])
 ds_load.add_argument("-o", "--overwrite", action="store_true", help=ds_help['load']['overwrite'])
+# Note that the loader options are named differently when they clash with the query options (e.g. -st)
+ds_load.add_argument("-i", "--include_files", nargs='+', help=ds_help['load']['include'])
+ds_load.add_argument("-e", "--exclude_files", nargs='+', help=ds_help['load']['exclude'])
+ds_load.add_argument("-stj", "--skip_trajectories", action="store_true", help=ds_help['load']['skip_trajectories'])
+ds_load.add_argument("-sf", "--skip_files", action="store_true", help=ds_help['load']['skip_files'])
+ds_load.add_argument("-sa", "--skip_analyses", action="store_true", help=ds_help['load']['skip_analyses'])
+ds_load.add_argument("-md", "--md_dirs", nargs='+', help=ds_help['load']['md_directories'])
 
 # Update references command
 upref_parser = subparsers.add_parser("upref",

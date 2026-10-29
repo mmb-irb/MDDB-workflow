@@ -188,8 +188,13 @@ class Loader:
 
     # Load a directory
     # Optionally load only some files (-i), as paths or wildcards relative to the target directory
+    # Optionally load all files but some (-e), with the same format
+    # Optionally skip the main trajectory, all files or all analyses
+    # Optionally load only some MD directories
     def load(self, target_directory: str, overwrite : bool = False,
-        include : list[str] | None = None) -> bool:
+        include : list[str] | None = None, exclude : list[str] | None = None,
+        skip_trajectories : bool = False, skip_files : bool = False, skip_analyses : bool = False,
+        md_directories : list[str] | None = None) -> bool:
         print(f'Running loader to load directory {target_directory}')
         # Set the environmental variables before calling the loader
         self.set_environment()
@@ -197,8 +202,13 @@ class Loader:
         # Instead we will always use either the '-c' (conserve) or the '-o' (overwrite) arguments
         force_argument = '-o' if overwrite else '-c'
         command = [NODEJS_COMMAND, self.loader_index, 'load', target_directory, force_argument]
-        # Note that an empty include would make the loader complain, so we never pass it empty
-        if include: command += ['-i', *include]
+        # Note that an empty include or exclude would make the loader complain, so we never pass them empty
+        if include: command += ['--include', *include]
+        if exclude: command += ['--exclude', *exclude]
+        if skip_trajectories: command.append('--skip-trajectories')
+        if skip_files: command.append('--skip-files')
+        if skip_analyses: command.append('--skip-analyses')
+        if md_directories: command += ['--md-directories', *md_directories]
         # Run the load process
         # Its output and errors are shown in the terminal as they come
         load_process = run(command)

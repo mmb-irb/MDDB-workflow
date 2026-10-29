@@ -1072,6 +1072,12 @@ class Dataset:
             loader_path: str = None,
             node: str = None,
             overwrite: bool = False,
+            include: list[str] = None,
+            exclude: list[str] = None,
+            skip_trajectories: bool = False,
+            skip_files: bool = False,
+            skip_analyses: bool = False,
+            md_directories: list[str] = None,
             query_path: list[str] = ['*'],
             query_state: list[str] = [State.DONE.value],
             query_message: list[str] = [],
@@ -1088,6 +1094,20 @@ class Dataset:
                 It is remembered in the dataset, so it only has to be passed the first time.
             overwrite (bool):
                 Overwrite the data already in the database. Otherwise only new data is uploaded.
+            include (list[str]):
+                Load only these files, as paths or wildcards relative to every project directory (e.g. '*/mda.rmsf.json').
+            exclude (list[str]):
+                Load all files but these, as paths or wildcards relative to every project directory.
+                It can not be combined with include.
+            skip_trajectories (bool):
+                Do not load the main trajectory of every MD.
+            skip_files (bool):
+                Do not load any file (e.g. structures, trajectories).
+            skip_analyses (bool):
+                Do not load any analysis.
+            md_directories (list[str]):
+                Load only these MD directories, as names relative to every project directory.
+                By default all MD directories are loaded.
             query_path (list[str]):
                 List of directory glob patterns to filter the projects from the dataset.
             query_state (list[str]):
@@ -1100,6 +1120,9 @@ class Dataset:
                 If the field is a list, it is enough for the value to be one of its items.
 
         """
+        # The loader would complain anyway, but we stop before connecting
+        if include and exclude:
+            raise InputError('Include and exclude can not be combined')
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
@@ -1127,7 +1150,9 @@ class Dataset:
         for p, project_entry in enumerate(filtered_projects, 1):
             rel_path = dict(zip(self.project_columns, project_entry))['rel_path']
             print(f'--- Loading {rel_path} ({p}/{projects_count}) ---')
-            if not loader.load(self._rel_to_abs(rel_path), overwrite=overwrite):
+            if not loader.load(self._rel_to_abs(rel_path), overwrite=overwrite,
+                include=include, exclude=exclude, skip_trajectories=skip_trajectories,
+                skip_files=skip_files, skip_analyses=skip_analyses, md_directories=md_directories):
                 raise RuntimeError(f'Something went wrong when loading {rel_path}')
         # This is not necessary since the SSH connection is closed anyway when the workflow ends
         loader.close_ssh_connection()
