@@ -29,7 +29,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - run: echo "Repository -> ${{ github.repository }}"
       - run: echo "Branch -> ${{ github.ref }}"
@@ -46,10 +46,10 @@ jobs:
       #     touch $HOME/.bash_profile
 
       - name: Setup-micromamba
-        uses: mamba-org/setup-micromamba@v2.0.4
+        uses: mamba-org/setup-micromamba@v3.2.1
         with:
           generate-run-shell: true
-          micromamba-version: '2.0.2-2'
+          micromamba-version: '2.9.0-0'
           post-cleanup: 'all'
           init-shell: bash
           environment-file: envs/environment.yml
