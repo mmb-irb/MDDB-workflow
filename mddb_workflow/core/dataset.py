@@ -2,6 +2,7 @@ from mddb_workflow.utils.auxiliar import InputError, load_yaml, load_json, save_
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import CACHE_FILENAME, ACCEPTED_INPUT_FILENAMES
+from mddb_workflow.utils.loader import Loader
 from mddb_workflow.utils.type_hints import *
 import pandas as pd
 import subprocess
@@ -289,6 +290,14 @@ class Dataset:
                     FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE
                 )
             ''')
+            # Create settings table
+            # Values passed once to the dataset commands are saved here so they do not have to be passed again
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY NOT NULL,
+                    value TEXT
+                )
+            ''')
 
             # Backward compatibility: add runtime tracking columns to existing databases.
             self._ensure_column_exists(cur, 'projects', 'process_id', 'INTEGER')
@@ -319,6 +328,21 @@ class Dataset:
                 END
             ''')
 
+            self.conn.commit()
+
+    def _get_setting(self, key: str) -> str | None:
+        """Get a value saved in the dataset settings, or None if it was never saved."""
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            cur.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            row = cur.fetchone()
+        return row[0] if row else None
+
+    def _set_setting(self, key: str, value: str):
+        """Save a value in the dataset settings."""
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            cur.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
             self.conn.commit()
 
     @staticmethod
@@ -1043,6 +1067,68 @@ class Dataset:
                 save_json(inputs, inputs_filepath, indent=4)
             else:
                 save_yaml(inputs, inputs_filepath)
+
+    def load(self,
+            loader_path: str = None,
+            node: str = None,
+            overwrite: bool = False,
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [State.DONE.value],
+            query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
+        ):
+        """Upload the selected projects to the database using the MDDB loader.
+
+        Args:
+            loader_path (str):
+                Path to the loader directory or to its index.js file.
+                It is remembered in the dataset, so it only has to be passed the first time.
+            node (str):
+                Alias of the node whose database receives the projects, as in the loader nodes config file.
+                It is remembered in the dataset, so it only has to be passed the first time.
+            overwrite (bool):
+                Overwrite the data already in the database. Otherwise only new data is uploaded.
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset. Only finished projects (done) by default.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
+
+        """
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        if len(filtered_projects) == 0:
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            return
+        # If the loader or the node are not passed then use the ones saved in the dataset the last time
+        if loader_path:
+            # The user may pass the index.js file instead of the loader directory
+            if os.path.basename(loader_path) == 'index.js': loader_path = os.path.dirname(loader_path)
+            loader_directory = os.path.abspath(loader_path)
+        else:
+            loader_directory = self._get_setting('loader_directory')
+        if not loader_directory:
+            raise InputError('Missing the loader directory (-ld). Please pass it once and it will be remembered in this dataset.')
+        node = node or self._get_setting('loader_node')
+        if not node:
+            raise InputError('Missing the loader node (-nd). Please pass it once and it will be remembered in this dataset.')
+        loader = Loader(loader_directory, node)
+        # Remember the loader settings once we know they work
+        self._set_setting('loader_directory', loader_directory)
+        self._set_setting('loader_node', node)
+        projects_count = len(filtered_projects)
+        for p, project_entry in enumerate(filtered_projects, 1):
+            rel_path = dict(zip(self.project_columns, project_entry))['rel_path']
+            print(f'--- Loading {rel_path} ({p}/{projects_count}) ---')
+            if not loader.load(self._rel_to_abs(rel_path), overwrite=overwrite):
+                raise RuntimeError(f'Something went wrong when loading {rel_path}')
 
     def scan(self,
         root_dir: str = None,

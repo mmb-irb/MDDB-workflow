@@ -85,14 +85,14 @@ class CustomHelpFormatter(RawTextHelpFormatter):
         # For options with choices, format them nicely
         opts = ', '.join(action.option_strings)
 
+        if action.nargs == 0:
+            # Boolean flag
+            return opts
         # Special case for include, exclude, and overwrite
         if action.dest in ['include', 'exclude', 'overwrite']:
             opts = ', '.join(action.option_strings)
             metavar = 'TASKS'
             return f"{opts} {metavar}"
-        if action.nargs == 0:
-            # Boolean flag
-            return opts
         else:
             # Format with metavar or choices
             metavar = self._format_args(action, action.dest.upper())
@@ -548,6 +548,16 @@ def main():
             )
         elif args.dataset_subcommand == 'scan':
             dataset.scan(root_dir='.', verbose=True)
+        elif args.dataset_subcommand == 'load':
+            dataset.load(
+                loader_path=args.loader,
+                node=args.node,
+                overwrite=args.overwrite,
+                query_path=args.query_path,
+                query_state=args.query_state,
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
+            )
 
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
@@ -977,14 +987,18 @@ ds_view.add_argument("-p", "--project_path", help='Path to the project.', requir
 for flags, kwargs in view_shared_args:
     ds_view.add_argument(*flags, **kwargs)
 # Common query parser for dataset subcommands
-query_parser = ArgumentParser(add_help=False)
-query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
-query_parser.add_argument("-st", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
-query_parser.add_argument("-ms", "--query_message", nargs='*', default=[], help=ds_help['get_dataframe']['query_message'])
-query_parser.add_argument("-qi", "--query_inputs", nargs=2, action='append', metavar=('FIELD', 'VALUE'), default=None,
-    help="Filter projects by a field in their inputs file (e.g. '-qi pdb_ids 1ABC'). " + ds_help['get_inputs_field']['field'] +
-    " The value is parsed as YAML. If the field is a list, it is enough for the value to be one of its items." +
-    " Repeat the option to add more conditions, projects must match all of them (e.g. '-qi pdb_ids 1ABC -qi temp 310').")
+# Some subcommands use only some states by default
+def make_query_parser(default_state: list[str] = []) -> ArgumentParser:
+    parser = ArgumentParser(add_help=False)
+    parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
+    parser.add_argument("-st", "--query_state", nargs='*', default=default_state, help=ds_help['get_dataframe']['query_state'])
+    parser.add_argument("-ms", "--query_message", nargs='*', default=[], help=ds_help['get_dataframe']['query_message'])
+    parser.add_argument("-qi", "--query_inputs", nargs=2, action='append', metavar=('FIELD', 'VALUE'), default=None,
+        help="Filter projects by a field in their inputs file (e.g. '-qi pdb_ids 1ABC'). " + ds_help['get_inputs_field']['field'] +
+        " The value is parsed as YAML. If the field is a list, it is enough for the value to be one of its items." +
+        " Repeat the option to add more conditions, projects must match all of them (e.g. '-qi pdb_ids 1ABC -qi temp 310').")
+    return parser
+query_parser = make_query_parser()
 # Scope filter only for subcommands which display both projects and MDs
 scope_parser = ArgumentParser(add_help=False)
 scope_parser.add_argument("-sc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
@@ -1023,6 +1037,11 @@ ds_run.add_argument("-c", "--cmd", type=str, help=ds_help['launch']['cmd'])
 ds_run.add_argument("-sl", "--slurm", action="store_true", help=ds_help['launch']['slurm'])
 ds_run.add_argument("-jt", "--job-template", help=ds_help['launch']['job_template'])
 ds_run.add_argument("--debug", action="store_true", help=ds_help['launch']['debug'])
+# Dataset load subcommand
+ds_load = dataset_subparsers.add_parser("load", formatter_class=CustomHelpFormatter, help="Upload the dataset projects to the database using the MDDB loader.", parents=[common_ds_parser, make_query_parser(['done'])])
+ds_load.add_argument("-ld", "--loader", type=str, help=ds_help['load']['loader_path'])
+ds_load.add_argument("-nd", "--node", type=str, help=ds_help['load']['node'])
+ds_load.add_argument("-o", "--overwrite", action="store_true", help=ds_help['load']['overwrite'])
 
 # Update references command
 upref_parser = subparsers.add_parser("upref",
