@@ -1715,7 +1715,11 @@ class Structure:
                 name_chains[chain_name] = parsed_chain
             # Get the parsed residue
             residue_label = (chain_name, residue_number, icode)
+            # Only consider the last processed residue, since residue labels may be repeated in the same chain
+            # e.g. coarse grained systems where every molecule block starts the numeration again
             parsed_residue = label_residues.get(residue_label, None)
+            if parsed_residue and parsed_residue is not parsed_residues[-1]:
+                parsed_residue = None
             # If the parsed residue was not yet instantiated then do it now
             if not parsed_residue:
                 # Instantiate the new parsed residue
