@@ -1129,6 +1129,8 @@ class Dataset:
             print(f'--- Loading {rel_path} ({p}/{projects_count}) ---')
             if not loader.load(self._rel_to_abs(rel_path), overwrite=overwrite):
                 raise RuntimeError(f'Something went wrong when loading {rel_path}')
+        # This is not necessary since the SSH connection is closed anyway when the workflow ends
+        loader.close_ssh_connection()
 
     def scan(self,
         root_dir: str = None,

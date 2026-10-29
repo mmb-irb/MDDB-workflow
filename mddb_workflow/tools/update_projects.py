@@ -303,3 +303,7 @@ def update_projects (
         save_json(updated_projects, updated_projects_filepath)
         # Once uploaded, remove the project directory since it may be heavy (e.g. trajectories)
         rmtree(project_directory)
+
+    # This is not necessary since the SSH connection is closed anyway when the workflow ends
+    # However, when updating all nodes, it avoids keeping the connection to every node open until the end
+    if loader: loader.close_ssh_connection()

@@ -207,6 +207,10 @@ def update_references (
     if loader and len(updated_references) > 0:
         load_batch()
 
+    # This is not necessary since the SSH connection is closed anyway when the workflow ends
+    # However, when updating all nodes or types, it avoids keeping every connection open until the end
+    if loader: loader.close_ssh_connection()
+
     # Warn the user about failed updates
     if failed_references_count > 0:
         warn(f' Failed to update {failed_references_count} out of {remote_outdated_count} references. '

@@ -147,6 +147,16 @@ class Loader:
             print('  Exceeded timeout')
             return False
 
+    # Close the SSH connection once we are done with the loader
+    # Note that this is not really necessary: the SSH connection is closed anyway when the workflow ends
+    # We do it just to close it in a controlled way and as soon as it is no longer used
+    def close_ssh_connection(self):
+        if self.ssh_process is None: return
+        print(f'Closing SSH connection to "{self.ssh_hostname}"')
+        self.ssh_process.terminate()
+        self.ssh_process.wait()
+        self.ssh_process = None
+
     # Set the loader environment variables before calling the loader
     # Note that at this point we have already checked that the configuration fields exist
     def set_environment(self):
