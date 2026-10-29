@@ -15,6 +15,9 @@ SSH_TIMEOUT = 30 # seconds
 # Se the nodeJS command
 NODEJS_COMMAND = 'node'
 
+# Set the exit code of the loader when it is interrupted (Control + C), as in the loader constants
+LOADER_INTERRUPTION_EXIT_CODE = 130
+
 # The contents of the loader nodes config file must have the follwoing structure
 # < node alias >:     < as in https://mdposit.mddbr.eu/api/rest/v1/nodes >
 #   ssh_hostname:     < as in your own ~/.ssh/config file >
@@ -197,12 +200,14 @@ class Loader:
         # Note that an empty include would make the loader complain, so we never pass it empty
         if include: command += ['-i', *include]
         # Run the load process
-        load_process = run(command, stderr=PIPE)
-        # If there is any error then assume the load failed
-        error_logs = load_process.stderr.decode()
-        if error_logs:
-            print('  Something went wrong')
-            print(error_logs)
+        # Its output and errors are shown in the terminal as they come
+        load_process = run(command)
+        # The loader exits with a code other than 0 when the load fails or is interrupted
+        if load_process.returncode == LOADER_INTERRUPTION_EXIT_CODE:
+            print('  The load was interrupted')
+            return False
+        if load_process.returncode != 0:
+            print(f'  Something went wrong (exit code {load_process.returncode})')
             return False
         return True
         
