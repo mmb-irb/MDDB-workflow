@@ -1685,7 +1685,9 @@ class Structure:
             # Values are separated by spaces
             values = line.split()
             # Mine atom data
+            # Missing elements are left empty so they are guessed later
             element = values[element_index]
+            if element == MMCIF_MISSING_VALUE: element = ''
             atom_name = values[atom_name_index].replace('"','')
             residue_name = values[residue_name_index]
             chain_name = values[chain_name_index]
