@@ -206,13 +206,19 @@ def check_interleaved_filtered_residues (
         and all(index in filtered_atom_indices for index in residue.atom_indices)
         for residue in reference_structure.residues)
     if not has_interleaved_residues: return
-    suggested_filter = f'({filter_selection}) and index > {last_kept_atom_index}' \
-        if isinstance(filter_selection, str) else f'<your filter selection> and index > {last_kept_atom_index}'
     # Reported to Gromacs in https://gitlab.com/gromacs/gromacs/-/work_items/5777
     # Once it is fixed this check may be removed
-    raise InputError('The filtered TPR file would have wrong residues because of a bug in Gromacs convert-tpr.\n'
+    error_header = ('The filtered TPR file would have wrong residues because of a bug in Gromacs convert-tpr.\n'
         '  Gromacs splits residues in pieces when whole residues are removed before atoms which are kept.\n'
-        '  Some pieces may have no mass and then imaging by residues writes NaN coordinates.\n'
+        '  Some pieces may have no mass and then imaging by residues writes NaN coordinates.\n')
+    # If all filtered atoms are before the last kept atom then any filter which avoids the bug would remove nothing
+    if max(filtered_atom_indices) < last_kept_atom_index:
+        raise InputError(error_header +
+            f'  All filtered atoms are placed before the last kept atom (index {last_kept_atom_index}),'
+            ' so no filter can avoid the bug. Do not filter atoms with this TPR file.')
+    suggested_filter = f'({filter_selection}) and index > {last_kept_atom_index}' \
+        if isinstance(filter_selection, str) else f'<your filter selection> and index > {last_kept_atom_index}'
+    raise InputError(error_header +
         f'  To avoid the bug do not filter residues placed before the last kept atom (index {last_kept_atom_index}), so the filtered atoms are only at the end. e.g.:\n'
         f'    filter_selection: {suggested_filter}\n'
         '  Remember to add the kept water and ions to the pbc_selection.')
