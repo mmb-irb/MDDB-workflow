@@ -4,7 +4,7 @@ from mddb_workflow.utils.constants import FILTERED, FILTERED_STRUCTURE, FILTERED
 from mddb_workflow.utils.constants import IMAGED, IMAGED_STRUCTURE, IMAGED_TRAJECTORY
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, CORRECTED_TRAJECTORY
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, CG_ATOM_ELEMENT, SNAPSHOTS_FLAG
-from mddb_workflow.utils.constants import FAITH_BYPASS
+from mddb_workflow.utils.constants import FAITH_BYPASS, BROKEN_PBC_FLAG
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.selections import Selection
@@ -16,7 +16,7 @@ from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION, FIXED_STRUCTURE_EXCEPTION
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
-from mddb_workflow.tools.image_and_fit import image_and_fit
+from mddb_workflow.tools.image_and_fit import image_and_fit, is_pbc_broken
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
@@ -67,6 +67,7 @@ def process_input_files(
     input_forced_class_selections: dict,
     # The cross-PBC contacts test depends on the simulation box
     # It is not used directly but this task must be run again if it changes
+    # Note that the box may be ignored also if PBC are found to be broken (see below)
     ignore_box: bool,
     # Make sure the MD is used only to set values or use its functions, but not to get values
     # Values must be passed separately as inputs so the task can identify when inputs change
@@ -292,6 +293,14 @@ def process_input_files(
     # We will make sure that the provisonal and the final PBC selections match
     # Since this is proviosonal we will make it silent
     provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
+
+    # --- BROKEN PBC CHECK ---------------------------------------------------------------
+
+    # If the trajectory was fitted already but the box was not rotated along with the coordinates then the box is useless
+    # In this case the simulation box is ignored in the whole workflow
+    center_selection = provisional_structure.invert_selection(provisional_pbc_selection)
+    broken_pbc = bool(center_selection) and is_pbc_broken(filtered_trajectory_file, provisional_structure, center_selection)
+    self.cache.update(BROKEN_PBC_FLAG, broken_pbc)
 
     # --- IMAGING AND FITTING ------------------------------------------------------------
 

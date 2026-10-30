@@ -1287,6 +1287,14 @@ class MD:
         return self._dihedrals
     dihedrals = property(get_dihedrals, None, None, "Topology dihedrals (read only)")
 
+    def is_box_ignored(self) -> bool:
+        """Check if the simulation box is to be ignored.
+        This happens when the user asks for it or when the processing finds the trajectory was fitted without rotating the box.
+        Note that this value is only right once the input files have been processed.
+        """
+        return self.project.ignore_box or self.cache.retrieve(BROKEN_PBC_FLAG, False)
+    box_ignored = property(is_box_ignored, None, None, "Set if the simulation box is to be ignored (read only)")
+
     # Simulation box data
     get_simulation_box_data = Task('simbox', 'Simulation box', mine_simulation_box_data)
     simulation_box_data = property(get_simulation_box_data, None, None, "Simulation box vectors, size, constant and orthogonal flags and shape (read only)")
@@ -1371,7 +1379,7 @@ class MD:
             distance_cutoff=5, # In Ångstroms
             snapshots=self.snapshots,
             simulation_box=self.simulation_box,
-            ignore_box=self.project.ignore_box,
+            ignore_box=self.box_ignored,
         )
         return self._cross_periodic_contacts
 
@@ -1686,7 +1694,8 @@ class Project:
             ignore_bonds (bool):
                 Force the workflow to ignore atom bonds. This will result in many check-ins being skipped
             ignore_box (bool):
-                Force the workflow to ignore the simulation box, e.g. when the trajectory box does not match the topology box.
+                Force the workflow to ignore the simulation box, e.g. when the trajectory box is wrong.
+                Note that the box is ignored anyway if the trajectory was fitted without rotating the box.
                 Everything depending on the box will be skipped (e.g. cross-PBC contacts test and box metadata).
             sample_trajectory (Optional[int]):
                 If passed, download the first 10 (by default) frames from the trajectory.

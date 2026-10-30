@@ -276,6 +276,7 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 
 # Set register cache flags
 SNAPSHOTS_FLAG = 'snapshots'
+BROKEN_PBC_FLAG = 'broken_pbc'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
 
 # Set the different test and warning flags
