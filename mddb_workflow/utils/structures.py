@@ -2132,7 +2132,7 @@ class Structure:
                     '  where chain names may be changed. Please select atoms by other means (e.g. residue numbers).')
             # Generate a structure file for vmd to read it
             auxiliar_vmd_filepath = get_auxiliar_vmd_filepath(vmd_format)
-            self.generate_file(auxiliar_vmd_filepath, show_warnings=False)
+            self.generate_file(auxiliar_vmd_filepath, show_warnings=False, accept_limitations=True)
             # Use vmd to find atom indices
             atom_indices = get_vmd_selection_atom_indices(auxiliar_vmd_filepath, selection_string)
             os.remove(auxiliar_vmd_filepath)
