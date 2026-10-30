@@ -191,10 +191,11 @@ class Loader:
     # Optionally load all files but some (-e), with the same format
     # Optionally skip the main trajectory, all files or all analyses
     # Optionally load only some MD directories
+    # Optionally skip the update of the option counters, which may be done at the end with the count function
     def load(self, target_directory: str, overwrite : bool = False,
         include : list[str] | None = None, exclude : list[str] | None = None,
         skip_trajectories : bool = False, skip_files : bool = False, skip_analyses : bool = False,
-        md_directories : list[str] | None = None) -> bool:
+        md_directories : list[str] | None = None, skip_counters : bool = False) -> bool:
         print(f'Running loader to load directory {target_directory}')
         # Set the environmental variables before calling the loader
         self.set_environment()
@@ -209,6 +210,7 @@ class Loader:
         if skip_files: command.append('--skip-files')
         if skip_analyses: command.append('--skip-analyses')
         if md_directories: command += ['--md-directories', *md_directories]
+        if skip_counters: command.append('--skip-counters')
         # Run the load process
         # Its output and errors are shown in the terminal as they come
         load_process = run(command)
@@ -220,4 +222,15 @@ class Loader:
             print(f'  Something went wrong (exit code {load_process.returncode})')
             return False
         return True
-        
+
+    # Update the option counters from scratch
+    # This is useful after loading many projects with the skip_counters option
+    def count(self) -> bool:
+        print('Updating the option counters')
+        # Set the environmental variables before calling the loader
+        self.set_environment()
+        count_process = run([NODEJS_COMMAND, self.loader_index, 'count'])
+        if count_process.returncode != 0:
+            print(f'  Something went wrong (exit code {count_process.returncode})')
+            return False
+        return True

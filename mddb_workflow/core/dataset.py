@@ -1196,13 +1196,20 @@ class Dataset:
         self._set_setting('loader_directory', loader_directory)
         self._set_setting('loader_node', node)
         projects_count = len(filtered_projects)
+        # Updating the option counters takes a while, so we skip it in every load and do it once at the end
         for p, project_entry in enumerate(filtered_projects, 1):
             rel_path = dict(zip(self.project_columns, project_entry))['rel_path']
             print(f'--- Loading {rel_path} ({p}/{projects_count}) ---')
             if not loader.load(self._rel_to_abs(rel_path), overwrite=overwrite,
                 include=include, exclude=exclude, skip_trajectories=skip_trajectories,
-                skip_files=skip_files, skip_analyses=skip_analyses, md_directories=md_directories):
+                skip_files=skip_files, skip_analyses=skip_analyses, md_directories=md_directories,
+                skip_counters=True):
+                # Update the counters anyway, since the previous projects were loaded already
+                if not loader.count():
+                    raise RuntimeError(f'Something went wrong when loading {rel_path} and then when updating the option counters')
                 raise RuntimeError(f'Something went wrong when loading {rel_path}')
+        if not loader.count():
+            raise RuntimeError('Something went wrong when updating the option counters')
         # This is not necessary since the SSH connection is closed anyway when the workflow ends
         loader.close_ssh_connection()
 
