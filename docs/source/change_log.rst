@@ -7,6 +7,104 @@ All notable changes to this project will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.12] - 2026-10-30
+=====================
+
+Added
+-----
+- Add inputs validation with Pydantic and autofill of the inputs file
+- Add the ``mwf upref`` command to update references, using the loader and a cache
+- Add the ``mwf uproj`` command to update outdated projects, including their membrane mapping
+- Add the ``mwf view`` and ``mwf ds view`` commands to open VMD with the most processed structure and trajectory, with an atom selection option and the PBC box shown
+- Add the ``mwf ds logs`` and ``mwf ds load`` commands, the ``-qi`` filter by inputs fields and the ``--get`` option of ``mwf ds inputs``
+- Allow ``mwf ds inputs`` to edit or create a single field and to list the existing inputs files
+- Reuse the job script from a previous run in ``mwf ds run``
+- Add the ``ua_selection`` and ``qm_selection`` inputs and guess coarse grained atoms with ``cg_selection: auto``
+- Add the ``forced_lipids`` input and the lipids mercy flag
+- Add a flag to skip frames, a local BLAST flag (``-lb``) and BLAST as optional dependency
+- Allow some console-only arguments in the inputs file and a manual chainer in ``mwf run``
+- Add the simulation box and cross-PBC contacts checks
+- Add an early PCA-based clustering prototype
+- Add early ComPASS (allostery) and LEGOLAS (chemical shifts) implementations, not yet in conda
+- Classify amphiphilic aggregates as bilayers, vesicles or micelles, with midplane leaflets, and map coarse grained lipids
+- Recognise lipids from their structure with SMARTS of the LIPID MAPS categories
+- Add automatic multimerism, all atom / coarse grained, nucleic and protein-nucleic complex system keywords
+- Note protein and nucleic sequence lengths and RMSD time splits in the MD metadata
+- Add CHARMM and Amber nucleic acid residue names
+- Add descriptions, client data and VMD scripts to warnings
+- Get InChI keys from MDDB, run InChI key generation in parallel and version InChI key references
+- Export the heaviest topology fields to binary files when they do not fit in Mongo
+- Write structures in mmCIF and name chains with no limit (big reform)
+
+Changed
+-------
+- Replace the Gromacs no-jump with our own no-jump which keeps molecules together
+- Add an automatic translation step and smarter defaults to the imaging protocol
+- Keep the box rotated after fitting and ignore it when the trajectory was fitted without rotation
+- Fit the trajectory integrity bimodality with gammas on jumps scaled per bond, support rotated boxes and detect permanent fragment breaks
+- Find leaflets from local lipid normals inside hydrophobic cores, like FATSLiM, and run LeafletFinder with periodic boundaries
+- Calculate lipid order only for flat bilayers, reading every coarse grained tail bead from gorder
+- Count all lipid contacts with numpy and reduce memory usage
+- Bump the versions of the membrane analyses changed by the new membrane mapping
+- Rework the interactions and chemical shifts output formats
+- Select automatic interaction agents by chain index
+- Smarter protein classification, solvent identification and PDB model filtering
+- Relax the stable bonds check for big systems and trajectories with few frames
+- Move file and CLI inputs handling to its own class
+- Create the register only for ``mwf run`` calls
+- Show the workflow version also when the closest tag is not annotated
+- Require biobb_mem 5.3.1
+
+Fixed
+-----
+- Fix several issues with missing topologies, missing atoms, dummy atoms and Gromacs masses
+- Fix energies with dummy atoms and agents moving away
+- Fix trajectories with no box crashing the integrity checks
+- Stop before filtering a TPR when Gromacs convert-tpr would split its residues
+- Filter the input structure when it has more atoms than the trajectory and there is no topology
+- Raise an input error when the filter selection selects no atoms
+- Fail when Gromacs exits with error or leaves an empty output file
+- Fix reading mmCIF files with missing values, missing elements or repeated residue labels
+- Split overflowed '****' residue numbers into separate residues when reading PDBs
+- Classify nucleic residues named like both DNA and RNA from their context
+- Fix the dataset lock not shared across nodes and retry transient SQLite errors
+- Fix the dataset 'waiting' status and the ``ds watch`` options
+- Retry remote project requests, downloads and database requests when the network or the server fails
+- Cache PubChem requests and stop treating request errors as missing data
+- Recover the registered UUID when a cache is lost
+- Leave workflow output files out of input glob patterns
+- Check if outputs will fit in Mongo
+
+
+[0.1.11] - 2026-06-04
+=====================
+
+Added
+-----
+- Re-implement the channels analysis with CHAP and add it to the default analyses
+- Add the custom metadata additions input
+- Add cg, dummy and forced class selections per MD
+- Add a global node URL option
+- Add Li, W and Ta elements
+
+Changed
+-------
+- Use PDB numbering and author notation in PDB references
+- Write auxiliary files to the specified ``--dir``
+- Load the first mmCIF model by default and trust mmCIF elements
+- Use strict numeric values for the temperature, frame step and time step inputs
+- Skip coarse grained interactions in energies
+
+Fixed
+-----
+- Restore support for removed MDs
+- Fix thickness for trajectories with negative z
+- Fix carbon recognized as cobalt and nitrogen as nickel
+- Better handle obsolete PDB ids and not found UniProt references
+- Throttle PubChem requests and retry failed requests, including SSL handshake timeouts
+- Raise an error for trajectories with 0 frames
+
+
 [0.1.10] - 2026-04-28
 =====================
 

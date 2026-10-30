@@ -893,7 +893,7 @@ def write_ndict(nested_dict: dict, nested_key: str, value):
 
 def get_git_version() -> str:
     """Get the current git version."""
-    git_command = f"git -C {__path__[0]} describe"
+    git_command = f"git -C {__path__[0]} describe --tags"
     process = run(git_command, shell=True, stdout=PIPE)
     return process.stdout.decode().replace('\n', '') or __version__
 
