@@ -40,9 +40,9 @@ dependencies:
   - bioconda::chap_mddb
   # - bioconda::chap
   - requests # To check is molecules is in LIPID MAPS
-  # AGUS: por problemas en el cluster con certificados y requests, la versión de 'openssl' 
-  # AGUS: tiene que ser forzada porque la 3.5 (la más nueva) da conflictos
-  - conda-forge::openssl=3.4.1
+  # AGUS: por problemas en el cluster con certificados y requests, la versión de 'openssl'
+  # AGUS: se mantiene forzada pero permitiendo versiones compatibles con dependencias actuales
+  - conda-forge::openssl>=3.5.0,<4
   # We must declare pip explicitly according to a warning
   - pip
   # This library is used to calculate TM scores
