@@ -423,6 +423,17 @@ def main():
                 query_message=args.query_message,
                 query_inputs=args.query_inputs
             )
+        elif args.dataset_subcommand == 'ls':
+            dataset.list_projects(
+                sort_by=args.sort_by,
+                asc=not args.reverse,
+                n_projects=args.n_rows,
+                include_logs=args.include_logs,
+                query_path=args.query_path,
+                query_state=args.query_state,
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
+            )
         elif args.dataset_subcommand == 'view':
             status = dataset.get_status(args.project_path)
             if status is None:
@@ -1025,6 +1036,12 @@ ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for al
 ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
 ds_show.add_argument('-m', '--summary', help="Get a summary of the state of the projects.", action='store_true')
 ds_show.add_argument('-id', '--show_id', help="Show UUIDs.", action='store_true')
+# Dataset ls subcommand
+ds_ls = dataset_subparsers.add_parser("ls", formatter_class=CustomHelpFormatter, help="List the dataset projects one block per project, with full paths and messages and the project name.", parents=[common_ds_parser, query_parser])
+ds_ls.add_argument('-s', '--sort_by', help=ds_help['list_projects']['sort_by'], default='last_modified', type=str)
+ds_ls.add_argument('-r', '--reverse', help="Reverse the sort order.", action='store_true')
+ds_ls.add_argument('-n', '--n_rows', help=ds_help['list_projects']['n_projects'], default=50, type=int)
+ds_ls.add_argument('-l', '--include_logs', help=ds_help['list_projects']['include_logs'], action='store_true')
 
 ds_logs = dataset_subparsers.add_parser("logs", formatter_class=CustomHelpFormatter, help="Show the most recent output logs of the dataset projects.", parents=[common_ds_parser, query_parser])
 ds_logs.add_argument("-e", "--error", help=ds_help['show_logs']['error'], action='store_true')

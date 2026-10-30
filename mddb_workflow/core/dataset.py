@@ -1334,6 +1334,82 @@ class Dataset:
         """Retrieve all MD status from the SQLite database as a list of tuples."""
         return self.query_table('mds')
 
+    def list_projects(self,
+            sort_by: str = 'last_modified',
+            asc: bool = True,
+            n_projects: int = 50,
+            include_logs: bool = False,
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [],
+            query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
+        ):
+        """Print each selected project in its own block, with full paths and messages and the name in its inputs file.
+
+        Args:
+            sort_by (str):
+                Column name to sort the projects by.
+            asc (bool):
+                Sort in ascending order.
+            n_projects (int):
+                Number of projects to show, the last ones after sorting. 0 for all projects.
+            include_logs (bool):
+                Show the paths to the most recent output and error logs of each project.
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
+
+        """
+        projects = self.get_dataframe(show_id=True, sort_by=sort_by, asc=asc, query_path=query_path,
+            query_state=query_state, query_message=query_message, query_inputs=query_inputs, query_scope='projects')
+        if len(projects) == 0:
+            print(_no_projects_message(_type_check_dir_list(query_path), _type_check_dir_list(query_state),
+                _type_check_dir_list(query_message), query_inputs))
+            return
+        total = len(projects)
+        if n_projects != 0: projects = projects.tail(n_projects)
+        # Show the MDs of each project inside its block, whatever their state
+        md_project_uuid_index = self.md_columns.index('project_uuid')
+        mds_per_project = {}
+        for md_entry in self.query_table('mds'):
+            mds_per_project.setdefault(md_entry[md_project_uuid_index], []).append(dict(zip(self.md_columns, md_entry)))
+        width = shutil.get_terminal_size((80, 20)).columns
+        for uuid, project in projects.iterrows():
+            rel_path = project['rel_path']
+            inputs_filepath = self._find_inputs_file(rel_path)
+            if inputs_filepath is None:
+                name = '(no inputs file)'
+            else:
+                found, name = _read_inputs_field(inputs_filepath, ['name'])
+                if not found: name = '(missing)'
+            print('=' * width)
+            print(f'Project:       {rel_path}')
+            print(f'Name:          {name}')
+            print(f'State:         {project["state"]}')
+            print(f'Last modified: {project["last_modified"]}')
+            # The loader leaves this file in the project once it is uploaded to the database
+            loaded = os.path.exists(os.path.join(self._rel_to_abs(rel_path), '.project_id'))
+            print(f'Loaded:        {"yes" if loaded else "no"}')
+            if project['message']: print(f'Message:       {project["message"]}')
+            if include_logs:
+                latest_out, latest_err = self._get_latest_log_files(rel_path)
+                print(f'Output log:    {latest_out or "(none)"}')
+                print(f'Error log:     {latest_err or "(none)"}')
+            mds = mds_per_project.get(uuid, [])
+            print(f'MDs:           {len(mds)}')
+            for md in mds:
+                print(f'  - {md["rel_path"]} ({md["state"]}, {md["last_modified"]})')
+                if md['message']: print(f'    {md["message"]}')
+        print('=' * width)
+        if len(projects) < total: print(f'Showing the last {len(projects)} of {total} projects')
+
     def get_dataframe(self,
             show_id=False,
             sort_by='last_modified',
