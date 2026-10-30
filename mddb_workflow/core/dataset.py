@@ -13,6 +13,7 @@ import os
 import tempfile
 import hashlib
 import glob
+import fnmatch
 import sqlite3
 import sys
 import threading
@@ -762,6 +763,7 @@ class Dataset:
             query_state: list[str] = [],
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
         ):
         """Generate an inputs.yaml file for the project directory based on a Jinja2 template.
 
@@ -787,6 +789,9 @@ class Dataset:
                 List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
                 Projects must match all pairs. Values are parsed as YAML.
                 If the field is a list, it is enough for the value to be one of its items.
+            query_name (list[str]):
+                List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
+                Case is ignored. Projects without a name are left out.
 
 
         """
@@ -794,9 +799,9 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
             return
 
         # Load the template
@@ -860,6 +865,7 @@ class Dataset:
             query_state: list[str] = [],
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
         ):
         """Print the value of a single field in the inputs files of the selected projects.
 
@@ -877,14 +883,17 @@ class Dataset:
                 List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
                 Projects must match all pairs. Values are parsed as YAML.
                 If the field is a list, it is enough for the value to be one of its items.
+            query_name (list[str]):
+                List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
+                Case is ignored. Projects without a name are left out.
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
             return
         keys = field.split('.')
         for project_entry in filtered_projects:
@@ -902,6 +911,7 @@ class Dataset:
             query_state: list[str] = [],
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
         ):
         """Print the whole content of the inputs files of the selected projects.
 
@@ -916,14 +926,17 @@ class Dataset:
                 List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
                 Projects must match all pairs. Values are parsed as YAML.
                 If the field is a list, it is enough for the value to be one of its items.
+            query_name (list[str]):
+                List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
+                Case is ignored. Projects without a name are left out.
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
             return
         for project_entry in filtered_projects:
             project_dict = dict(zip(self.project_columns, project_entry))
@@ -943,6 +956,7 @@ class Dataset:
             query_state: list[str] = [],
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
         ):
         """Print the most recent output or error logs of the selected projects.
 
@@ -961,14 +975,17 @@ class Dataset:
                 List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
                 Projects must match all pairs. Values are parsed as YAML.
                 If the field is a list, it is enough for the value to be one of its items.
+            query_name (list[str]):
+                List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
+                Case is ignored. Projects without a name are left out.
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
             return
         projects = [dict(zip(self.project_columns, project_entry)) for project_entry in filtered_projects]
         # Sort projects as in 'ds show', so the most recently modified ones are printed last
@@ -995,6 +1012,7 @@ class Dataset:
             query_state: list[str] = [],
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
         ):
         """Set a single field in the existing inputs files of the selected projects.
         Note that comments in the inputs files are lost.
@@ -1017,15 +1035,18 @@ class Dataset:
                 List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
                 Projects must match all pairs. Values are parsed as YAML.
                 If the field is a list, it is enough for the value to be one of its items.
+            query_name (list[str]):
+                List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
+                Case is ignored. Projects without a name are left out.
 
         """
         # Query projects directly from database with filters
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
             return
         parsed_value = yaml.safe_load(value)
         keys = field.split('.')
@@ -1082,6 +1103,7 @@ class Dataset:
             query_state: list[str] = [State.DONE.value],
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
         ):
         """Upload the selected projects to the database using the MDDB loader.
 
@@ -1118,6 +1140,9 @@ class Dataset:
                 List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
                 Projects must match all pairs. Values are parsed as YAML.
                 If the field is a list, it is enough for the value to be one of its items.
+            query_name (list[str]):
+                List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
+                Case is ignored. Projects without a name are left out.
 
         """
         # The loader would complain anyway, but we stop before connecting
@@ -1126,9 +1151,9 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
             return
         # If the loader or the node are not passed then use the ones saved in the dataset the last time
         if loader_path:
@@ -1277,7 +1302,7 @@ class Dataset:
         return where_clause, params
 
     def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None,
-            query_inputs: list[tuple[str, str]] = None) -> list[tuple]:
+            query_inputs: list[tuple[str, str]] = None, query_name: list[str] = None) -> list[tuple]:
         """Query an available table with optional filters.
 
         Args:
@@ -1286,27 +1311,29 @@ class Dataset:
             query_state: List of states to filter by
             query_message: List of glob patterns to filter message by (e.g., 'URLError*')
             query_inputs: List of field and value pairs to filter projects by their inputs file, all of them must match (e.g., [('pdb_ids', '1ABC')])
+            query_name: List of glob patterns to filter projects by the name in their inputs file, ignoring case (e.g., '*kinase*')
 
         Returns:
             List of tuples with project data
 
         """
         rows = self._query_table_sql(table, query_path, query_state, query_message)
-        if not query_inputs: return rows
+        if not query_inputs and not query_name: return rows
         # MDs are filtered by the inputs file of their project
         if table == 'mds':
-            matching_projects = self.query_table('projects', query_inputs=query_inputs)
+            matching_projects = self.query_table('projects', query_inputs=query_inputs, query_name=query_name)
             matching_uuids = set(project[0] for project in matching_projects)
             project_uuid_index = self.md_columns.index('project_uuid')
             return [row for row in rows if row[project_uuid_index] in matching_uuids]
-        conditions = [(field.split('.'), yaml.safe_load(value)) for field, value in query_inputs]
+        conditions = [(field.split('.'), yaml.safe_load(value)) for field, value in query_inputs or []]
         rel_path_index = self.project_columns.index('rel_path')
         filtered_rows = []
         for row in rows:
             inputs_filepath = self._find_inputs_file(row[rel_path_index])
             if inputs_filepath is None: continue
-            if all(_inputs_field_matches(inputs_filepath, keys, value) for keys, value in conditions):
-                filtered_rows.append(row)
+            if not all(_inputs_field_matches(inputs_filepath, keys, value) for keys, value in conditions): continue
+            if query_name and not _inputs_name_matches(inputs_filepath, query_name): continue
+            filtered_rows.append(row)
         return filtered_rows
 
     def _query_table_sql(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None) -> list[tuple]:
@@ -1343,6 +1370,7 @@ class Dataset:
             query_state: list[str] = [],
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
         ):
         """Print each selected project in its own block, with full paths and messages and the name in its inputs file.
 
@@ -1365,13 +1393,17 @@ class Dataset:
                 List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
                 Projects must match all pairs. Values are parsed as YAML.
                 If the field is a list, it is enough for the value to be one of its items.
+            query_name (list[str]):
+                List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
+                Case is ignored. Projects without a name are left out.
 
         """
         projects = self.get_dataframe(show_id=True, sort_by=sort_by, asc=asc, query_path=query_path,
-            query_state=query_state, query_message=query_message, query_inputs=query_inputs, query_scope='projects')
+            query_state=query_state, query_message=query_message, query_inputs=query_inputs, query_name=query_name,
+            query_scope='projects')
         if len(projects) == 0:
             print(_no_projects_message(_type_check_dir_list(query_path), _type_check_dir_list(query_state),
-                _type_check_dir_list(query_message), query_inputs))
+                _type_check_dir_list(query_message), query_inputs, query_name))
             return
         total = len(projects)
         if n_projects != 0: projects = projects.tail(n_projects)
@@ -1419,6 +1451,7 @@ class Dataset:
             query_state: list[str] | str = [],
             query_message: list[str] | str = [],
             query_inputs: list[tuple[str, str]] = None,
+            query_name: list[str] = [],
             query_scope: str = None,
     ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
@@ -1435,6 +1468,7 @@ class Dataset:
             query_state (list[str] | str): If provided, filters rows whose 'state' matches this value/list of values.
             query_message (list[str] | str): If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
             query_inputs (list[tuple[str, str]], optional): If provided, filters rows whose project inputs file has all these field and value pairs (e.g. [('pdb_ids', '1ABC')]).
+            query_name (list[str], optional): If provided, filters rows whose project inputs file name matches these glob patterns ignoring case (e.g. '*kinase*').
             query_scope (str, optional): If provided, filters rows whose 'scope' matches this value ('project'/'p' or 'md'/'m').
 
         """
@@ -1461,7 +1495,7 @@ class Dataset:
         dataframes = []
         for scope in scopes_to_query:
             cols = self.project_columns if scope == 'projects' else self.md_columns
-            data = self.query_table(scope, query_path, query_state, query_message, query_inputs)
+            data = self.query_table(scope, query_path, query_state, query_message, query_inputs, query_name)
             df = pd.DataFrame(data, columns=cols)
             df['scope'] = scope
             if len(df) > 0:
@@ -1603,6 +1637,7 @@ class Dataset:
         query_state: list[str] | str = [],
         query_message: list[str] | str = [],
         query_inputs: list[tuple[str, str]] = None,
+        query_name: list[str] = [],
         debug: bool = False,
     ):
         """Launch a command for each project directory in the dataset.
@@ -1629,6 +1664,8 @@ class Dataset:
                 If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
             query_inputs (list[tuple[str, str]]):
                 If provided, filters projects whose inputs file has all these field and value pairs (e.g. [('pdb_ids', '1ABC')]).
+            query_name (list[str]):
+                If provided, filters projects whose inputs file name matches these glob patterns ignoring case (e.g. '*kinase*').
             debug (bool):
                 Only print the commands without executing them.
 
@@ -1654,7 +1691,7 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
 
         if debug:
             print(f"DEBUG: Found {len(filtered_projects)} projects matching the query filters.")
@@ -1870,7 +1907,8 @@ def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path(
     return directories
 
 
-def _no_projects_message(query_path: list[str], query_state: list[str], query_message: list[str], query_inputs: list[tuple[str, str]]) -> str:
+def _no_projects_message(query_path: list[str], query_state: list[str], query_message: list[str], query_inputs: list[tuple[str, str]],
+        query_name: list[str]) -> str:
     """Build the message for a query with no matching projects, mentioning only the filters in use."""
     filters = []
     query_path = [pattern for pattern in query_path if pattern and pattern != '*']
@@ -1878,8 +1916,16 @@ def _no_projects_message(query_path: list[str], query_state: list[str], query_me
     if query_state: filters.append(f'state {" or ".join(query_state)}')
     if query_message: filters.append(f'message {" or ".join(query_message)}')
     for field, value in query_inputs or []: filters.append(f'inputs {field} = {value}')
+    if query_name: filters.append(f'name {" or ".join(query_name)}')
     if not filters: return 'No projects found in the dataset.'
     return 'No projects found matching ' + ' and '.join(filters) + '.'
+
+
+def _inputs_name_matches(inputs_filepath: str, patterns: list[str]) -> bool:
+    """Check if the name in an inputs file matches any of the glob patterns, ignoring case."""
+    found, name = _read_inputs_field(inputs_filepath, ['name'])
+    if not found or name is None: return False
+    return any(fnmatch.fnmatch(str(name).lower(), pattern.lower()) for pattern in patterns)
 
 
 def _inputs_field_matches(inputs_filepath: str, keys: list[str], value: Any) -> bool:
