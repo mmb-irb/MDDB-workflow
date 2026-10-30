@@ -1,7 +1,7 @@
 from mddb_workflow.utils.auxiliar import InputError, load_yaml, load_json, save_yaml, save_json, is_glob
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
-from mddb_workflow.utils.constants import CACHE_FILENAME, ACCEPTED_INPUT_FILENAMES
+from mddb_workflow.utils.constants import CACHE_FILENAME, ACCEPTED_INPUT_FILENAMES, REGISTER_FILENAME
 from mddb_workflow.utils.loader import Loader
 from mddb_workflow.utils.type_hints import *
 import pandas as pd
@@ -764,6 +764,7 @@ class Dataset:
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
         ):
         """Generate an inputs.yaml file for the project directory based on a Jinja2 template.
 
@@ -792,6 +793,9 @@ class Dataset:
             query_name (list[str]):
                 List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
                 Case is ignored. Projects without a name are left out.
+            query_warnings (list[str]):
+                List of glob patterns to filter the projects by the tags of their current warnings (e.g. 'pbcontacts').
+                Warnings in the MDs of the project count as well. Use '*' to get projects with any warning.
 
 
         """
@@ -799,9 +803,9 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name, query_warnings)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name, query_warnings))
             return
 
         # Load the template
@@ -866,6 +870,7 @@ class Dataset:
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
         ):
         """Print the value of a single field in the inputs files of the selected projects.
 
@@ -886,14 +891,17 @@ class Dataset:
             query_name (list[str]):
                 List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
                 Case is ignored. Projects without a name are left out.
+            query_warnings (list[str]):
+                List of glob patterns to filter the projects by the tags of their current warnings (e.g. 'pbcontacts').
+                Warnings in the MDs of the project count as well. Use '*' to get projects with any warning.
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name, query_warnings)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name, query_warnings))
             return
         keys = field.split('.')
         for project_entry in filtered_projects:
@@ -912,6 +920,7 @@ class Dataset:
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
         ):
         """Print the whole content of the inputs files of the selected projects.
 
@@ -929,14 +938,17 @@ class Dataset:
             query_name (list[str]):
                 List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
                 Case is ignored. Projects without a name are left out.
+            query_warnings (list[str]):
+                List of glob patterns to filter the projects by the tags of their current warnings (e.g. 'pbcontacts').
+                Warnings in the MDs of the project count as well. Use '*' to get projects with any warning.
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name, query_warnings)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name, query_warnings))
             return
         for project_entry in filtered_projects:
             project_dict = dict(zip(self.project_columns, project_entry))
@@ -957,6 +969,7 @@ class Dataset:
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
         ):
         """Print the most recent output or error logs of the selected projects.
 
@@ -978,14 +991,17 @@ class Dataset:
             query_name (list[str]):
                 List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
                 Case is ignored. Projects without a name are left out.
+            query_warnings (list[str]):
+                List of glob patterns to filter the projects by the tags of their current warnings (e.g. 'pbcontacts').
+                Warnings in the MDs of the project count as well. Use '*' to get projects with any warning.
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name, query_warnings)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name, query_warnings))
             return
         projects = [dict(zip(self.project_columns, project_entry)) for project_entry in filtered_projects]
         # Sort projects as in 'ds show', so the most recently modified ones are printed last
@@ -1013,6 +1029,7 @@ class Dataset:
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
         ):
         """Set a single field in the existing inputs files of the selected projects.
         Note that comments in the inputs files are lost.
@@ -1038,15 +1055,18 @@ class Dataset:
             query_name (list[str]):
                 List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
                 Case is ignored. Projects without a name are left out.
+            query_warnings (list[str]):
+                List of glob patterns to filter the projects by the tags of their current warnings (e.g. 'pbcontacts').
+                Warnings in the MDs of the project count as well. Use '*' to get projects with any warning.
 
         """
         # Query projects directly from database with filters
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name, query_warnings)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name, query_warnings))
             return
         parsed_value = yaml.safe_load(value)
         keys = field.split('.')
@@ -1104,6 +1124,7 @@ class Dataset:
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
         ):
         """Upload the selected projects to the database using the MDDB loader.
 
@@ -1143,6 +1164,9 @@ class Dataset:
             query_name (list[str]):
                 List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
                 Case is ignored. Projects without a name are left out.
+            query_warnings (list[str]):
+                List of glob patterns to filter the projects by the tags of their current warnings (e.g. 'pbcontacts').
+                Warnings in the MDs of the project count as well. Use '*' to get projects with any warning.
 
         """
         # The loader would complain anyway, but we stop before connecting
@@ -1151,9 +1175,9 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name, query_warnings)
         if len(filtered_projects) == 0:
-            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name))
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs, query_name, query_warnings))
             return
         # If the loader or the node are not passed then use the ones saved in the dataset the last time
         if loader_path:
@@ -1302,7 +1326,7 @@ class Dataset:
         return where_clause, params
 
     def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None,
-            query_inputs: list[tuple[str, str]] = None, query_name: list[str] = None) -> list[tuple]:
+            query_inputs: list[tuple[str, str]] = None, query_name: list[str] = None, query_warnings: list[str] = None) -> list[tuple]:
         """Query an available table with optional filters.
 
         Args:
@@ -1312,13 +1336,22 @@ class Dataset:
             query_message: List of glob patterns to filter message by (e.g., 'URLError*')
             query_inputs: List of field and value pairs to filter projects by their inputs file, all of them must match (e.g., [('pdb_ids', '1ABC')])
             query_name: List of glob patterns to filter projects by the name in their inputs file, ignoring case (e.g., '*kinase*')
+            query_warnings: List of glob patterns to filter by the tags of the current warnings (e.g., 'pbcontacts')
+                Projects also match when one of their MDs has the warning
 
         Returns:
             List of tuples with project data
 
         """
         rows = self._query_table_sql(table, query_path, query_state, query_message)
-        if not query_inputs and not query_name: return rows
+        if query_inputs or query_name:
+            rows = self._filter_by_inputs(table, rows, query_inputs, query_name)
+        if query_warnings:
+            rows = self._filter_by_warnings(table, rows, query_warnings)
+        return rows
+
+    def _filter_by_inputs(self, table: str, rows: list[tuple], query_inputs: list[tuple[str, str]], query_name: list[str]) -> list[tuple]:
+        """Keep the rows whose project inputs file matches the inputs and name filters."""
         # MDs are filtered by the inputs file of their project
         if table == 'mds':
             matching_projects = self.query_table('projects', query_inputs=query_inputs, query_name=query_name)
@@ -1335,6 +1368,34 @@ class Dataset:
             if query_name and not _inputs_name_matches(inputs_filepath, query_name): continue
             filtered_rows.append(row)
         return filtered_rows
+
+    def _filter_by_warnings(self, table: str, rows: list[tuple], query_warnings: list[str]) -> list[tuple]:
+        """Keep the rows with a current warning whose tag matches any of the glob patterns.
+        Projects are kept also when one of their MDs has a matching warning.
+        """
+        if table == 'mds':
+            rel_path_index = self.md_columns.index('rel_path')
+            return [row for row in rows if self._has_warnings(row[rel_path_index], query_warnings)]
+        # Find the projects with at least one MD with a matching warning
+        md_rel_path_index = self.md_columns.index('rel_path')
+        project_uuid_index = self.md_columns.index('project_uuid')
+        warned_project_uuids = set(md_row[project_uuid_index] for md_row in self._query_table_sql('mds')
+            if self._has_warnings(md_row[md_rel_path_index], query_warnings))
+        rel_path_index = self.project_columns.index('rel_path')
+        return [row for row in rows if row[0] in warned_project_uuids or self._has_warnings(row[rel_path_index], query_warnings)]
+
+    def _has_warnings(self, rel_path: str, patterns: list[str]) -> bool:
+        """Check if the register of a project or MD has a current warning whose tag matches any of the glob patterns.
+        Directories which were never run have no register and thus no warnings.
+        """
+        register_filepath = os.path.join(self._rel_to_abs(rel_path), REGISTER_FILENAME)
+        if not os.path.exists(register_filepath): return False
+        entries = load_json(register_filepath)
+        if len(entries) == 0: return False
+        # The last entry holds the current warnings
+        # Old warnings with no tag are ignored, as the register does
+        tags = [warning['tag'] for warning in entries[-1]['warnings'] if warning.get('tag')]
+        return any(fnmatch.fnmatchcase(tag, pattern) for tag in tags for pattern in patterns)
 
     def _query_table_sql(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None) -> list[tuple]:
         """Query an available table with the filters which are stored in the database."""
@@ -1371,6 +1432,7 @@ class Dataset:
             query_message: list[str] = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
         ):
         """Print each selected project in its own block, with full paths and messages and the name in its inputs file.
 
@@ -1396,14 +1458,17 @@ class Dataset:
             query_name (list[str]):
                 List of glob patterns to filter the projects by the name in their inputs file (e.g. '*kinase*').
                 Case is ignored. Projects without a name are left out.
+            query_warnings (list[str]):
+                List of glob patterns to filter the projects by the tags of their current warnings (e.g. 'pbcontacts').
+                Warnings in the MDs of the project count as well. Use '*' to get projects with any warning.
 
         """
         projects = self.get_dataframe(show_id=True, sort_by=sort_by, asc=asc, query_path=query_path,
             query_state=query_state, query_message=query_message, query_inputs=query_inputs, query_name=query_name,
-            query_scope='projects')
+            query_warnings=query_warnings, query_scope='projects')
         if len(projects) == 0:
             print(_no_projects_message(_type_check_dir_list(query_path), _type_check_dir_list(query_state),
-                _type_check_dir_list(query_message), query_inputs, query_name))
+                _type_check_dir_list(query_message), query_inputs, query_name, query_warnings))
             return
         total = len(projects)
         if n_projects != 0: projects = projects.tail(n_projects)
@@ -1452,6 +1517,7 @@ class Dataset:
             query_message: list[str] | str = [],
             query_inputs: list[tuple[str, str]] = None,
             query_name: list[str] = [],
+            query_warnings: list[str] = [],
             query_scope: str = None,
     ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
@@ -1469,6 +1535,7 @@ class Dataset:
             query_message (list[str] | str): If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
             query_inputs (list[tuple[str, str]], optional): If provided, filters rows whose project inputs file has all these field and value pairs (e.g. [('pdb_ids', '1ABC')]).
             query_name (list[str], optional): If provided, filters rows whose project inputs file name matches these glob patterns ignoring case (e.g. '*kinase*').
+            query_warnings (list[str], optional): If provided, filters rows with a current warning whose tag matches these glob patterns (e.g. 'pbcontacts', or '*' for any warning). Projects also match when one of their MDs has the warning.
             query_scope (str, optional): If provided, filters rows whose 'scope' matches this value ('project'/'p' or 'md'/'m').
 
         """
@@ -1495,7 +1562,7 @@ class Dataset:
         dataframes = []
         for scope in scopes_to_query:
             cols = self.project_columns if scope == 'projects' else self.md_columns
-            data = self.query_table(scope, query_path, query_state, query_message, query_inputs, query_name)
+            data = self.query_table(scope, query_path, query_state, query_message, query_inputs, query_name, query_warnings)
             df = pd.DataFrame(data, columns=cols)
             df['scope'] = scope
             if len(df) > 0:
@@ -1638,6 +1705,7 @@ class Dataset:
         query_message: list[str] | str = [],
         query_inputs: list[tuple[str, str]] = None,
         query_name: list[str] = [],
+        query_warnings: list[str] = [],
         debug: bool = False,
     ):
         """Launch a command for each project directory in the dataset.
@@ -1666,6 +1734,9 @@ class Dataset:
                 If provided, filters projects whose inputs file has all these field and value pairs (e.g. [('pdb_ids', '1ABC')]).
             query_name (list[str]):
                 If provided, filters projects whose inputs file name matches these glob patterns ignoring case (e.g. '*kinase*').
+            query_warnings (list[str]):
+                If provided, filters projects with a current warning whose tag matches these glob patterns (e.g. 'pbcontacts', or '*' for any warning).
+                Warnings in the MDs of the project count as well.
             debug (bool):
                 Only print the commands without executing them.
 
@@ -1691,7 +1762,7 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs, query_name, query_warnings)
 
         if debug:
             print(f"DEBUG: Found {len(filtered_projects)} projects matching the query filters.")
@@ -1908,7 +1979,7 @@ def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path(
 
 
 def _no_projects_message(query_path: list[str], query_state: list[str], query_message: list[str], query_inputs: list[tuple[str, str]],
-        query_name: list[str]) -> str:
+        query_name: list[str], query_warnings: list[str]) -> str:
     """Build the message for a query with no matching projects, mentioning only the filters in use."""
     filters = []
     query_path = [pattern for pattern in query_path if pattern and pattern != '*']
@@ -1917,6 +1988,7 @@ def _no_projects_message(query_path: list[str], query_state: list[str], query_me
     if query_message: filters.append(f'message {" or ".join(query_message)}')
     for field, value in query_inputs or []: filters.append(f'inputs {field} = {value}')
     if query_name: filters.append(f'name {" or ".join(query_name)}')
+    if query_warnings: filters.append(f'warnings {" or ".join(query_warnings)}')
     if not filters: return 'No projects found in the dataset.'
     return 'No projects found matching ' + ' and '.join(filters) + '.'
 

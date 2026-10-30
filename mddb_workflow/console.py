@@ -422,7 +422,8 @@ def main():
                 query_state=args.query_state,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
         elif args.dataset_subcommand == 'ls':
             dataset.list_projects(
@@ -434,7 +435,8 @@ def main():
                 query_state=args.query_state,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
         elif args.dataset_subcommand == 'view':
             status = dataset.get_status(args.project_path)
@@ -478,7 +480,8 @@ def main():
                 query_scope=args.query_scope,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
             total = len(df)
             if args.n_rows == 0 or args.n_rows >= total:
@@ -502,7 +505,8 @@ def main():
                     query_scope=args.query_scope,
                     query_message=args.query_message,
                     query_inputs=args.query_inputs,
-                    query_name=args.query_name
+                    query_name=args.query_name,
+                    query_warnings=args.query_warnings
                 ),
                 title="Live MDDB Dataset"
             )
@@ -515,7 +519,8 @@ def main():
                 query_state=args.query_state,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
         elif args.dataset_subcommand == 'inputs' and args.set:
             if args.inputs_template or args.inputs_generator or args.overwrite:
@@ -528,7 +533,8 @@ def main():
                 query_state=args.query_state,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
         elif args.dataset_subcommand == 'inputs' and not args.inputs_template:
             # Without a template there is nothing to generate so we show the existing inputs files
@@ -539,7 +545,8 @@ def main():
                 query_state=args.query_state,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
         elif args.dataset_subcommand == 'inputs':
             dataset.generate_inputs_yaml(
@@ -550,7 +557,8 @@ def main():
                 query_state=args.query_state,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
         elif args.dataset_subcommand == 'run':
             dataset.launch(
@@ -559,6 +567,7 @@ def main():
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
                 query_name=args.query_name,
+                query_warnings=args.query_warnings,
                 n_jobs=args.n_jobs,
                 pool_size=args.pool_size,
                 cmd=args.cmd,
@@ -583,7 +592,8 @@ def main():
                 query_state=args.query_state,
                 query_message=args.query_message,
                 query_inputs=args.query_inputs,
-                query_name=args.query_name
+                query_name=args.query_name,
+                query_warnings=args.query_warnings
             )
 
     # If user wants to run the NASSA analysis
@@ -1027,6 +1037,9 @@ def make_query_parser(default_state: list[str] = []) -> ArgumentParser:
     parser.add_argument("-nm", "--query_name", nargs='*', default=[],
         help="Filter projects by the name in their inputs file using glob patterns, ignoring case (e.g. '-nm \"*kinase*\"')." +
         " Projects without a name are left out.")
+    parser.add_argument("-wn", "--query_warnings", nargs='*', default=[], action=custom, const=['*'],
+        help="Filter projects by the tags of their current warnings using glob patterns (e.g. '-wn pbcontacts')." +
+        " Warnings in the MDs of the project count as well. Pass the flag alone to get projects with any warning.")
     return parser
 query_parser = make_query_parser()
 # Scope filter only for subcommands which display both projects and MDs
