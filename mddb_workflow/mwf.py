@@ -1871,8 +1871,6 @@ class Project:
         self.local_blast = local_blast
 
         # Other values which may be found/calculated on demand
-        self._pbc_selection = MISSING_VALUE
-        self._pbc_residues = MISSING_VALUE
         self._cg_selection = MISSING_VALUE
         self._cg_residues = MISSING_VALUE
         self._ua_selection = MISSING_VALUE
@@ -2347,20 +2345,6 @@ class Project:
         return self._qm_selection
     qm_selection = property(get_qm_selection, None, None, "Quantum mechanics atom selection (read only)")
 
-    def get_pbc_selection(self) -> 'Selection':
-        """Get the periodic boundary conditions atom selection. Make sure it is coherent among all MDs."""
-        # If we already have a stored value then return it
-        if self._pbc_selection is not MISSING_VALUE:
-            return self._pbc_selection
-        # Otherwise we must set the selection
-        # Make sure it is coherent among all MDs
-        unique_md_selections = set([md.pbc_selection for md in self.mds if md is not REMOVED_MD])
-        if len(unique_md_selections) > 1:
-            raise InputError('Periodic Boundary Conditions selection is not coherent among MDs. Please change the input value.')
-        self._pbc_selection = self.reference_md.pbc_selection
-        return self._pbc_selection
-    pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
-
     def get_dummy_selection(self) -> 'Selection':
         """Get the dummy atoms selection. Make sure it is coherent among all MDs."""
         # If we already have a stored value then return it
@@ -2492,11 +2476,6 @@ class Project:
         return reference_structure
     structure = property(get_structure, None, None, "Parsed structure from the reference MD (read only)")
 
-    def get_pbc_residues(self) -> list[int]:
-        """Get the indices of residues in periodic boundary conditions."""
-        return self.reference_md.pbc_residues
-    pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
-
     def get_snapshots(self) -> int:
         """Get the reference MD snapshots."""
         return self.reference_md.snapshots
@@ -2545,6 +2524,11 @@ class Project:
     def get_md_charges(self):
         return [md.charges for md in self.mds]
     md_charges = property(get_md_charges, None, None, "Atom charges from each MD (read only)")
+
+    # Note that the PBC selection may be different in every MD so there is no project PBC selection
+    def get_md_pbc_selections(self) -> list['Selection']:
+        return [None if md is REMOVED_MD else md.pbc_selection for md in self.mds]
+    md_pbc_selections = property(get_md_pbc_selections, None, None, "Periodic boundary conditions atom selection from each MD (read only)")
 
     # Topology reader (early stage)
     get_topology_reader = MD.get_topology_reader

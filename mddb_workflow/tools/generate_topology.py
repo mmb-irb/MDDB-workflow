@@ -11,8 +11,21 @@ BIN_FLAG = 'gridfs'
 # Set the value used in binary files to flag missing values (e.g. atoms with missing bonds)
 BIN_MISSING_VALUE = 2 ** 32 - 1
 
+# Group sorted indices in ranges of consecutive values
+# Ranges are [first, last] pairs where both values are included
+# Indices with no consecutive neighbours are kept as they are
+# e.g. [1, 2, 3, 7, 9, 10] -> [[1, 3], 7, [9, 10]]
+def get_index_ranges (sorted_indices : list[int]) -> list[int | list[int]]:
+    ranges = []
+    for index in sorted_indices:
+        if len(ranges) > 0 and ranges[-1][1] == index - 1:
+            ranges[-1][1] = index
+        else:
+            ranges.append([index, index])
+    return [ first if first == last else [first, last] for first, last in ranges ]
+
 # Format selections in a database-efficient format
-# Parse selections to indices of chains, residues and atoms thus making the dict as light as possible
+# Parse selections to ranges of chain, residue and atom indices thus making the dict as light as possible
 # Alternatively the formatted selection may be the string 'all'
 def format_selection (structure : 'Structure', selection : 'Selection') -> dict | str:
     if not selection: raise ValueError('Trying to format empty selection')
@@ -39,11 +52,11 @@ def format_selection (structure : 'Structure', selection : 'Selection') -> dict 
     # Set the finally formatted selection
     formatted = { 'n': len(selection) }
     if len(chain_indices) > 0:
-        formatted['ch'] = chain_indices
+        formatted['ch'] = get_index_ranges(chain_indices)
     if len(residue_indices) > 0:
-        formatted['re'] = residue_indices
+        formatted['re'] = get_index_ranges(residue_indices)
     if len(atom_indices) > 0:
-        formatted['at'] = sorted(atom_indices)
+        formatted['at'] = get_index_ranges(sorted(atom_indices))
     return formatted
 
 
@@ -51,7 +64,7 @@ def generate_topology (
     structure : 'Structure',
     md_charges : list[list[float]],
     residue_map : dict,
-    pbc_selection : 'Selection',
+    md_pbc_selections : list['Selection'],
     cg_selection : 'Selection',
     ua_selection : 'Selection',
     qm_selection : 'Selection',
@@ -204,8 +217,23 @@ def generate_topology (
     # Set custom atom selections
     selections = {}
 
-    # Add the main selections
-    if pbc_selection: selections['pbc'] = format_selection(structure, pbc_selection)
+    # Add the PBC selection, which may be different in every MD
+    # MDs with no PBC selection have a null value
+    md_pbc_map = []
+    unique_pbc_selections = []
+    for pbc_selection in md_pbc_selections:
+        formatted = format_selection(structure, pbc_selection) if pbc_selection else None
+        if formatted not in unique_pbc_selections:
+            unique_pbc_selections.append(formatted)
+        md_pbc_map.append(unique_pbc_selections.index(formatted))
+    # If all MDs have the same PBC selection then set it as the value
+    if len(unique_pbc_selections) == 1:
+        if unique_pbc_selections[0]: selections['pbc'] = unique_pbc_selections[0]
+    # Otherwise set a map as we do with charges
+    else:
+        selections['pbc'] = { 'mdmap': md_pbc_map, 'values': unique_pbc_selections }
+
+    # Add the rest of main selections
     if cg_selection: selections['cg'] = format_selection(structure, cg_selection)
     if ua_selection: selections['ua'] = format_selection(structure, ua_selection)
     if qm_selection: selections['qm'] = format_selection(structure, qm_selection)
