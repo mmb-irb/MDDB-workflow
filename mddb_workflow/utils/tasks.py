@@ -247,9 +247,15 @@ class Task:
             if existing_incomplete_output: rmtree(incomplete_output_directory)
             if existing_final_output: rmtree(final_output_directory)
             if any_existing_output_files:
+                input_files = self._get_input_files(processed_args, output_files)
                 for output_file in output_files.values():
                     if output_file == None or type(output_file) == Exception: continue
-                    if output_file.exists: output_file.remove()
+                    if not output_file.exists: continue
+                    # Never delete an input file, even if it is also an output file
+                    # This should be prevented before, when reading inputs, but we check it again just in case
+                    if any(input_file.is_deleted_by_removing(output_file) for input_file in input_files):
+                        raise RuntimeError(f'Output file "{output_file.path}" is also an input file of task {self.flag}, so it can not be deleted')
+                    output_file.remove()
             if existing_output_data: parent.cache.delete(self.cache_output_key)
         # If already existing output is not to be overwritten then check if it is already what we need
         else:
@@ -327,6 +333,16 @@ class Task:
         if writes_output_dir and exists(incomplete_output_directory):
             rename(incomplete_output_directory, final_output_directory)
         return output
+
+    @staticmethod
+    def _get_input_files(processed_args: dict, output_files: dict) -> list['File']:
+        """Get all files passed to the task, apart from its own output files."""
+        input_files = []
+        for argument, value in processed_args.items():
+            if argument in output_files: continue
+            values = value if type(value) == list else [value]
+            input_files += [ item for item in values if isinstance(item, File) ]
+        return input_files
 
     def _find_arg_value(self, arg: str, parent: Union['Project', 'MD'], default_arguments: set):
         """Find argument values, thus running any dependency if necessary."""

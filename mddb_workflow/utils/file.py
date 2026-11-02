@@ -1,5 +1,5 @@
 from os import remove, symlink, rename, readlink
-from os.path import exists, isabs, abspath, relpath, split, islink, normpath, getmtime, getsize
+from os.path import exists, isabs, abspath, relpath, split, islink, normpath, getmtime, getsize, realpath, dirname, basename, join
 from time import strftime, gmtime
 from shutil import copyfile
 from typing import Optional
@@ -75,6 +75,13 @@ class File:
         if isinstance(other, self.__class__):
             return self.path == other.path  # Paths are already normalized
         return False
+
+    def is_deleted_by_removing(self, other: 'File') -> bool:
+        """Check if removing the other file would delete this file, even through symlinks.
+        Note that removing a symlink does not delete the file it points to.
+        """
+        def get_entry(path: str) -> str: return join(realpath(dirname(path)), basename(path))
+        return get_entry(other.absolute_path) in [ get_entry(self.absolute_path), realpath(self.absolute_path) ]
 
     def check_existence(self) -> bool:
         """Check if file exists."""

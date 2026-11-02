@@ -337,6 +337,15 @@ class MD:
         self._input_topology_filepath = relativize_and_parse_path(input_topology_filepath)
         return self._input_topology_filepath
 
+    def check_input_is_not_output(self, input_file: File, output_filepath: str):
+        """Make sure an input file is not where the workflow writes an output file.
+        Otherwise the input file would be deleted or overwritten when running the workflow.
+        """
+        output_file = File(output_filepath)
+        if not input_file.is_deleted_by_removing(output_file): return
+        raise InputError(f'The input file "{input_file.path}" is in the same place where the workflow writes the output file "{output_file.path}".\n'
+            ' The workflow would delete or overwrite it. Please rename or move the input file and update the inputs.')
+
     def get_input_topology_file(self) -> Optional[File]:
         """Get the input topology file.
         If the file is not found try to download it.
@@ -394,6 +403,8 @@ class MD:
         # If the file finally exists then we are done
         if input_topology_file.exists:
             self._input_topology_file = input_topology_file
+            # Note that this function is also used by the project, which has no output topology of its own
+            if isinstance(self, MD): self.check_input_is_not_output(input_topology_file, self.topology_filepath)
             return self._input_topology_file
         raise InputError(f'Missing input topology file "{input_topology_file.path}"')
     input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
@@ -511,6 +522,7 @@ class MD:
                     self.update_file_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
         # If the file already exists then return it
         if input_structure_file.exists:
+            self.check_input_is_not_output(input_structure_file, self.pathify(STRUCTURE_FILENAME))
             self._input_structure_file = input_structure_file
             return self._input_structure_file
         raise InputError(f'Missing input structure file "{input_structure_file.path}"')
@@ -664,6 +676,8 @@ class MD:
                 missing_input_trajectory_files.append(trajectory_file)
         # If all files already exists then we are done
         if len(missing_input_trajectory_files) == 0:
+            for trajectory_file in input_trajectory_files:
+                self.check_input_is_not_output(trajectory_file, self.get_trajectory_filepath())
             self._input_trajectory_files = input_trajectory_files
             return self._input_trajectory_files
         missing_filepaths = [trajectory_file.path for trajectory_file in missing_input_trajectory_files]
