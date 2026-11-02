@@ -462,6 +462,12 @@ def iterate_xtc_frames(xtc_filename : str):
             yield xyz[0], box[0] if box is not None else np.zeros((3, 3), dtype=np.float32)
 
 
+def has_box(xtc_filename: str) -> bool:
+    """Check if a xtc trajectory has a simulation box, by looking at its first frame."""
+    _, box_vectors = next(iterate_xtc_frames(xtc_filename))
+    return bool(box_vectors.any())
+
+
 # Maximum value (nm) of box vector components which must be zero in a not rotated box
 # Note that the xtc precision is 0.001 nm
 ROTATED_BOX_TOLERANCE = 0.001

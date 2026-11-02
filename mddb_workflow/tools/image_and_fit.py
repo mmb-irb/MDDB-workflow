@@ -14,7 +14,7 @@ from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_BONDS, InputE
 from mddb_workflow.utils.constants import AUTOMATIC_FLAG
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.mdt_spells import rotate_boxes, iterate_xtc_frames
-from mddb_workflow.utils.mdt_spells import read_xtc_sample_frames, is_box_rotated
+from mddb_workflow.utils.mdt_spells import read_xtc_sample_frames, is_box_rotated, has_box
 from mddb_workflow.utils.mdt_spells import guess_translation_fitted, guess_rotation_fitted
 from mddb_workflow.analyses.mindist import find_frame_cross_contacts
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
@@ -78,6 +78,13 @@ def image_and_fit(
 
     if not image and not fit:
         return
+
+    # Without a simulation box there are no periodic images, so imaging makes no sense
+    # Fitting is still possible, but there is no box to rotate
+    trajectory_has_box = has_box(input_trajectory_file.path)
+    if image and not trajectory_has_box:
+        raise InputError('The trajectory has no simulation box, so it can not be imaged.\n'
+            ' Please do not ask for the imaging (i.e. remove the "image" input or the "-img" argument).')
 
     # Using a TPR topology may provide some advantage in the imaging process
     # This includes connectivity and atom mass data
@@ -237,10 +244,14 @@ def image_and_fit(
             show_error_logs=True)
 
         # Rotate boxes as coordinates were rotated by the fit
-        print(' Rotating boxes')
-        rotate_boxes(latest_trajectory, fitted_trajectory_file, rotated_trajectory_file)
-        fitted_trajectory_file.remove()
-        rotated_trajectory_file.rename_to(output_trajectory_file)
+        if trajectory_has_box:
+            print(' Rotating boxes')
+            rotate_boxes(latest_trajectory, fitted_trajectory_file, rotated_trajectory_file)
+            fitted_trajectory_file.remove()
+            rotated_trajectory_file.rename_to(output_trajectory_file)
+        else:
+            print(' There is no box to rotate')
+            fitted_trajectory_file.rename_to(output_trajectory_file)
 
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
         # If there was imaging, we reset again to it its not far from the origin
