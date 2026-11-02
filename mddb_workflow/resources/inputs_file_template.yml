@@ -366,6 +366,7 @@ interactions:
 # If this field is set to 'auto' then PBC residues are set automatically.
 # Solvent, counter ions and membrane lipids are selected in this cases.
 # Note that these are the most tipical residues under periodic boundary conditions.
+# You may also add your own selection to the automatic one using 'auto + <selection>' (e.g. auto + resname LIG).
 #
 # This field is also useful for those scenarions with several protein or nucleic acid molecules floating around.
 # In this situation you can not image and fit all molecules.
@@ -375,7 +376,9 @@ interactions:
 #
 # Example:
 #
-# pbc_selection: water or ions
+# pbc_selection: auto
+# pbc_selection: auto + resname LIG
+# pbc_selection: chain X
 
 pbc_selection: auto
 

@@ -7,6 +7,7 @@ from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from mddb_workflow.utils.constants import GLOBALS
 from mddb_workflow.utils.constants import DATABASE_DOCUMENT_SIZE_LIMIT
 from mddb_workflow.utils.constants import DATABASE_DOCUMENT_PATTERNS, DATABASE_DOCUMENT_LIST_PATTERNS
+from mddb_workflow.utils.constants import AUTOMATIC_FLAG
 from mddb_workflow.utils.type_hints import *
 
 import os
@@ -130,6 +131,22 @@ JSON_SERIALIZABLE_MISSING_BONDS = 'MB'
 
 # Keep all exceptions in a set
 STANDARD_EXCEPTIONS = {MISSING_TOPOLOGY, MISSING_CHARGES, MISSING_BONDS}
+
+
+def parse_automatic_selection(selection_string: Optional[str]) -> tuple[bool, Optional[str]]:
+    """Check if a selection string is the automatic flag, which may be followed by an additional selection.
+    e.g. auto + resname LIG
+    Return whether the selection is automatic and the additional selection string, if any.
+    """
+    if not isinstance(selection_string, str): return False, None
+    flag, plus, additional = selection_string.partition('+')
+    if flag.strip() != AUTOMATIC_FLAG: return False, None
+    if not plus: return True, None
+    additional = additional.strip()
+    if not additional:
+        raise InputError(f'Selection "{selection_string}" is missing a selection after the "+"')
+    return True, additional
+
 
 def all_cases(names: list[str] | set[str]) -> set[str]:
     """Given a list or set of names.

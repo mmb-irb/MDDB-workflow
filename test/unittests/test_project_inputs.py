@@ -573,3 +573,40 @@ def test_project_inputs_autofills_values_and_reports_changes(tmp_path):
     reloaded = ProjectInputs(File(str(inputs_path)), directory_name='demo')
     assert reloaded.get('pbc_selection') == 'new'
     assert reloaded.get('description') == 'generated'
+
+
+def test_forced_plain_automatic_value_keeps_extended_automatic_values(tmp_path):
+    inputs_path = tmp_path / 'inputs.json'
+    inputs_path.write_text(json.dumps({
+        'pbc_selection': 'auto + resname LIG',
+        'mds': [
+            {'name': 'md1', 'mdir': 'md1', 'pbc_selection': 'auto + chain B'},
+            {'name': 'md2', 'mdir': 'md2', 'pbc_selection': 'resname SOL'},
+        ],
+    }), encoding='utf-8')
+    project = Project(directory=str(tmp_path), inputs_filepath=str(inputs_path),
+        forced_inputs=[['pbc_selection', 'auto']])
+
+    assert project.inputs.get('pbc_selection') == 'auto + resname LIG'
+    assert project.mds[0].input_pbc_selection == 'auto + chain B'
+    assert project.mds[1].input_pbc_selection == 'auto + resname LIG'
+    reloaded = ProjectInputs(File(str(inputs_path)), directory_name='demo')
+    assert reloaded.file_inputs['pbc_selection'] == 'auto + resname LIG'
+    assert reloaded.file_inputs['mds'][0]['pbc_selection'] == 'auto + chain B'
+    assert 'pbc_selection' not in reloaded.file_inputs['mds'][1]
+
+
+def test_forced_value_replaces_project_and_md_values(tmp_path):
+    inputs_path = tmp_path / 'inputs.json'
+    inputs_path.write_text(json.dumps({
+        'pbc_selection': 'auto',
+        'mds': [{'name': 'md1', 'mdir': 'md1', 'pbc_selection': 'auto + resname LIG'}],
+    }), encoding='utf-8')
+    project = Project(directory=str(tmp_path), inputs_filepath=str(inputs_path),
+        forced_inputs=[['pbc_selection', 'water or ions']])
+
+    assert project.inputs.get('pbc_selection') == 'water or ions'
+    assert project.mds[0].input_pbc_selection == 'water or ions'
+    reloaded = ProjectInputs(File(str(inputs_path)), directory_name='demo')
+    assert reloaded.file_inputs['pbc_selection'] == 'water or ions'
+    assert 'pbc_selection' not in reloaded.file_inputs['mds'][0]

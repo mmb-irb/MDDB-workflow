@@ -4,7 +4,7 @@ from mddb_workflow.utils.constants import FILTERED, FILTERED_STRUCTURE, FILTERED
 from mddb_workflow.utils.constants import IMAGED, IMAGED_STRUCTURE, IMAGED_TRAJECTORY
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, CORRECTED_TRAJECTORY
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, CG_ATOM_ELEMENT, SNAPSHOTS_FLAG
-from mddb_workflow.utils.constants import FAITH_BYPASS, BROKEN_PBC_FLAG, AUTOMATIC_FLAG
+from mddb_workflow.utils.constants import FAITH_BYPASS, BROKEN_PBC_FLAG, AUTOMATIC_FLAG, CHAINS_CHANGED_FLAG
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.selections import Selection
@@ -409,7 +409,7 @@ def process_input_files(
     # Correct the structure
     # This function reads and or modifies the following MD variables:
     #   snapshots, reference_bonds, register, cache, mercy, trust
-    structure_corrector(
+    chains_changed = structure_corrector(
         structure=provisional_structure,
         input_trajectory_file=imaged_trajectory_file,
         input_topology_file=filtered_topology_file,
@@ -429,6 +429,8 @@ def process_input_files(
         ignore_bonds=self.project.ignore_bonds,
         chainer=input_chainer,
     )
+    # Save if chains were changed, since selections by chain may not select the same atoms after the correction
+    self.cache.update(CHAINS_CHANGED_FLAG, chains_changed)
 
     # If the corrected output exists then use it
     # Otherwise use the previous step files

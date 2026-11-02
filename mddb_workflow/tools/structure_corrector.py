@@ -247,7 +247,7 @@ def structure_corrector(
     guess_bonds: bool,
     ignore_bonds: bool,
     chainer: Optional[dict] = None,
-) -> None:
+) -> bool:
     """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
 
     Supported cases:
@@ -270,6 +270,8 @@ def structure_corrector(
     Note that the 'trust' flag may be passed for critical checkings to skip them.
 
     This function also sets some values in the passed MD.
+
+    Return True if the chain of any atom was changed.
 
     """
     # Write the initial output structure file which will be overwritten several times further
@@ -599,6 +601,9 @@ def structure_corrector(
     # Forced chains ----------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
+    # Save the chain of every atom to further know if chains were changed
+    initial_atom_chains = [ atom.chain.name for atom in structure.atoms ]
+
     # Set chains as requested by the user, if requested
     # Save the forced chains so we can make sure they are not modified by further corrections
     forced_atom_chains = None
@@ -731,6 +736,10 @@ def structure_corrector(
     # Warn if chains look wrongly assigned (e.g. every lipid has its own chain)
     structure.check_suspicious_chains()
 
+    # Check if chains were changed
+    # Note that this must be checked before atoms are resorted
+    chains_changed = initial_atom_chains != [ atom.chain.name for atom in structure.atoms ]
+
     # ------------------------------------------------------------------------------------------
     # Merged residues ------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
@@ -784,3 +793,5 @@ def structure_corrector(
 
     # Report failed tests with mercy now that atoms are in their final order
     for report in pending_reports: report()
+
+    return chains_changed

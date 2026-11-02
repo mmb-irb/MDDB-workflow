@@ -14,13 +14,14 @@ from functools import partial
 # Importing constants first is important
 from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
-from mddb_workflow.core.inputs import ProjectInputs
+from mddb_workflow.core.inputs import ProjectInputs, forced_value_wins
 # Import local utils
 from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import warn, load_json
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import get_git_version, download_file
 from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise, safe_getattr
+from mddb_workflow.utils.auxiliar import parse_automatic_selection
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -687,10 +688,15 @@ class MD:
     def get_file_input(self, name: str):
         """Get a specific 'input' value from MD inputs."""
         value = self.md_inputs.get(name, MISSING_INPUT_EXCEPTION)
-        # If we had a value then return it
-        if value != MISSING_INPUT_EXCEPTION:
+        # If we had a value then return it, unless it is replaced by a command line value
+        if value != MISSING_INPUT_EXCEPTION and not self.is_forced_input(name, value):
             return value
         return self.project.inputs.get(name)
+
+    def is_forced_input(self, name: str, md_value) -> bool:
+        """Check if an MD input value is replaced by a value forced from the command line."""
+        forced_inputs = self.project.inputs.forced_inputs
+        return name in forced_inputs and forced_value_wins(forced_inputs[name], md_value)
 
     def update_file_inputs(self, key: str, new_value) -> bool:
         """Permanently update current MD inputs in the inputs file.
@@ -939,9 +945,9 @@ class MD:
         """
         # Set the getter
         def getter(self):
-            # Get the MD input
+            # Get the MD input, unless it is replaced by a command line value
             value = self.md_inputs.get(name, None)
-            if value is not None:
+            if value is not None and not self.is_forced_input(name, value):
                 return value
             # If there is no MD input then return the project value
             return safe_getattr(self.project, f'input_{name}')
@@ -980,8 +986,11 @@ class MD:
             selection_string = self.project.inputs.get_default('pbc_selection')
         # Parse the selection string using the reference structure
         parsed_selection = None
+        # The automatic flag may be combined with an additional user selection
+        # e.g. auto + resname LIG
+        is_automatic, additional_selection_string = parse_automatic_selection(selection_string)
         # If the input PBC selection is the automatic flag then guess it automatically
-        if selection_string == AUTOMATIC_FLAG:
+        if is_automatic:
             # To guess PBC atoms (with the current implementation) we must make sure ther eis no CG
             if reference_structure.has_cg():
                 raise InputError('We can not guess which atoms are under Periodic Boundary Conditions (PBC) in Coarse Grained (CG) systems. Please set PBC atoms manually.\n'
@@ -990,6 +999,13 @@ class MD:
                     ' e.g. -pbc "resname DPPC"')
             if verbose: print(' Guessing PBC atoms as solvent, counter ions and lipids')
             parsed_selection = reference_structure.select_pbc_guess()
+            # Add the additional user selection, if any
+            if additional_selection_string:
+                if verbose: print(f' Adding PBC atoms "{additional_selection_string}"')
+                additional_selection = reference_structure.select(additional_selection_string)
+                if not additional_selection:
+                    raise InputError(f'PBC selection "{additional_selection_string}" selected no atoms')
+                parsed_selection += additional_selection
         # If we have a valid input value then use it
         elif selection_string:
             if verbose: print(f' Selecting PBC atoms "{selection_string}"')
@@ -2108,12 +2124,14 @@ class Project:
         """Get a resolved input value through the project input manager."""
         return self.inputs.get(name)
 
-    def update_cache_inputs(self, arg_key: str, new_value: Any, verbose: bool = False):
+    def update_cache_inputs(self, arg_key: str, new_value: Any, verbose: bool = False, mds: Optional[list['MD']] = None):
         """Update an input argument cksum in the cache of all tasks using it.
         This may be useful after updating an input value if you don't want all tasks using it to run again in the next workflow run.
+        If some MDs are passed then only the tasks of these MDs are updated, and not the project tasks.
         """
         # Iterate project available tasks
         for requestable in project_requestables.values():
+            if mds is not None: break
             # Ignore anything which is not a task
             if not isinstance(requestable, Task): continue
             # Make sure the cache already has this argument key
@@ -2129,7 +2147,7 @@ class Project:
             # Ignore anything which is not a task
             if not isinstance(requestable, Task): continue
             # Iterate MDs since we will have to update the task cache in every MD
-            for md in self.mds:
+            for md in (self.mds if mds is None else mds):
                 if md == REMOVED_MD: continue
                 # Make sure the cache already has this argument key
                 # Otherwise it means the task is not using the input or it did not run yet
@@ -2150,7 +2168,11 @@ class Project:
         # WARNING: It is important to get these values before generating the inputs file
         # WARNING: The inputs file is expected to either exists from the begining or not exist at all
         # WARNING: Creating the inputs file mid run alters the order of things and it is not yet supported
-        final_pbc_selection = self.pbc_selection.to_vmd() if self.pbc_selection else None
+        # The PBC selection may be different in every MD
+        active_mds = [ md for md in self.mds if md != REMOVED_MD ]
+        md_pbc_selections = [ md.pbc_selection.to_vmd() if md.pbc_selection else None for md in active_mds ]
+        same_pbc_selections = len(set(md_pbc_selections)) == 1
+        final_pbc_selection = md_pbc_selections[0] if same_pbc_selections else None
         final_cg_selection = self.cg_selection.to_vmd() if self.cg_selection else None
         final_ua_selection = self.ua_selection.to_vmd() if self.ua_selection else None
         final_qm_selection = self.qm_selection.to_vmd() if self.qm_selection else None
@@ -2163,17 +2185,27 @@ class Project:
         # Parse the selections to ranged VMD syntax guess
         # Then to make sure some tasks are not repeated uselessly we must update some cache arguments cksums
         # Note that this is done because we are updating inputs after using them
-        input_updates = self.inputs.autofill({
-            'pbc_selection': final_pbc_selection,
+        project_values = {
             'cg_selection': final_cg_selection,
             'ua_selection': final_ua_selection,
             'qm_selection': final_qm_selection,
             'dummy_selection': final_dummy_selection,
-        })
+        }
+        # If all MDs have the same PBC selection then set it for the whole project
+        if same_pbc_selections: project_values['pbc_selection'] = final_pbc_selection
+        input_updates = self.inputs.autofill(project_values)
         # Fill the PBC selection
-        if input_updates['pbc_selection']:
+        if same_pbc_selections:
+            # Remove MD values, since the project value is used by all MDs now
+            removed_md_values = [ self.inputs.remove_file_inputs(f'mds.{md.index}.pbc_selection') for md in active_mds ]
             # Update the value in tasks caches only if there was an actual update
-            self.update_cache_inputs('input_pbc_selection', final_pbc_selection)
+            if input_updates['pbc_selection'] or any(removed_md_values):
+                self.update_cache_inputs('input_pbc_selection', final_pbc_selection)
+        # If MDs have different PBC selections then set them for every MD
+        else:
+            for md, md_pbc_selection in zip(active_mds, md_pbc_selections):
+                if md.update_file_inputs('pbc_selection', md_pbc_selection):
+                    self.update_cache_inputs('input_pbc_selection', md_pbc_selection, mds=[md])
         # Fill the CG selection
         if input_updates['cg_selection']:
             # Update the value in tasks caches only if there was an actual update
