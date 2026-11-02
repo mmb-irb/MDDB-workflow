@@ -1582,7 +1582,7 @@ class Project:
         dummy_selection: Optional[str] = None,
         forced_class_selections: Optional[dict] = None,
         image: bool = False,
-        fit: bool = False,
+        fit: bool | str = False,
         translation: Optional[list[float] | str] = None,
         mercy: list[str] | bool = [],
         trust: list[str] | bool = [],
@@ -1673,8 +1673,9 @@ class Project:
             image (bool):
                 Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
                 Value passed through console overrides the one in inputs file.
-            fit (bool):
+            fit (bool|str):
                 Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.
+                Use 'auto' to fit only if the trajectory does not seem to be fitted already.
                 Value passed through console overrides the one in inputs file.
             translation (list[float]|str):
                 Set the x y z translation (nm) for the imaging process.

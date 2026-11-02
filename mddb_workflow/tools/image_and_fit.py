@@ -61,7 +61,8 @@ def image_and_fit(
         image:
             Set if it must me imaged
         fit:
-            Set if it must be fitted
+            Set if it must be fitted.
+            Note that the automatic flag must be solved before calling this function.
         translation:
             Set how it must be translated during imaging, in nm.
             Use 'auto' to find a translation which keeps non-PBC atoms away from the box boundaries.
@@ -370,8 +371,10 @@ def no_jump(
             writer.write(output_xyz, time=time, step=step, box=boxes)
 
 
-def is_pbc_broken(trajectory_file: 'File', structure: 'Structure', selection: 'Selection') -> bool:
-    """Check if the trajectory seems to be fitted already in rotation and periodic boundary conditions are thus broken.
+def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', selection: 'Selection') -> tuple[bool, bool]:
+    """Check if the trajectory seems to be fitted already, both in translation and rotation.
+    Check also if it is fitted in rotation and periodic boundary conditions are thus broken.
+    Return both values: fitted and broken PBC.
     Periodic boundary conditions are kept only if boxes were rotated along with the coordinates.
     Note that some tools (e.g. Gromacs) do not rotate boxes when fitting.
     Note that a translation (e.g. centering) does not break periodic boundary conditions.
@@ -385,16 +388,17 @@ def is_pbc_broken(trajectory_file: 'File', structure: 'Structure', selection: 'S
     rotation_fitted = guess_rotation_fitted(frames, residue_atom_indices)
     fitted_moves = [ move for move, fitted in [('translation', translation_fitted), ('rotation', rotation_fitted)] if fitted ]
     if fitted_moves: print(f' The trajectory seems to be fitted in {" and ".join(fitted_moves)}')
-    if not rotation_fitted: return False
+    fitted = translation_fitted and rotation_fitted
+    if not rotation_fitted: return fitted, False
     boxes = [ box for _, box in frames ]
     if not all(box is not None and box.any() for box in boxes):
         warn('The trajectory seems to be fitted already, but it has no box.\n'
             ' Periodic boundary conditions are probably broken, so the imaging will probably fail.')
-        return False
-    if any(is_box_rotated(box) for box in boxes): return False
+        return fitted, False
+    if any(is_box_rotated(box) for box in boxes): return fitted, False
     warn('The trajectory seems to be fitted already, but its box is not rotated accordingly.\n'
         ' Periodic boundary conditions are probably broken, so the simulation box will be ignored and the imaging will probably fail.')
-    return True
+    return fitted, True
 
 
 def reset_structure(
