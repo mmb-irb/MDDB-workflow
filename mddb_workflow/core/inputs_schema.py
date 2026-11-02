@@ -17,6 +17,19 @@ from mddb_workflow.utils.auxiliar import InputError, warn
 from mddb_workflow.utils.constants import PDB_ID_FORMAT, AVAILABLE_CHECKINGS, AVAILABLE_FAILURES, AUTOMATIC_FLAG
 
 
+def check_translation_value(value):
+    """Make sure the translation is either the automatic flag or a list of 3 numbers."""
+    if value is None:
+        return value
+    if type(value) is str:
+        if value != AUTOMATIC_FLAG:
+            raise ValueError(f'Translation must be "{AUTOMATIC_FLAG}" or a list of 3 numbers, got "{value}".')
+        return value
+    if len(value) != 3:
+        raise ValueError(f'Translation must be a list of 3 numbers (x y z), got {len(value)}.')
+    return value
+
+
 class InputsBaseModel(BaseModel):
     """Base model tolerating (and preserving) unknown fields."""
 
@@ -120,6 +133,15 @@ class MDConfig(InputsBaseModel):
     input_topology_filepath: Optional[str] = None
     input_structure_filepath: Optional[str] = None
     input_trajectory_filepaths: Optional[Union[str, list[str]]] = None
+    # Processing parameters which may be different for each MD
+    image: Optional[bool] = None
+    fit: Optional[bool] = None
+    translation: Optional[Union[str, list[float]]] = None
+
+    @field_validator('translation')
+    @classmethod
+    def check_translation(cls, value):
+        return check_translation_value(value)
 
 
 class WorkflowInputs(InputsBaseModel):
@@ -219,15 +241,7 @@ class WorkflowInputs(InputsBaseModel):
     @field_validator('translation')
     @classmethod
     def check_translation(cls, value):
-        if value is None:
-            return value
-        if type(value) is str:
-            if value != AUTOMATIC_FLAG:
-                raise ValueError(f'Translation must be "{AUTOMATIC_FLAG}" or a list of 3 numbers, got "{value}".')
-            return value
-        if len(value) != 3:
-            raise ValueError(f'Translation must be a list of 3 numbers (x y z), got {len(value)}.')
-        return value
+        return check_translation_value(value)
 
     @field_validator('skip_frames')
     @classmethod

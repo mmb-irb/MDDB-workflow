@@ -720,6 +720,8 @@ Each MD is to be stored in an independent folder when running the workflow.
 Each MD must have a different name, which will be used also to assign directories in the workflow.
 
 MDs may include additional metadata to overwrite the project metadata for a specific case.
+The processing inputs ``image``, ``fit`` and ``translation`` may also be set per MD to overwrite the project values.
+Note that these values are overwritten in all MDs when passed through the command line.
 
 
 

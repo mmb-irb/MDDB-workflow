@@ -803,6 +803,23 @@ class MD:
         if self.project.sample_trajectory: return self.pathify(TRAJECTORY_SAMPLE_FILENAME)
         return self.pathify(TRAJECTORY_FILENAME)
 
+    def processing_input_getter(name: str):
+        """Get processing inputs (image, fit, translation) which may be set per MD.
+        Values passed through the command line apply to all MDs.
+        Otherwise the MD input is used and, if missing, the project value.
+        """
+        def getter(self):
+            if self.project.console_processing_inputs[name] or name in self.project.inputs.forced_inputs:
+                return getattr(self.project, name)
+            value = self.md_inputs.get(name, None)
+            if value is not None: return value
+            return getattr(self.project, name)
+        return getter
+
+    image = property(processing_input_getter('image'), None, None, "Set if the trajectory is to be imaged (read only)")
+    fit = property(processing_input_getter('fit'), None, None, "Set if the trajectory is to be fitted (read only)")
+    translation = property(processing_input_getter('translation'), None, None, "Translation for the imaging process (read only)")
+
     # Number of frames to be excluded from the beginning of the trajectory
     # Note that it is None when there is nothing to skip so the processing is not run again in old projects
     def get_input_skip_frames(self) -> Optional[int]:
@@ -1867,6 +1884,8 @@ class Project:
         # Note that the filter selection variable is not further handled here
         # This is just pased to the filtering function which knows how to handle the default
         self.filter_selection = filter_selection if filter_selection else self.inputs.get('filter_selection', filter_selection)
+        # Keep track of values passed through console, since they also override MD values
+        self.console_processing_inputs = { 'image': image, 'fit': fit, 'translation': translation }
         self.image = image if image else self.inputs.get('image', image)
         self.fit = fit if fit else self.inputs.get('fit', fit)
         self.translation = translation if translation else self.inputs.get('translation', AUTOMATIC_FLAG)
