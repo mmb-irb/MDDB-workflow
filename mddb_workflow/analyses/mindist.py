@@ -1,11 +1,12 @@
 import itertools
+from collections import Counter
 from os.path import abspath
 import numpy as np
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
-from mddb_workflow.utils.auxiliar import TestFailure, warn
-from mddb_workflow.utils.constants import CROSS_PBC_FLAG
+from mddb_workflow.utils.auxiliar import TestFailure, warn, ranger, parse_automatic_selection
+from mddb_workflow.utils.constants import CROSS_PBC_FLAG, AUTOMATIC_FLAG
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.mdt_spells import iterate_xtc_frames
 from mddb_workflow.utils.selections import Selection
@@ -132,6 +133,9 @@ def check_cross_periodic_contacts(
     view_script_filename : str,
     structure : 'Structure',
     pbc_selection : 'Selection',
+    input_pbc_selection : Optional[str],
+    update_md_inputs : Callable,
+    chains_changed : bool,
     mercy : list[str],
     trust: list[str],
     register : 'Register',
@@ -145,6 +149,10 @@ def check_cross_periodic_contacts(
 
     Every frame is checked with find_frame_cross_contacts, which works for any
     box shape and does not need the system to be centred in the box.
+
+    Also check if any non-PBC fragment goes away from the rest of the system (e.g. an unbound ligand).
+    If the input PBC selection is automatic then these fragments are added to the PBC selection of this MD
+    in the inputs file and the workflow must be run again.
 
     distance_cutoff is kept as a fixed parameter (default 5 Å in mwf.py).
     No dynamic scaling is needed: the comparison d_PBC < cutoff ≤ d_direct
@@ -191,18 +199,18 @@ def check_cross_periodic_contacts(
 
     print(f'Checking cross-PBC contacts ({n_nonpbc} non-PBC atoms, cutoff {distance_cutoff} Å)')
 
-    # # Split non-PBC atoms in fragments to check none of them goes away from the rest of the system
-    # # The geometric center of every fragment is compared against the geometric center of all non-PBC atoms
-    # # If bonds are missing then we can not find fragments so we use chains instead
-    # if structure.is_missing_any_bonds():
-    #     fragments = [ chain.get_selection() & non_pbc_selection for chain in structure.chains ]
-    #     fragments = [ fragment for fragment in fragments if fragment ]
-    # else:
-    #     fragments = list(structure.find_fragments(non_pbc_selection))
-    # fragments_atom_indices = [ np.array(fragment.atom_indices) for fragment in fragments ]
-    # # Frames where every fragment escaped, and the distances in the first escaped frame
-    # escape_frames = [ [] for _ in fragments ]
-    # first_escape_distances = [ None for _ in fragments ]
+    # Split non-PBC atoms in fragments to check none of them goes away from the rest of the system
+    # The geometric center of every fragment is compared against the geometric center of all non-PBC atoms
+    # If bonds are missing then we can not find fragments so we use chains instead
+    if structure.is_missing_any_bonds():
+        fragments = [ chain.get_selection() & non_pbc_selection for chain in structure.chains ]
+        fragments = [ fragment for fragment in fragments if fragment ]
+    else:
+        fragments = list(structure.find_fragments(non_pbc_selection))
+    fragments_atom_indices = [ np.array(fragment.atom_indices) for fragment in fragments ]
+    # Frames where every fragment escaped, and the distances in the first escaped frame
+    escape_frames = [ [] for _ in fragments ]
+    first_escape_distances = [ None for _ in fragments ]
 
     violation_frames = []
     # Frame with the largest number of atoms in cross-PBC contact, to be reported as example
@@ -226,13 +234,13 @@ def check_cross_periodic_contacts(
         box_vectors = frame_box.astype(np.float64)   # (3, 3) nm, rows are vectors
         all_positions = frame_positions.astype(np.float64)
         positions = all_positions[non_pbc_indices]  # (n_nonpbc, 3) nm
-        # # Check if any fragment is closer to a periodic image of the non-PBC center than to the center itself
-        # fragment_centers = np.array([ all_positions[atom_indices].mean(axis=0) for atom_indices in fragments_atom_indices ])
-        # escaped = find_frame_escaped_fragments(positions.mean(axis=0), fragment_centers, box_vectors, ESCAPE_MARGIN)
-        # for fragment_index, own_distance, image_distance in escaped:
-        #     escape_frames[fragment_index].append(frame_idx)
-        #     if first_escape_distances[fragment_index] is None:
-        #         first_escape_distances[fragment_index] = (own_distance, image_distance)
+        # Check if any fragment is closer to a periodic image of the non-PBC center than to the center itself
+        fragment_centers = np.array([ all_positions[atom_indices].mean(axis=0) for atom_indices in fragments_atom_indices ])
+        escaped = find_frame_escaped_fragments(positions.mean(axis=0), fragment_centers, box_vectors, ESCAPE_MARGIN)
+        for fragment_index, own_distance, image_distance in escaped:
+            escape_frames[fragment_index].append(frame_idx)
+            if first_escape_distances[fragment_index] is None:
+                first_escape_distances[fragment_index] = (own_distance, image_distance)
         # Check if there are atoms too close to its period images in this frame
         pairs, distances, cell_shifts = find_frame_cross_contacts(positions, box_vectors, cutoff_nm)
         if len(pairs) == 0: continue
@@ -246,9 +254,8 @@ def check_cross_periodic_contacts(
             example_box_vectors = box_vectors
 
     # Report any problem
-    # escaped_fragment_indices = [ index for index, frames in enumerate(escape_frames) if frames ]
-    # if not violation_frames and not escaped_fragment_indices:
-    if not violation_frames:
+    escaped_fragment_indices = [ index for index, frames in enumerate(escape_frames) if frames ]
+    if not violation_frames and not escaped_fragment_indices:
         print(' Test passed: no cross-PBC contacts detected')
         register.update_test(CROSS_PBC_FLAG, True)
         return True
@@ -256,18 +263,32 @@ def check_cross_periodic_contacts(
     titles, descriptions = [], []
     # Frames and atoms to be shown in the client
     data = {}
-    # # Fragments which went away from the rest of the system
-    # if escaped_fragment_indices:
-    #     titles.append('Some non-PBC fragments go away from the rest of the system')
-    #     description = ''
-    #     for fragment_index in escaped_fragment_indices:
-    #         fragment_name = name_fragment(structure, fragments[fragment_index])
-    #         frames = escape_frames[fragment_index]
-    #         own_distance, image_distance = first_escape_distances[fragment_index]
-    #         description += (f'{fragment_name} in {len(frames)}/{snapshots} frames.'
-    #             f' First in frame {frames[0]}\n')
-    #     description += 'If these fragments diffuse freely (e.g. an unbound ligand) then they must be part of the PBC selection'
-    #     descriptions.append(description)
+    # Fragments which went away from the rest of the system
+    if escaped_fragment_indices:
+        titles.append('Some non-PBC fragments go away from the rest of the system')
+        description = ''
+        for fragment_index in escaped_fragment_indices:
+            fragment_name = name_fragment(structure, fragments[fragment_index])
+            frames = escape_frames[fragment_index]
+            own_distance, image_distance = first_escape_distances[fragment_index]
+            description += (f'{fragment_name} in {len(frames)}/{snapshots} frames.'
+                f' First in frame {frames[0]}, where it is {own_distance * 10:.1f} Å away from the rest of the system'
+                f' and {image_distance * 10:.1f} Å away from its periodic image\n')
+        # If the PBC selection is automatic then add the escaped fragments to the PBC selection of this MD
+        is_automatic, additional_selection_string = parse_automatic_selection(input_pbc_selection)
+        if is_automatic:
+            escaped_fragments = [ fragments[fragment_index] for fragment_index in escaped_fragment_indices ]
+            escaped_selection_string = get_fragments_selection_string(structure, escaped_fragments, chains_changed)
+            if additional_selection_string:
+                new_pbc_selection = f'{AUTOMATIC_FLAG} + ({additional_selection_string}) or {escaped_selection_string}'
+            else:
+                new_pbc_selection = f'{AUTOMATIC_FLAG} + {escaped_selection_string}'
+            update_md_inputs('pbc_selection', new_pbc_selection)
+            raise TestFailure(f'{titles[-1]}\n{description}'
+                f'These fragments have been added to the PBC selection of this MD in the inputs file: "{new_pbc_selection}"\n'
+                'Please run the workflow again')
+        description += 'If these fragments diffuse freely (e.g. an unbound ligand) then they must be part of the PBC selection'
+        descriptions.append(description)
     # Contacts across periodic boundaries
     if violation_frames:
         n_violations = len(violation_frames)
@@ -399,6 +420,51 @@ def remove_view_script(script_filename : str):
     """Remove the VMD script from a previous run, if any."""
     script_file = File(script_filename)
     if script_file.exists: script_file.remove()
+
+
+def get_fragments_selection_string(
+    structure : 'Structure',
+    fragments : list['Selection'],
+    chains_changed : bool,
+) -> str:
+    """Write a VMD selection string for some fragments, as readable as possible.
+
+    A fragment which is a whole chain is selected by its chain name, unless chains were changed when correcting the structure.
+    A fragment which is a single residue with a unique name is selected by its residue name.
+    Otherwise fragments are selected by their residue indices.
+    """
+    chain_name_counts = Counter(chain.name for chain in structure.chains)
+    residue_name_counts = Counter(residue.name for residue in structure.residues)
+    selection_strings = []
+    residue_indices = []
+    for fragment in fragments:
+        atom_indices = set(fragment.atom_indices)
+        # Chains are set in the input structure, while this structure is already corrected
+        # If chains were changed then chain names may select different atoms in the input structure
+        if not chains_changed:
+            chains = structure.get_selection_chains(fragment)
+            if len(chains) == 1:
+                chain = chains[0]
+                if chain_name_counts[chain.name] == 1 and set(chain.get_selection().atom_indices) == atom_indices:
+                    selection_strings.append(f'chain {chain.name}')
+                    continue
+        fragment_residue_indices = structure.get_selection_residue_indices(fragment)
+        if len(fragment_residue_indices) == 1:
+            residue = structure.residues[fragment_residue_indices[0]]
+            if residue_name_counts[residue.name] == 1 and set(residue.get_selection().atom_indices) == atom_indices:
+                selection_strings.append(f'resname {residue.name}')
+                continue
+        residue_indices += fragment_residue_indices
+    if residue_indices:
+        selection_strings.append('residue ' + ranger(sorted(residue_indices), unit_separator=' ', range_separator=' to '))
+    selection_string = ' or '.join(selection_strings)
+    # Make sure the selection string selects exactly the fragment atoms
+    fragments_atom_indices = set(itertools.chain.from_iterable(fragment.atom_indices for fragment in fragments))
+    selected_atom_indices = set(structure.select(selection_string).atom_indices)
+    if selected_atom_indices != fragments_atom_indices:
+        raise RuntimeError(f'Selection "{selection_string}" selects {len(selected_atom_indices)} atoms'
+            f' while fragments have {len(fragments_atom_indices)} atoms')
+    return selection_string
 
 
 def name_fragment(structure : 'Structure', fragment : 'Selection') -> str:
