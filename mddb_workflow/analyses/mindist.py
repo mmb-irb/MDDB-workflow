@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
-from mddb_workflow.utils.auxiliar import TestFailure, warn, ranger, parse_automatic_selection
+from mddb_workflow.utils.auxiliar import TestFailure, PbcSelectionUpdated, warn, ranger, parse_automatic_selection
 from mddb_workflow.utils.constants import CROSS_PBC_FLAG, AUTOMATIC_FLAG
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.mdt_spells import iterate_xtc_frames
@@ -134,7 +134,7 @@ def check_cross_periodic_contacts(
     structure : 'Structure',
     pbc_selection : 'Selection',
     input_pbc_selection : Optional[str],
-    update_md_inputs : Callable,
+    update_pbc_selection : Callable,
     chains_changed : bool,
     mercy : list[str],
     trust: list[str],
@@ -283,10 +283,13 @@ def check_cross_periodic_contacts(
                 new_pbc_selection = f'{AUTOMATIC_FLAG} + ({additional_selection_string}) or {escaped_selection_string}'
             else:
                 new_pbc_selection = f'{AUTOMATIC_FLAG} + {escaped_selection_string}'
-            update_md_inputs('pbc_selection', new_pbc_selection)
+            # If the inputs file is updated then the workflow is run again with the new PBC selection
+            if update_pbc_selection(new_pbc_selection):
+                raise PbcSelectionUpdated(f'{titles[-1]}\n{description}'
+                    f'These fragments have been added to the PBC selection of this MD in the inputs file: "{new_pbc_selection}"')
+            # Otherwise the PBC selection may be set from the command line, so the user must change it
             raise TestFailure(f'{titles[-1]}\n{description}'
-                f'These fragments have been added to the PBC selection of this MD in the inputs file: "{new_pbc_selection}"\n'
-                'Please run the workflow again')
+                f'These fragments must be part of the PBC selection: "{new_pbc_selection}"')
         description += 'If these fragments diffuse freely (e.g. an unbound ligand) then they must be part of the PBC selection'
         descriptions.append(description)
     # Contacts across periodic boundaries

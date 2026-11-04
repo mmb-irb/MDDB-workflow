@@ -56,6 +56,13 @@ class TestFailure (QuietException):
     pass
 
 
+class PbcSelectionUpdated (QuietException):
+    """Quiet exception for when the PBC selection in the inputs file has been changed during the run.
+    Tasks which were already run with the previous PBC selection must be run again, so the workflow is relaunched.
+    """
+    pass
+
+
 class EnvironmentError (QuietException):
     """Quite exception for when the problem is not in the code but in the environment."""
     pass

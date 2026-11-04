@@ -16,7 +16,7 @@ from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
 from mddb_workflow.core.inputs import ProjectInputs, forced_value_wins
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
+from mddb_workflow.utils.auxiliar import InputError, PbcSelectionUpdated, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import warn, load_json
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import get_git_version, download_file
@@ -709,6 +709,13 @@ class MD:
         if project_value == new_value: return False
         nested_key = f'mds.{self.index}.{key}'
         return self.project.inputs.update_file_inputs(nested_key, new_value)
+
+    def update_pbc_selection_input(self, new_value: str) -> bool:
+        """Permanently update the PBC selection of this MD in the inputs file.
+        Return False if there is no update or if the new value would be replaced by a command line value.
+        """
+        if self.is_forced_input('pbc_selection', new_value): return False
+        return self.update_file_inputs('pbc_selection', new_value)
 
     # ---------------------------------
 
@@ -1420,7 +1427,7 @@ class MD:
             structure=self.structure,
             pbc_selection=self.pbc_selection,
             input_pbc_selection=self.input_pbc_selection,
-            update_md_inputs=self.update_file_inputs,
+            update_pbc_selection=self.update_pbc_selection_input,
             chains_changed=self.cache.retrieve(CHAINS_CHANGED_FLAG, False),
             mercy=self.project.mercy,
             trust=self.project.trust,
@@ -2926,6 +2933,10 @@ class ErrorHandling:
 
     def __exit__(self, exc_type, exc_value, traceback):
         """Exit the context manager."""
+        # The PBC selection was updated and the workflow is to be relaunched, so this is not an error
+        if exc_type and issubclass(exc_type, PbcSelectionUpdated):
+            self.update_state(state=State.RUNNING, message='Relaunching workflow after updating the PBC selection')
+            return False
         if exc_type and issubclass(exc_type, Exception):
             error = exc_value.__class__.__name__ + ': ' + str(exc_value)
             self.update_state(state=State.ERROR, message=error)
@@ -2962,6 +2973,27 @@ def workflow(
         keep_going (bool): If True, continue to the next MD if a task fails. Project tasks still stop on errors. Default is False.
 
     """
+    # If the PBC selection is changed in the inputs file during the run then run the workflow again
+    # Every time this happens a new fragment is added to the PBC selection, so this does not repeat forever
+    while True:
+        try:
+            return run_workflow(project_parameters, download, setup, include, exclude, overwrite, dataset_path, keep_going)
+        except PbcSelectionUpdated as update:
+            print(f'\n{update}')
+            print(f'{CYAN_HEADER} Relaunching the workflow with the new PBC selection {COLOR_END}')
+
+
+def run_workflow(
+    project_parameters: dict,
+    download: bool,
+    setup: bool,
+    include: Optional[list[str]],
+    exclude: Optional[list[str]],
+    overwrite: Optional[list[str] | bool],
+    dataset_path: Optional[str],
+    keep_going: bool,
+):
+    """Run the MDDB workflow once. See the workflow function for the arguments."""
     # Print workflow header
     git_version = get_git_version()
     print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}){COLOR_END}')
