@@ -1,5 +1,6 @@
 from mddb_workflow.utils.auxiliar import load_json, save_json
 from mddb_workflow.utils.arg_cksum import get_cksum_id
+from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.core.dataclass import InChIKeyData
 import uuid as uuid_module
@@ -42,8 +43,12 @@ class Cache:
         If so, then we must read it again before.
         This is checked in case the workflow is running several times in parallel.
         """
-        current_filehash = self.file.get_cksum()
-        if current_filehash != self.filehash: self.load()
+        if self.get_filehash() != self.filehash: self.load()
+
+    def get_filehash(self) -> Optional[str]:
+        """Get a cksum of the cache file as it is right now in disk."""
+        # Use a new file handler every time, since file handlers remember the first cksum they calculate
+        return File(self.file.path).get_cksum()
 
     def retrieve(self, key: str, fallback=None):
         """Read a value from the cache."""
@@ -70,7 +75,7 @@ class Cache:
         # Read the cache in disk
         self.data = load_json(self.file.path)
         # Save a cksum of the current cache file
-        self.filehash = self.file.get_cksum()
+        self.filehash = self.get_filehash()
         # Make some modifications
         if 'inchikeys_task_output' in self.data:
             self.data['inchikeys_task_output'] = InChIKeyData.load_cache(self.data['inchikeys_task_output'])
@@ -82,6 +87,8 @@ class Cache:
         save_json(self.data, self._aux_file.path, indent=4)
         # If the new cache is successfully written then replace the old one
         self._aux_file.rename_to(self.file)
+        # Save the cksum of the new cache file, so we do not read again our own changes
+        self.filehash = self.get_filehash()
 
 
 def get_cached_function(function: Callable, cache: Cache) -> Callable:
