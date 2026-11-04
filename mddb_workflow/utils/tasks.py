@@ -219,8 +219,8 @@ class Task:
         forced_overwrite = self.flag in parent.overwritables
         changed_inputs, had_cache, cache_cksums = self._get_changed_inputs(parent, processed_args)
         any_input_changed = len(changed_inputs) > 0
-        # Update the cache inputs
-        parent.cache.update(self.cache_arg_cksums_key, cache_cksums)
+        # Note that new input cksums are saved in the cache only once the task is completed
+        # If the task fails or is interrupted then the next run must still know which inputs changed
         # We must overwrite outputs either if inputs changed or if it was forced by the user
         must_overwrite = forced_overwrite or any_input_changed
         # Check if output already exists
@@ -275,6 +275,7 @@ class Task:
             # If we already have the expected output then we can skip the task at all
             if satisfied_output:
                 print(f'{GREY_HEADER}-> Task {task_full_label} already completed{COLOR_END}')
+                parent.cache.update(self.cache_arg_cksums_key, cache_cksums)
                 return output
         # If we are at this point then we are missing some output so we must proceed to run the task
         # Use the final output directory instead of the incomplete one if exists
@@ -312,6 +313,8 @@ class Task:
                 for filename in filenames:
                     check_database_document_size(f'{directory}/{filename}')
         self._set_parent_output(parent, output)
+        # Now that the task is completed save the input cksums in the cache
+        parent.cache.update(self.cache_arg_cksums_key, cache_cksums)
         if self.use_cache:
             # Save output in cache unless it is marked to not save it
             # Note that all must be JSON serializable values
@@ -397,7 +400,8 @@ class Task:
         # Get cache argument references
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums_key, MISSING_VALUE_EXCEPTION)
         had_cache = False if cache_cksums == MISSING_VALUE_EXCEPTION else True
-        if cache_cksums == MISSING_VALUE_EXCEPTION: cache_cksums = {}
+        # Work on a copy, since changing the cached dict would save new cksums with any other cache update
+        cache_cksums = {} if cache_cksums == MISSING_VALUE_EXCEPTION else dict(cache_cksums)
         # Check argument by argument
         # Keep a list with arguments which have changed
         unmatched_arguments = []

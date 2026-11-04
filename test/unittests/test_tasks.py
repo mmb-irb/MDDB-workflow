@@ -9,10 +9,13 @@ import os
 import shutil
 import pathlib
 import pytest
+import numpy as np
+import MDAnalysis as mda
 from unittest.mock import patch, create_autospec
 from mddb_workflow.mwf import Project, MD
 from mddb_workflow.tools.generate_map import generate_protein_mapping
 from mddb_workflow.tools.process_input_files import process_input_files
+import mddb_workflow.tools.process_input_files as process_input_files_module
 
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
@@ -154,6 +157,74 @@ def test_md_task_overwrite_keeps_project_output():
         os.chdir(cwd)
 
 
+def write_trajectory(path: pathlib.Path, frames: int):
+    """Write a trajectory of the dummy peptide with the given number of frames."""
+    universe = mda.Universe(str(dummy_dir / "gromacs/ala_ala.gro"))
+    rng = np.random.default_rng(0)
+    with mda.Writer(str(path), n_atoms=universe.atoms.n_atoms) as writer:
+        for _ in range(frames):
+            universe.atoms.positions += rng.normal(size=(universe.atoms.n_atoms, 3)) * 0.05
+            writer.write(universe.atoms)
+
+
+@pytest.mark.parametrize('interrupted', [False, True])
+def test_more_frames_in_new_input_trajectory(interrupted: bool):
+    """Test that the workflow works after replacing the input trajectory by another one with more frames.
+
+    Bug scenario: The workflow was run with a trajectory and then the input trajectory was replaced by a longer one.
+    The next run was interrupted before counting frames, but input cksums were already saved in the cache.
+    Then, in the following run, the new trajectory was not seen as a change and the old number of frames was used.
+    The RMSDs analysis failed since it found more RMSD values than frames.
+    """
+    regenerate_test_fld()
+
+    shutil.copy(dummy_dir / "inputs.yaml", test_fld)
+    shutil.copy(dummy_dir / "gromacs/ala_ala.tpr", test_fld)
+    (test_fld / "replica_1").mkdir(exist_ok=True)
+    input_trajectory = test_fld / "replica_1/raw_trajectory.xtc"
+
+    def get_md() -> MD:
+        project = Project(
+            directory=str(test_fld),
+            input_topology_filepath=str(test_fld / "ala_ala.tpr"),
+            input_trajectory_filepaths="raw_trajectory.xtc",
+            input_md_directories=['replica_1'],
+            trust=DUMMY_GROMACS_TRUST
+        )
+        return project.mds[0]
+
+    cwd = pathlib.Path.cwd()
+    os.chdir(test_fld)
+
+    try:
+        # First run: run the whole RMSDs analysis with a short trajectory
+        write_trajectory(input_trajectory, 100)
+        md = get_md()
+        MD.run_rmsds_analysis(md)
+        assert md.snapshots == 100
+
+        # Replace the input trajectory by a longer one
+        write_trajectory(input_trajectory, 200)
+
+        # Second run: interrupt the input files processing before frames are counted
+        if interrupted:
+            interrupted_convert = create_autospec(process_input_files_module.convert, side_effect=SimulatedInterruption)
+            with patch.object(process_input_files_module, 'convert', interrupted_convert):
+                md = get_md()
+                with pytest.raises(SimulatedInterruption):
+                    MD.run_rmsds_analysis(md)
+
+        # Last run: the RMSDs analysis must work with the new number of frames
+        md = get_md()
+        MD.run_rmsds_analysis(md)
+        assert md.snapshots == 200
+
+    finally:
+        os.chdir(cwd)
+
+
 if __name__ == "__main__":
     test_task_no_output_file_second_run()
     test_md_task_overwrite_keeps_project_output()
+    test_more_frames_in_new_input_trajectory(False)
+    test_more_frames_in_new_input_trajectory(True)
