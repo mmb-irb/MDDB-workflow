@@ -1,5 +1,5 @@
 from os import rename, mkdir, walk
-from os.path import exists
+from os.path import exists, abspath, commonpath
 from shutil import rmtree
 from inspect import getfullargspec
 import time
@@ -251,6 +251,10 @@ class Task:
                 for output_file in output_files.values():
                     if output_file == None or type(output_file) == Exception: continue
                     if not output_file.exists: continue
+                    # Never delete a project output when running an MD task (e.g. the topology from inpro)
+                    # Other MDs share this output, so deleting it would make them run the task again if this one is interrupted
+                    # The task is to overwrite this output anyway
+                    if self._is_project_output(parent, output_file): continue
                     # Never delete an input file, even if it is also an output file
                     # This should be prevented before, when reading inputs, but we check it again just in case
                     if any(input_file.is_deleted_by_removing(output_file) for input_file in input_files):
@@ -343,6 +347,14 @@ class Task:
             values = value if type(value) == list else [value]
             input_files += [ item for item in values if isinstance(item, File) ]
         return input_files
+
+    @staticmethod
+    def _is_project_output(parent: Union['Project', 'MD'], output_file: 'File') -> bool:
+        """Check if the parent is an MD and the output file is out of its directory, thus belonging to the project."""
+        # We can not use the 'isinstance' function here because we can not import the MD class
+        if parent.__class__.__name__ != 'MD': return False
+        md_directory = abspath(parent.directory)
+        return commonpath([md_directory, output_file.absolute_path]) != md_directory
 
     def _find_arg_value(self, arg: str, parent: Union['Project', 'MD'], default_arguments: set):
         """Find argument values, thus running any dependency if necessary."""

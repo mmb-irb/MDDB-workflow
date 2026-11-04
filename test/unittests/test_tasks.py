@@ -8,9 +8,11 @@ logic fails when checking for satisfied output because the expected file doesn't
 import os
 import shutil
 import pathlib
+import pytest
 from unittest.mock import patch, create_autospec
-from mddb_workflow.mwf import Project
+from mddb_workflow.mwf import Project, MD
 from mddb_workflow.tools.generate_map import generate_protein_mapping
+from mddb_workflow.tools.process_input_files import process_input_files
 
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
@@ -87,5 +89,71 @@ def test_task_no_output_file_second_run():
         os.chdir(cwd)
 
 
+class SimulatedInterruption(Exception):
+    """Exception used to simulate the workflow being killed in the middle of a task."""
+
+
+def test_md_task_overwrite_keeps_project_output():
+    """Test that overwriting an MD task does not delete outputs shared with other MDs.
+
+    Bug scenario: The inpro task of every MD outputs the project topology when all MDs share the same input topology.
+    When the inpro of one MD was overwritten (e.g. because its input trajectory changed) the project topology was deleted.
+    If the workflow was interrupted before the task finished then the topology was left missing.
+    Then, in the next run, the inpro task of the first MD was run again with no input changes.
+    """
+    regenerate_test_fld()
+
+    shutil.copy(dummy_dir / "inputs.yaml", test_fld)
+    shutil.copy(dummy_dir / "gromacs/ala_ala.tpr", test_fld)
+    md_directories = ['replica_1', 'replica_2']
+    for md_directory in md_directories:
+        (test_fld / md_directory).mkdir(exist_ok=True)
+        shutil.copy(dummy_dir / "gromacs/raw_trajectory.xtc", test_fld / md_directory)
+
+    def get_project() -> Project:
+        return Project(
+            directory=str(test_fld),
+            input_topology_filepath=str(test_fld / "ala_ala.tpr"),
+            input_trajectory_filepaths="raw_trajectory.xtc",
+            input_md_directories=md_directories,
+            trust=DUMMY_GROMACS_TRUST
+        )
+
+    cwd = pathlib.Path.cwd()
+    os.chdir(test_fld)
+
+    try:
+        # First run: process the input files of both MDs
+        project = get_project()
+        md1, md2 = project.mds
+        md1.topology_file
+        md2.topology_file
+        project_topology_file = md1.topology_file
+        assert md2.topology_file == project_topology_file, "Both MDs should share the project topology"
+        assert project_topology_file.exists
+
+        # Second run: overwrite the inpro of the second MD and interrupt it in the middle
+        interrupted_processing = create_autospec(process_input_files, side_effect=SimulatedInterruption)
+        with patch.object(MD.input_files_processing, 'func', interrupted_processing):
+            project = get_project()
+            md1, md2 = project.mds
+            md2.overwritables.add(MD.input_files_processing.flag)
+            with pytest.raises(SimulatedInterruption):
+                md2.topology_file
+        assert project_topology_file.exists, "The project topology should not be deleted by an MD task"
+
+        # Third run: the inpro of the first MD must not be run again since nothing changed
+        unexpected_processing = create_autospec(process_input_files)
+        with patch.object(MD.input_files_processing, 'func', unexpected_processing):
+            project = get_project()
+            md1, md2 = project.mds
+            md1.topology_file
+            unexpected_processing.assert_not_called()
+
+    finally:
+        os.chdir(cwd)
+
+
 if __name__ == "__main__":
     test_task_no_output_file_second_run()
+    test_md_task_overwrite_keeps_project_output()
