@@ -397,8 +397,12 @@ def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', sel
     residue_atom_indices = [ atom_indices for atom_indices in residue_atom_indices if atom_indices ]
     translation_fitted = guess_translation_fitted(frames, selection.atom_indices)
     rotation_fitted = guess_rotation_fitted(frames, residue_atom_indices)
-    fitted_moves = [ move for move, fitted in [('translation', translation_fitted), ('rotation', rotation_fitted)] if fitted ]
-    if fitted_moves: print(f' The trajectory seems to be fitted in {" and ".join(fitted_moves)}')
+    if translation_fitted and rotation_fitted:
+        print(' The trajectory seems to be fitted in translation and rotation')
+    elif translation_fitted:
+        print(' The trajectory seems to be fitted in translation, but NOT in rotation')
+    elif rotation_fitted:
+        print(' The trajectory seems to be fitted in rotation, but NOT in translation')
     fitted = translation_fitted and rotation_fitted
     if not rotation_fitted: return fitted, False
     boxes = [ box for _, box in frames ]
