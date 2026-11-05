@@ -63,6 +63,7 @@ def process_input_files(
     # However we must add them as arguments, so this task will be run again if they change
     input_pbc_selection: Optional[str],
     input_cg_selection: Optional[str],
+    input_ua_selection: Optional[str],
     input_dummy_selection: Optional[str],
     input_forced_class_selections: dict,
     # The cross-PBC contacts test depends on the simulation box
@@ -406,6 +407,11 @@ def process_input_files(
     corrected_trajectory_filepath = f'{output_directory}/{CORRECTED_TRAJECTORY}'
     corrected_trajectory_file = File(corrected_trajectory_filepath)
 
+    # Set a provisional united atom selection
+    # Atoms in united atom residues may have their hydrogens absorbed, so the coherent bonds test expects less bonds
+    # Note that it is not saved in the MD, since the definitive selection is set further from the processed files
+    provisional_ua_selection = self._parse_ua_selection(provisional_structure, imaged_trajectory_file, provisional_cg_selection)
+
     # Correct the structure
     # This function reads and or modifies the following MD variables:
     #   snapshots, reference_bonds, register, cache, mercy, trust
@@ -420,6 +426,7 @@ def process_input_files(
         MD=self,
         pbc_selection=provisional_pbc_selection,
         cg_selection=provisional_cg_selection,
+        ua_selection=provisional_ua_selection,
         dummy_selection=self.dummy_selection,
         snapshots=snapshots,
         register=self.register,

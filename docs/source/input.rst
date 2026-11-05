@@ -516,6 +516,7 @@ Use ``auto`` to guess them from the force fields, atom names, atoms per residue 
 Set those atoms which belong to united atom (UA) residues, where carbons have their hydrogens absorbed (e.g. GROMOS, Berger lipids).
 Note that polar hydrogens may be still present.
 These residues are skipped where explicit hydrogens are needed (e.g. InChI keys).
+Their atoms may also have less bonds in the coherent bonds test (e.g. a terminal methyl is a carbon with 1 bond).
 Use ``auto`` to guess them by looking for carbons with missing hydrogens.
 
 .. warning::

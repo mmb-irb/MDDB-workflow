@@ -389,6 +389,7 @@ cg_selection: auto
 # Set those atoms which belong to united atom (UA) residues, where carbons have their hydrogens absorbed (e.g. GROMOS, Berger lipids).
 # Note that polar hydrogens may be still present.
 # These residues are skipped where explicit hydrogens are needed (e.g. InChI keys).
+# Their atoms may also have less bonds in the coherent bonds test (e.g. a terminal methyl is a carbon with 1 bond).
 # Atom selections are defined using `VMD selection language <https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html>`_.
 # Use the flag 'auto' to guess them by looking for carbons with missing hydrogens.
 # IMPORTANT: EXPERIMENTAL INPUT

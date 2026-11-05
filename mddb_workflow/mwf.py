@@ -1119,23 +1119,30 @@ class MD:
         return self._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
+    def _parse_ua_selection(self, reference_structure: 'Structure', trajectory_file: 'File', cg_selection: 'Selection') -> 'Selection':
+        """Parse the united atom selection input.
+        The trajectory file must match the reference structure, since it may be used to guess UA atoms.
+        """
+        print('Setting United Atom (UA) atoms selection')
+        selection_string = self.input_ua_selection
+        if not selection_string:
+            print(' Empty selection -> There is no UA at all')
+            ua_selection = Selection()
+        elif selection_string == AUTOMATIC_FLAG:
+            print(' Guessing UA atoms')
+            ua_selection = guess_ua_selection(reference_structure, trajectory_file, cg_selection, verbose=True)
+        else:
+            print(f' Selecting UA atoms "{selection_string}"')
+            ua_selection = reference_structure.select(selection_string)
+        print(f' UA selection has {len(ua_selection)} atoms')
+        return ua_selection
+
     def get_ua_selection(self) -> 'Selection':
         """Get the united atom selection."""
         # If we already have a stored value then return it
         if self._ua_selection is not MISSING_VALUE:
             return self._ua_selection
-        print('Setting United Atom (UA) atoms selection')
-        selection_string = self.input_ua_selection
-        if not selection_string:
-            print(' Empty selection -> There is no UA at all')
-            self._ua_selection = Selection()
-        elif selection_string == AUTOMATIC_FLAG:
-            print(' Guessing UA atoms')
-            self._ua_selection = guess_ua_selection(self.structure, self.trajectory_file, self.cg_selection, verbose=True)
-        else:
-            print(f' Selecting UA atoms "{selection_string}"')
-            self._ua_selection = self.structure.select(selection_string)
-        print(f' UA selection has {len(self._ua_selection)} atoms')
+        self._ua_selection = self._parse_ua_selection(self.structure, self.trajectory_file, self.cg_selection)
         return self._ua_selection
     ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
 
