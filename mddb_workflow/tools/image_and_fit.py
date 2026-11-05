@@ -66,6 +66,7 @@ def image_and_fit(
         translation:
             Set how it must be translated during imaging, in nm.
             Use 'auto' to find a translation which keeps non-PBC atoms away from the box boundaries.
+            If all atoms are PBC then lipids are used instead, so membranes are not split along their normal.
         structure:
             The structure of the system. Note that this is an early provisional structure.
         pbc_selection:
@@ -133,8 +134,16 @@ def image_and_fit(
         print(' Running imaging steps')
 
         # Find the translation automatically if requested
+        # If all atoms are PBC then use lipids, so membranes are not split by the box boundaries (e.g. lipid-only systems)
+        # Note that lipids are still PBC atoms in the rest of the imaging, so they may be periodic (e.g. membranes)
+        # Periodic non-PBC atoms (e.g. a nanoparticle touching its own image) still fail, since they can not be kept whole
         if translation == AUTOMATIC_FLAG:
-            translation = find_automatic_translation(latest_trajectory, center_selection)
+            if center_selection:
+                translation = find_automatic_translation(latest_trajectory, center_selection)
+            else:
+                lipid_selection = structure.select_lipids()
+                if lipid_selection: print(' There are only PBC atoms, so lipids are used to find the automatic translation')
+                translation = find_automatic_translation(latest_trajectory, lipid_selection, ignore_periodic=True)
 
         # Check if coordinates are to be translated
         must_translate = translation != [0, 0, 0]
@@ -428,12 +437,17 @@ def reset_structure(
         -dump 0', user_input=SYSTEM_SELECTION_NAME)
 
 
-def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') -> list[float]:
-    """Find a translation which places the box boundaries where no non-PBC object is split.
+def find_automatic_translation(trajectory_file: 'File', selection: 'Selection', ignore_periodic: bool = False) -> list[float]:
+    """Find a translation which places the box boundaries where no object of the selection is split.
 
     Only the first frame of the trajectory is used.
     Atoms in the selection which are close to each other, directly or across the box boundaries, are grouped in objects.
     Then every object is made whole and the boundary along every box vector is placed in the middle of the largest gap between objects.
+    Objects in contact with their own periodic image or filling the whole box can not be kept whole, so it fails.
+    If periodic objects are to be ignored (e.g. membranes of PBC lipids) then every box vector is handled on its own instead.
+    Objects are split by any boundary along the box vectors they are periodic along, so they are ignored along them only.
+    e.g. a flat membrane is ignored along the box vectors in its plane, but not along its normal.
+    If there is no gap along a box vector then its boundary is not moved.
     """
     if not selection: return [0, 0, 0]
     print(' Finding the automatic translation')
@@ -460,15 +474,20 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') 
         neighbours[fragment].append((other_fragment, np.array(shift)))
         neighbours[other_fragment].append((fragment, -np.array(shift)))
     # Join fragments in objects, giving every fragment the periodic shift which makes the object whole
+    # A fragment reached again with a different shift means the object is in contact with its own periodic image
+    # Then the object is periodic (e.g. a membrane) along the box vectors where both shifts differ
+    # Along the other box vectors shifts are always the same, so the object can still be made whole along them
     self_contact_error = InputError('Non-PBC atoms are in contact with their own periodic image in the first frame.\n'
         '  The automatic translation does not work in these cases.')
     fragment_shifts = [None] * fragment_count
     fragment_objects = np.empty(fragment_count, dtype=int)
+    periodic_objects = []
     object_count = 0
     for seed in range(fragment_count):
         if fragment_shifts[seed] is not None: continue
         fragment_shifts[seed] = np.zeros(3, dtype=int)
         fragment_objects[seed] = object_count
+        periodic_axes = np.zeros(3, dtype=bool)
         queue = deque([seed])
         while queue:
             fragment = queue.popleft()
@@ -478,21 +497,34 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') 
                     fragment_shifts[other_fragment] = expected_shift
                     fragment_objects[other_fragment] = object_count
                     queue.append(other_fragment)
-                elif not np.array_equal(fragment_shifts[other_fragment], expected_shift):
-                    raise self_contact_error
+                else:
+                    periodic_axes |= fragment_shifts[other_fragment] != expected_shift
+        periodic_objects.append(periodic_axes)
         object_count += 1
+    periodic_objects = np.array(periodic_objects)
+    if not ignore_periodic and periodic_objects.any(): raise self_contact_error
     # Get the fractional coordinates of every atom once its object is whole
+    # Coordinates along the box vectors where the object is periodic are not used
     fractional = positions @ inverse_box - np.array(fragment_shifts)[atom_fragments]
     atom_objects = fragment_objects[atom_fragments]
     translation = np.zeros(3)
     for axis in range(3):
+        # Objects which are periodic along this box vector are split by any boundary, so they are ignored
+        periodic = periodic_objects[:, axis]
+        if periodic.all():
+            print(f'  Objects are periodic along the box vector {axis + 1} (e.g. membranes), so there is no translation along it')
+            continue
+        if periodic.any():
+            print(f'  Some objects are periodic along the box vector {axis + 1} (e.g. membranes), so they are ignored along it')
         values = fractional[:, axis]
         lows = np.full(object_count, np.inf)
         highs = np.full(object_count, -np.inf)
         np.minimum.at(lows, atom_objects, values)
         np.maximum.at(highs, atom_objects, values)
-        if np.any(highs - lows >= 1): raise self_contact_error
+        lows, highs = lows[~periodic], highs[~periodic]
+        if not ignore_periodic and np.any(highs - lows >= 1): raise self_contact_error
         # Bring every object interval into [0, 1) and split the ones going beyond 1
+        # Objects which are longer than the box along this box vector fill it all
         offsets = np.floor(lows)
         lows, highs = lows - offsets, highs - offsets
         crossing = highs > 1
@@ -508,8 +540,12 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') 
         gaps.append((merged[-1][1], merged[0][0] + 1))
         gap_low, gap_high = max(gaps, key=lambda gap: gap[1] - gap[0])
         if gap_high <= gap_low:
-            raise InputError(f'Non-PBC atoms fill the whole box along the box vector {axis + 1} in the first frame.\n'
-                '  The automatic translation does not work in these cases.')
+            if not ignore_periodic:
+                raise InputError(f'Non-PBC atoms fill the whole box along the box vector {axis + 1} in the first frame.\n'
+                    '  The automatic translation does not work in these cases.')
+            warn(f'Atoms to find the automatic translation fill the whole box along the box vector {axis + 1} in the first frame.\n'
+                ' Some of them will be split by the box boundary anyway, so there is no translation along it.')
+            continue
         # Move the middle of the gap to the boundary, choosing the shortest way
         middle = ((gap_low + gap_high) / 2) % 1
         translation[axis] = -middle if middle < 0.5 else 1 - middle
