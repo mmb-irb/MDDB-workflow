@@ -917,9 +917,16 @@ def write_ndict(nested_dict: dict, nested_key: str, value):
 
 def get_git_version() -> str:
     """Get the current git version."""
-    git_command = f"git -C {__path__[0]} describe --tags"
-    process = run(git_command, shell=True, stdout=PIPE)
-    return process.stdout.decode().replace('\n', '') or __version__
+    git_command = f"git -C {__path__[0]}"
+    # The workflow was not installed from a git clone
+    if run(f"{git_command} rev-parse", shell=True, stdout=PIPE, stderr=PIPE).returncode != 0:
+        return __version__
+    process = run(f"{git_command} describe --tags", shell=True, stdout=PIPE, stderr=PIPE)
+    if process.returncode == 0:
+        return process.stdout.decode().strip()
+    # No tag is reachable from the current commit (e.g. a clone without tags)
+    commit = run(f"{git_command} rev-parse --short HEAD", shell=True, stdout=PIPE, stderr=PIPE).stdout.decode().strip()
+    return f'{__version__} untagged {commit}'
 
 
 def natural_sort_key(s):
