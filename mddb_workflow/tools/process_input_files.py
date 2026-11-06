@@ -4,7 +4,7 @@ from mddb_workflow.utils.constants import FILTERED, FILTERED_STRUCTURE, FILTERED
 from mddb_workflow.utils.constants import IMAGED, IMAGED_STRUCTURE, IMAGED_TRAJECTORY, AUTO_IMAGE_FLAG
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, CORRECTED_TRAJECTORY
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, CG_ATOM_ELEMENT, SNAPSHOTS_FLAG
-from mddb_workflow.utils.constants import FAITH_BYPASS, BROKEN_PBC_FLAG, AUTOMATIC_FLAG, CHAINS_CHANGED_FLAG
+from mddb_workflow.utils.constants import FAITH_BYPASS, BROKEN_PBC_FLAG, AUTOMATIC_FLAG, CHAINS_CHANGED_FLAG, STABLE_BONDS_FLAG
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.selections import Selection
@@ -20,6 +20,7 @@ from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajec
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
+from mddb_workflow.tools.get_bonds import find_safe_bonds
 
 
 def _prepare_incomplete_output(output_directory: str, output_filename: str) -> File:
@@ -359,7 +360,19 @@ def process_input_files(
             fit=fit,
             translation=translation,
             structure=provisional_structure,
-            pbc_selection=provisional_pbc_selection
+            pbc_selection=provisional_pbc_selection,
+            # Bonds are found as the safe bonds further, but here with the provisional structure
+            find_bonds=lambda trajectory_file, frames_count: find_safe_bonds(
+                filtered_topology_file,
+                trajectory_file,
+                STABLE_BONDS_FLAG not in self.project.trust,
+                frames_count,
+                provisional_structure,
+                self.register,
+                provisional_cg_selection,
+                self.project.guess_bonds,
+                self.project.ignore_bonds,
+            ),
         )
         _commit_incomplete_output(incompleted_imaged_trajectory_file, imaged_trajectory_file)
         # Update the cache
