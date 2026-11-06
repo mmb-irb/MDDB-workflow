@@ -200,6 +200,9 @@ def test_project_inputs_applies_common_md_overrides_and_skips_removed(tmp_path):
             [{'name': 'one', 'mdir': 'same'}, {'name': 'two', 'mdir': 'same'}],
             'Duplicated values in MD inputs',
         ),
+        ([{'mdir': 'incomplete_replica'}], 'header is reserved'),
+        ([{'mdir': 'replicas/incomplete_1/'}], 'header is reserved'),
+        ([{'name': 'incomplete replica'}], 'header is reserved'),
     ],
 )
 def test_project_inputs_validates_md_config(md_config, expected_message, capsys):
@@ -214,6 +217,16 @@ def test_project_inputs_validates_md_config(md_config, expected_message, capsys)
     if 'Duplicated' in expected_message:
         output = capsys.readouterr().out
         assert 'same name' in output or 'same directory' in output
+
+
+def test_project_inputs_accepts_incomplete_word_not_as_header():
+    inputs = ProjectInputs(
+        File('/tmp/project-inputs-does-not-exist.yaml'),
+        directory_name='demo',
+    )
+    md_config = [{'name': 'replica incomplete'}, {'mdir': 'incomplete'}]
+    inputs.validate_md_config(md_config)
+    assert md_config[0]['mdir'] == 'replica_incomplete'
 
 
 def test_project_uses_project_inputs_to_autofill_md_identifiers(tmp_path):
