@@ -31,6 +31,9 @@ AUTO_TRANSLATION_CUTOFF = 0.5
 # Number of frames read at once in the no-jump step
 NO_JUMP_CHUNK_SIZE = 100
 
+# Number of frames along the trajectory where split molecules are searched when the image is automatic
+SPLIT_CHECK_FRAMES = 10
+
 
 def image_and_fit(
     input_structure_file: 'File',
@@ -414,6 +417,48 @@ def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', sel
     warn('The trajectory seems to be fitted already, but its box is not rotated accordingly.\n'
         ' Periodic boundary conditions are probably broken, so the simulation box will be ignored and the imaging will probably fail.')
     return fitted, True
+
+
+def find_split_molecules(
+    trajectory_file: 'File',
+    topology_file: Union['File', Exception],
+    structure: 'Structure',
+    selection: 'Selection',
+) -> bool:
+    """Check if molecules in the selection are split by the box boundaries in some frames.
+    Two bonded atoms are split when they are closer through the box boundaries than directly.
+    Bonds are taken from the topology. If they are missing then every atom is paired with the first atom of its residue.
+    Only a few frames along the trajectory are checked, so short problems may be missed.
+    """
+    if trajectory_file.format != 'xtc':
+        raise ValueError(f'Finding split molecules is only supported for xtc trajectories: {trajectory_file.path}')
+    selected_atom_indices = set(selection.atom_indices)
+    atom_bonds = mine_topology_bonds(topology_file)
+    if atom_bonds and any(bonds == MISSING_BONDS for bonds in atom_bonds):
+        atom_bonds = None
+    if atom_bonds:
+        if len(atom_bonds) != structure.atom_count:
+            raise InputError(f'Topology bonds have {len(atom_bonds)} atoms, but the structure has {structure.atom_count} atoms')
+        pairs = [ (atom_index, bonded) for atom_index, bonds in enumerate(atom_bonds) for bonded in bonds
+            if atom_index < bonded and atom_index in selected_atom_indices and bonded in selected_atom_indices ]
+    else:
+        pairs = [ (residue.atom_indices[0], atom_index) for residue in structure.residues for atom_index in residue.atom_indices[1:]
+            if residue.atom_indices[0] in selected_atom_indices and atom_index in selected_atom_indices ]
+    if not pairs: return False
+    pairs = np.array(pairs, dtype=int)
+    with mdt.formats.XTCTrajectoryFile(trajectory_file.path) as reader:
+        frames_count = len(reader)
+        for frame in np.unique(np.linspace(0, frames_count - 1, SPLIT_CHECK_FRAMES).astype(int)):
+            reader.seek(frame)
+            xyz, _, _, boxes = reader.read(n_frames=1)
+            if boxes is None or not boxes[0].any(): return False
+            positions, box_vectors = xyz[0].astype(np.float64), boxes[0].astype(np.float64)
+            fractional = (positions[pairs[:, 1]] - positions[pairs[:, 0]]) @ np.linalg.inv(box_vectors)
+            split_count = int(closest_images(fractional, box_vectors).any(axis=1).sum())
+            if split_count:
+                print(f' {split_count} bonds are split by the box boundaries in frame {frame}')
+                return True
+    return False
 
 
 def reset_structure(

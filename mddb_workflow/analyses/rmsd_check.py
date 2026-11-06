@@ -10,7 +10,7 @@ from tqdm import tqdm
 import plotext as plt
 from scipy import special
 
-from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn, fail
+from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, InputsUpdated, warn, fail
 from mddb_workflow.utils.auxiliar import round_to_hundredths
 from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG, BIMODALITY_BIC_CUTOFF, BIMODALITY_SEPARATION_CUTOFF
 from mddb_workflow.utils.constants import RED_HEADER, COLOR_END
@@ -77,6 +77,8 @@ def check_trajectory_integrity (
     # DANI: He visto saltos 'correctos' pasar de 6
     # DANI: He visto saltos 'incorrectos' no bajar de 10
     standard_deviations_cutoff : float,
+    # Set the image as true in the inputs file if it was automatic and the trajectory was not imaged
+    update_image : Callable,
     snapshots : int,
     # Used only to suggest how to skip non-equilibrated frames
     md_index : int,
@@ -505,6 +507,12 @@ def check_trajectory_integrity (
             'frames': shown_frames,
             'selection': format_selection(structure, worst_fragment),
         }
+
+    # If the trajectory was not imaged because it did not seem necessary then run the workflow again with the image
+    # Frames not equilibrated at the beginning are not fixed by the image, so they do not count here
+    if any_outliers > 0 and update_image():
+        raise InputsUpdated(f'RMSD check has failed but the trajectory was not imaged\n{description}\n{view_hint}\n'
+            'The image of this MD has been set to true in the inputs file')
 
     # If there were any outlier then the check has failed
     if any_outliers > 0:

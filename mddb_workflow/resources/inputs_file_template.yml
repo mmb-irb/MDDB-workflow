@@ -627,6 +627,8 @@ filter_selection:
 
 # Set if the trajectory is to be imaged so atoms stay in the PBC box.
 # See the "pbc_selection" field for more information.
+# Use 'auto' to image only if non-PBC molecules are split by the box boundaries in some frames.
+# If the image was not done and the trajectory integrity test fails then the workflow is run again with the image.
 # Equivalent to the "-img" command line argument.
 #
 # Example:

@@ -16,7 +16,7 @@ from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
 from mddb_workflow.core.inputs import ProjectInputs, forced_value_wins
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, PbcSelectionUpdated, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
+from mddb_workflow.utils.auxiliar import InputError, InputsUpdated, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import warn, load_json
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import get_git_version, download_file
@@ -717,6 +717,15 @@ class MD:
         if self.is_forced_input('pbc_selection', new_value): return False
         return self.update_file_inputs('pbc_selection', new_value)
 
+    def update_image_input(self) -> bool:
+        """Permanently set the image of this MD as true in the inputs file, if it was automatic and the trajectory was not imaged.
+        Return False if there is no update or if the image is set from the command line.
+        """
+        if self.image != AUTOMATIC_FLAG: return False
+        if self.project.console_processing_inputs['image'] or 'image' in self.project.inputs.forced_inputs: return False
+        if self.cache.retrieve(AUTO_IMAGE_FLAG) is not False: return False
+        return self.project.inputs.update_file_inputs(f'mds.{self.index}.image', True)
+
     # ---------------------------------
 
     def get_file(self, target_file: File) -> bool:
@@ -1408,6 +1417,7 @@ class MD:
             # time_length = self.time_length,
             check_selection=ALL_ATOMS,
             standard_deviations_cutoff=self.project.rmsd_cutoff,
+            update_image=self.update_image_input,
             snapshots=self.snapshots,
             md_index=self.index,
             skipped_frames=self.input_skip_frames or 0,
@@ -1621,7 +1631,7 @@ class Project:
         qm_selection: Optional[str] = None,
         dummy_selection: Optional[str] = None,
         forced_class_selections: Optional[dict] = None,
-        image: bool = False,
+        image: bool | str = False,
         fit: bool | str = False,
         translation: Optional[list[float] | str] = None,
         mercy: list[str] | bool = [],
@@ -1710,8 +1720,10 @@ class Project:
             forced_class_selections:
                 Custom forced selections for molecular classification.
                 Value passed through arguments overrides the one in inputs file.
-            image (bool):
+            image (bool|str):
                 Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
+                Use 'auto' to image only if non-PBC molecules are split by the box boundaries in some frames.
+                If the image was not done and the trajectory integrity test fails then the workflow is run again with the image.
                 Value passed through console overrides the one in inputs file.
             fit (bool|str):
                 Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.
@@ -2933,9 +2945,9 @@ class ErrorHandling:
 
     def __exit__(self, exc_type, exc_value, traceback):
         """Exit the context manager."""
-        # The PBC selection was updated and the workflow is to be relaunched, so this is not an error
-        if exc_type and issubclass(exc_type, PbcSelectionUpdated):
-            self.update_state(state=State.RUNNING, message='Relaunching workflow after updating the PBC selection')
+        # The inputs file was updated and the workflow is to be relaunched, so this is not an error
+        if exc_type and issubclass(exc_type, InputsUpdated):
+            self.update_state(state=State.RUNNING, message='Relaunching workflow after updating the inputs file')
             return False
         if exc_type and issubclass(exc_type, Exception):
             error = exc_value.__class__.__name__ + ': ' + str(exc_value)
@@ -2973,14 +2985,15 @@ def workflow(
         keep_going (bool): If True, continue to the next MD if a task fails. Project tasks still stop on errors. Default is False.
 
     """
-    # If the PBC selection is changed in the inputs file during the run then run the workflow again
-    # Every time this happens a new fragment is added to the PBC selection, so this does not repeat forever
+    # If the inputs file is changed during the run to fix a failed test then run the workflow again
+    # This does not repeat forever since every change is done once:
+    # every time a new fragment is added to the PBC selection, and the automatic image is set to true only once
     while True:
         try:
             return run_workflow(project_parameters, download, setup, include, exclude, overwrite, dataset_path, keep_going)
-        except PbcSelectionUpdated as update:
+        except InputsUpdated as update:
             print(f'\n{update}')
-            print(f'{CYAN_HEADER} Relaunching the workflow with the new PBC selection {COLOR_END}')
+            print(f'{CYAN_HEADER} Relaunching the workflow with the new inputs {COLOR_END}')
 
 
 def run_workflow(

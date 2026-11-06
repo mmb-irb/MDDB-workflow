@@ -134,7 +134,7 @@ class MDConfig(InputsBaseModel):
     input_structure_filepath: Optional[str] = None
     input_trajectory_filepaths: Optional[Union[str, list[str]]] = None
     # Processing parameters which may be different for each MD
-    image: Optional[bool] = None
+    image: Optional[Union[bool, Literal['auto']]] = None
     fit: Optional[Union[bool, Literal['auto']]] = None
     translation: Optional[Union[str, list[float]]] = None
 
@@ -215,7 +215,7 @@ class WorkflowInputs(InputsBaseModel):
     # Workflow control parameters
     # These values have an effect in the workflow but they are not propagated to the database
     filter_selection: Optional[Union[bool, str]] = None
-    image: Optional[bool] = None
+    image: Optional[Union[bool, Literal['auto']]] = None
     fit: Optional[Union[bool, Literal['auto']]] = None
     translation: Optional[Union[str, list[float]]] = None
     chainer: Optional[dict[str, str]] = None

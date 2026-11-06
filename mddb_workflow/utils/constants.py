@@ -142,6 +142,8 @@ FILTERED_STRUCTURE = 'filtered.cif'
 FILTERED_TRAJECTORY = 'filtered.xtc'
 
 IMAGED = 'imaged'
+# Value of the automatic image, saved in the cache
+AUTO_IMAGE_FLAG = 'auto_image'
 IMAGED_STRUCTURE = 'imaged.cif'
 IMAGED_TRAJECTORY = 'imaged.xtc'
 
