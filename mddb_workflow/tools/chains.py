@@ -44,18 +44,13 @@ def check_interproscan_status(jobid: str) -> str:
     """Check the status of the InterProScan job."""
     # Set the request URL
     request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/status/{jobid}'
-    parsed_response = None
     try:
         with urlopen(request_url) as response:
-            parsed_response = response.read().decode("utf-8")
+            return response.read().decode("utf-8")
+    # Show what InterProScan says and let the error go up so server errors are retried
     except HTTPError as error:
         print(error.read().decode())
-        if error.code == 404:
-            print(' Not found')
-            return None
-        else:
-            raise ValueError('Something went wrong with the InterProScan status request: ' + request_url)
-    return parsed_response
+        raise
 
 
 @retry_request
@@ -63,20 +58,13 @@ def check_interproscan_result(jobid: str) -> dict:
     """Obtain the result of the InterProScan job in json format."""
     # Set the request URL
     request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{jobid}/json'
-    parsed_response = None
     try:
         with urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
+            return json.loads(response.read().decode("utf-8"))
+    # Show what InterProScan says and let the error go up so server errors are retried
     except HTTPError as error:
         print(error.read().decode())
-        if error.code == 404:
-            print(' Not found')
-            return None
-        elif error.code == 503:
-            raise RemoteServiceError('InterProScan Service unavailable. Please try again later.')
-        else:
-            raise ValueError('Something went wrong with the InterProScan results request: ' + request_url)
-    return parsed_response
+        raise
 
 
 # Set the expected ligand data fields
@@ -175,6 +163,9 @@ def get_interproscan_results(
     # AGUS: a veces ha llegado a tardar ~6 minutos que es excesivo, creo que  minutos es suficiente tiempo de espera
     TIMEOUT = 300  # 5 min (seg)
     start_time = time.time()
+    # Jobs which fail in InterProScan are sent again, since failures are often temporary problems on their side
+    MAX_RESUBMISSIONS = 2
+    resubmissions = {}
     # Iterate over the jobids to check the status and get the results
     # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list
     # until there are no more jobids in either list
@@ -192,9 +183,20 @@ def get_interproscan_results(
             # We only know four possible status for interproscan jobs, but it could be more
             if status == 'RUNNING' or status == 'PENDING' or status == 'QUEUED':
                 continue
-            # If the status is something that we don´t know then we raise an error in order to solucionate this problem
+            # If the job failed then send it again
+            # The wait time starts again so the new job has the full time to finish
+            if status in ('ERROR', 'FAILURE') and resubmissions.get(sequence, 0) < MAX_RESUBMISSIONS:
+                resubmissions[sequence] = resubmissions.get(sequence, 0) + 1
+                new_jobid = request_interproscan(sequence)
+                print(f' InterProScan job {interproscan_jobid} ended with status {status}.' +
+                    f' Sending it again as {new_jobid} ({resubmissions[sequence]}/{MAX_RESUBMISSIONS})')
+                interproscan_jobids[sequence] = new_jobid
+                pending_jobids[pending_jobids.index(interproscan_jobid)] = new_jobid
+                start_time = time.time()
+                continue
             if status != 'FINISHED':
-                raise ValueError('Something went wrong with the InterProScan job: ' + interproscan_jobid)
+                raise RemoteServiceError(f'InterProScan job {interproscan_jobid} ended with status {status}.' +
+                    f' Check the details in https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{interproscan_jobid}/error')
             # Retrive the results from InterProScan
             interproscan_result = check_interproscan_result(interproscan_jobid)
             # Get corresponding chain data and add the InterProScan results
