@@ -350,6 +350,9 @@ class ProteinMapper:
         # Get matched uniprot ids
         matched_references = [chain_data['match']['ref'] for chain_data in self.protein_parsed_chains]
         matched_uniprot_ids = set([ref['uniprot'] for ref in matched_references if type(ref) == dict])
+        # Isoforms of the forced references are aligned too and may score better than the canonical sequence
+        # A chain matching an isoform (e.g. P12345-2) is then a match of its entry (P12345)
+        matched_uniprot_ids |= {uniprot_id.split('-')[0] for uniprot_id in matched_uniprot_ids}
         # Check the difference
         unmatched_uniprot_ids = forced_uniprot_ids - matched_uniprot_ids
         if len(unmatched_uniprot_ids) > 0:
