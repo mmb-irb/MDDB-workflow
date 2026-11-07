@@ -640,6 +640,7 @@ image:
 # Set the translation (x y z in nm) applied to the trajectory before imaging.
 # The goal is that non-PBC molecules are not split by the box boundaries in the first frame.
 # Use 'auto' to find a translation which places the box boundaries away from non-PBC atoms.
+# If all atoms are PBC then lipids are used instead, so membranes are not split along their normal.
 # This has no effect if the trajectory is not to be imaged.
 # Equivalent to the "-trans" command line argument.
 #

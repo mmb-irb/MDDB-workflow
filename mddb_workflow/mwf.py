@@ -1732,6 +1732,7 @@ class Project:
             translation (list[float]|str):
                 Set the x y z translation (nm) for the imaging process.
                 Use 'auto' to find a translation which keeps non-PBC atoms away from the box boundaries.
+                If all atoms are PBC then lipids are used instead, so membranes are not split along their normal.
                 e.g. -trans 0.5 -1 0
                 Value passed through console overrides the one in inputs file.
             mercy (list[str]|bool):
