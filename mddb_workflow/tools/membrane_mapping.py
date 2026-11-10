@@ -43,6 +43,9 @@ CG_CORE_CONTACT_DISTANCE = 7
 AA_CORE_CONTACT_DISTANCE = 4.5
 # Minimum fraction of lipids with tail atoms to group them into hydrophobic cores
 MIN_TAIL_FRACTION = 0.9
+# Minimum number of other lipids of a hydrophobic core whose tails touch the tails of a lipid in it
+# Lipids in aggregates touch 8-12 lipids (median) and 5-8 at least, while lipids in solution touch 1 or 2 by chance
+MIN_CORE_PARTNERS = 3
 
 
 def generate_membrane_mapping(
@@ -80,10 +83,11 @@ def generate_membrane_mapping(
             - frame (int): Trajectory frame where the membranes were found.
 
     Notes:
-        - All atom lipids are the residues with lipid references (from their InChI keys), coarse grained lipids are
-          found by residue and bead names (see coarse_grain_lipids).
-        - Membranes are found in the first frame or, if there are none, in the last frame, for lipids which assemble
-          along the trajectory (see find_frame_leaflets).
+        - All atom lipids are the molecules with lipid references (from their InChI keys), which may span several
+          residues (see lipid_molecules), coarse grained lipids are residues found by residue and bead names (see
+          coarse_grain_lipids).
+        - Membranes are found in the first and the last frames, keeping the mapping with more lipids in membranes, then
+          more leaflets, then the last one, since they may assemble or fuse along the trajectory (see find_frame_leaflets).
         - Lipids are grouped into hydrophobic cores by tail contacts (see hydrophobic_cores).
         - Leaflets are groups of at least 24 neighbour lipids of a core with similar local normals, like in FATSLiM
           (see find_leaflets), classified into aggregates from their shape and orientation (see classify_core).
@@ -95,25 +99,62 @@ def generate_membrane_mapping(
         no_inchikey_residues = list(cg_residues) + list(ua_residues)
         headgroup_ag, tails = coarse_grain_lipids(universe, no_inchikey_residues, input_forced_lipids)
         core_distance = CG_CORE_CONTACT_DISTANCE
+        lipid_of = None
     else:
         # Select only the lipids from the InChIKeyData
         lipid_map = {key: inchikeys[key] for key in lipid_references.keys()}
-        headgroup_ag = all_atom_headgroups(lipid_map, universe)
-        tails = all_atom_tails(headgroup_ag.residues.atoms) if headgroup_ag else None
+        lipid_resindices, lipid_of = lipid_molecules(lipid_map, universe)
+        headgroup_ag = all_atom_headgroups(lipid_map, universe, lipid_resindices)
+        tails = all_atom_tails(lipid_atoms(universe, lipid_of, headgroup_ag.resindices)) if headgroup_ag else None
         core_distance = AA_CORE_CONTACT_DISTANCE
-    membrane_map = find_frame_leaflets(universe, headgroup_ag, tails, core_distance)
+    membrane_map = find_frame_leaflets(universe, headgroup_ag, tails, core_distance, lipid_of)
 
     if membrane_map['n_mems'] > 0:
         save_json(membrane_map, output_file.path)
     return membrane_map
 
 
+def lipid_molecules(lipid_map: dict[str, 'InChIKeyData'], universe: 'Universe') -> tuple[np.ndarray, np.ndarray]:
+    """Get the residue representing every lipid molecule and the lipid of every residue.
+
+    Lipids spanning several residues (InChI key fragments, e.g. PEG-lipids with a residue per PEG monomer or
+    gangliosides with a residue per sugar) are one lipid, represented by its residue with most tail atoms (see
+    all_atom_tails), e.g. the glycerol of PEG-lipids or the ceramide of gangliosides, which has the polar atom at the
+    interface with the tails. Ties are broken by residue order. Any other residue represents itself.
+    Returns the residue indices of the lipids and the residue index of the lipid of every residue in the universe.
+    """
+    lipid_of = np.arange(len(universe.residues))
+    molecules = []
+    for data in lipid_map.values():
+        if data.moltype == 'fragment' and len(data.fragments) > 0: molecules.extend(data.fragments)
+        else: molecules.extend([resindex] for resindex in data.resindices)
+    tail_counts = np.zeros(len(universe.residues), dtype=int)
+    multi_residue = [molecule for molecule in molecules if len(molecule) > 1]
+    if len(multi_residue) > 0:
+        tails = all_atom_tails(universe.residues[np.unique(np.concatenate(multi_residue))].atoms)
+        if tails is not None: tail_counts = np.bincount(tails.resindices, minlength=len(universe.residues))
+    lipid_resindices = []
+    for molecule in molecules:
+        representative = max(molecule, key=lambda resindex: (tail_counts[resindex], -resindex))
+        lipid_of[molecule] = representative
+        lipid_resindices.append(representative)
+    return np.array(lipid_resindices, dtype=int), lipid_of
+
+
+def lipid_atoms(universe: 'Universe', lipid_of: np.ndarray, lipids: np.ndarray | list[int]) -> 'AtomGroup':
+    """Get all atoms of the given lipids (the residue indices representing them), in all their residues."""
+    return universe.residues[np.isin(lipid_of, lipids)].atoms
+
+
 def all_atom_headgroups(
     lipid_map: dict[str, 'InChIKeyData'],
     universe: 'Universe',
-) -> dict:
+    lipid_resindices: Optional[np.ndarray] = None,
+) -> Optional['AtomGroup']:
     """Extract the headgroup atoms for all lipids in the system using the most charged atom.
     In case of missing charges, it will try to guess the headgroup from the atom elements and bonds.
+    There is one polar atom per lipid molecule, in the residue representing it (see lipid_molecules), which is
+    found when the residues are not given.
     """
     if len(lipid_map) == 0:
         # no lipids found in the structure.
@@ -121,21 +162,19 @@ def all_atom_headgroups(
         return None
 
     # Select only the lipids and potential membrane members
-    lipid_resindices = []
-    for ref in lipid_map.values():
-        lipid_resindices.extend(ref.resindices)
+    if lipid_resindices is None: lipid_resindices, _ = lipid_molecules(lipid_map, universe)
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_resindices) == 0:
         # no lipids found in the structure.
         return None
-    all_lipids = universe.select_atoms(f'(resindex {" ".join(map(str, (lipid_resindices)))})')
+    all_lipids = universe.residues[np.unique(lipid_resindices)]
 
     # For better leaflet assignation we only use polar atoms
     if not hasattr(universe.atoms, 'charges'):
         warn("Atom charges not found, guessing headgroups by element.")
         polar_atoms = []
         skipped = Counter()
-        for residue in all_lipids.residues:
+        for residue in all_lipids:
             polar_atom = guess_polar_atom(residue)
             if polar_atom is None:
                 skipped[residue.resname] += 1
@@ -147,8 +186,7 @@ def all_atom_headgroups(
         print("Using atom charges to find polar atoms for leaflet assignment.")
         charges = np.abs(universe.atoms.charges)
         polar_atoms = []
-        for ridx in all_lipids.residues.resindices:  # take only one per fragment
-            res = universe.residues[ridx]
+        for res in all_lipids:
             res_ch = charges[res.atoms.ix]
             max_ch_idx = np.argmax(res_ch)
             polar_atoms.append(res.atoms[max_ch_idx].index)
@@ -248,21 +286,22 @@ def connected_labels(first: np.ndarray, second: np.ndarray, n_nodes: int) -> np.
     return connected_components(graph, directed=False)[1]
 
 
-def lipid_centers(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup']) -> np.ndarray:
-    """Get the center of every lipid by residue index: the centroid of its tail atoms or, without tail atoms, of all
-    its atoms. Tail centroids keep the head to tail vector along the tails when other parts of the lipid are big,
-    like the PEG chain of PEG-lipids which goes to the solvent.
+def lipid_centers(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup'], lipid_of: np.ndarray) -> np.ndarray:
+    """Get the center of every lipid by the residue index representing it (see lipid_molecules): the centroid of its
+    tail atoms or, without tail atoms, of all its atoms. Tail centroids keep the head to tail vector along the tails
+    when other parts of the lipid are big, like the PEG chain of PEG-lipids which goes to the solvent.
     """
-    n_residues = len(headgroup_ag.universe.residues)
+    universe = headgroup_ag.universe
+    n_residues = len(universe.residues)
 
     def centroid_sums(atoms: 'AtomGroup') -> tuple[np.ndarray, np.ndarray]:
         sums = np.zeros((n_residues, 3))
         counts = np.zeros(n_residues)
-        np.add.at(sums, atoms.resindices, atoms.positions)
-        np.add.at(counts, atoms.resindices, 1)
+        np.add.at(sums, lipid_of[atoms.resindices], atoms.positions)
+        np.add.at(counts, lipid_of[atoms.resindices], 1)
         return sums, counts
 
-    sums, counts = centroid_sums(headgroup_ag.residues.atoms)
+    sums, counts = centroid_sums(lipid_atoms(universe, lipid_of, headgroup_ag.resindices))
     if tails is not None and len(tails) > 0:
         tail_sums, tail_counts = centroid_sums(tails)
         with_tails = tail_counts > 0
@@ -271,23 +310,48 @@ def lipid_centers(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup']) -> np
 
 
 def hydrophobic_cores(headgroup_ag: 'AtomGroup', tails: Optional['AtomGroup'], distance: float,
-        dimensions: np.ndarray | None) -> tuple[Optional[list['AtomGroup']], list[int]]:
+        dimensions: np.ndarray | None, lipid_of: np.ndarray) -> tuple[Optional[list[np.ndarray]], list[int]]:
     """Group lipids into hydrophobic cores: lipids whose tail atoms are closer than the given distance, directly or
-    through other lipids.
+    through other lipids, and which are packed: their tails touch the tails of at least MIN_CORE_PARTNERS other
+    lipids of the core (a k-core of the tail contacts graph, like core points in DBSCAN). Lipids whose tails touch
+    packed lipids but not enough of them (e.g. at the edge of a fusion stalk) are in the core too, like border points in
+    DBSCAN, so they join leaflets by their normals like the rest.
 
     Aggregates touching each other only through their headgroups (e.g. a lipid nanoparticle on a bilayer) are in
     separate cores, while the two leaflets of a bilayer or fused aggregates (e.g. at a fusion stalk) share a core.
-    Returns the polar atoms of every core with at least MIN_LEAFLET_LIPIDS lipids, biggest first, and the residue
-    indices of lipids out of them. There are no cores (None) when less than MIN_TAIL_FRACTION of lipids have tail atoms.
+    Lipids in solution touching each other by chance (e.g. before they assemble) form chains, not packed cores.
+    Returns the positions in headgroup_ag of the lipids of every core with at least MIN_LEAFLET_LIPIDS lipids, biggest
+    first, and the residue indices of lipids out of them. There are no cores (None) when less than MIN_TAIL_FRACTION of
+    lipids have tail atoms.
+    Lipids are the residue indices representing them (see lipid_molecules), so tail atoms may be in other residues.
     """
     resindices = headgroup_ag.resindices
-    if tails is None or np.isin(resindices, tails.resindices).mean() < MIN_TAIL_FRACTION:
-        return None, []
+    if tails is None: return None, []
+    tail_lipids = lipid_of[tails.resindices]
+    if np.isin(resindices, tail_lipids).mean() < MIN_TAIL_FRACTION: return None, []
+    n_residues = len(headgroup_ag.universe.residues)
     pairs = capped_distance(tails.positions, tails.positions, distance, box=dimensions, return_distances=False)
-    labels = connected_labels(tails.resindices[pairs[:, 0]], tails.resindices[pairs[:, 1]],
-        len(headgroup_ag.universe.residues))[resindices]
+    # Pairs of different lipids whose tails touch, as first * n_residues + second with first < second
+    first, second = np.sort(tail_lipids[pairs], axis=1).T
+    codes = np.unique(first[first != second] * n_residues + second[first != second])
+    edges = np.column_stack([codes // n_residues, codes % n_residues])
+    # Remove lipids touching less than MIN_CORE_PARTNERS packed lipids until all remaining lipids touch enough of them
+    packed = np.zeros(n_residues, dtype=bool)
+    packed[resindices] = True
+    packed_edges = edges
+    while True:
+        packed_edges = packed_edges[packed[packed_edges[:, 0]] & packed[packed_edges[:, 1]]]
+        loose = packed & (np.bincount(packed_edges.ravel(), minlength=n_residues) < MIN_CORE_PARTNERS)
+        if not loose.any(): break
+        packed[loose] = False
+    labels = connected_labels(packed_edges[:, 0], packed_edges[:, 1], n_residues)
+    # Loose lipids touching packed lipids join their core (border points in DBSCAN), other loose lipids are alone
+    border = edges[packed[edges[:, 0]] != packed[edges[:, 1]]]
+    border = np.where(packed[border[:, :1]], border, border[:, ::-1])
+    labels[border[:, 1]] = labels[border[:, 0]]
+    labels = labels[resindices]
     sizes = np.bincount(labels)
-    cores = [headgroup_ag[labels == label] for label in np.argsort(-sizes, kind='stable') if sizes[label] >= MIN_LEAFLET_LIPIDS]
+    cores = [np.flatnonzero(labels == label) for label in np.argsort(-sizes, kind='stable') if sizes[label] >= MIN_LEAFLET_LIPIDS]
     out_of_cores = resindices[sizes[labels] < MIN_LEAFLET_LIPIDS].tolist()
     return cores, out_of_cores
 
@@ -443,33 +507,59 @@ def classify_leaflets(descriptions: list[dict], box: np.ndarray | None) -> tuple
 
 
 def find_frame_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tails: Optional['AtomGroup'],
-        core_distance: float) -> dict:
-    """Find leaflets (see find_leaflets) in the first frame or, if there are no membranes, in the last frame.
+        core_distance: float, lipid_of: Optional[np.ndarray] = None) -> dict:
+    """Find leaflets (see find_leaflets) in the first and the last frames and keep the mapping which describes most.
 
-    Lipids may assemble along the trajectory (e.g. lipids in solution forming a micelle), so the first frame has no
-    membranes yet. The frame is saved in the membrane mapping: the one where membranes were found or the last one
-    tried. The trajectory goes back to its current frame afterwards since the universe is shared with other tasks.
+    Membranes may change along the trajectory: lipids in solution assembling into a micelle (no membranes in the first
+    frame yet), small micelles fusing into one, a fusion stalk relaxing into a vesicle or a lipid nanoparticle fusing
+    with a bilayer. So the mapping of a frame is kept when:
+    1. It has clearly more lipids in membranes (more than MIN_LEAFLET_LIPIDS more), since lipids are still assembling
+       in the other frame.
+    2. It has more leaflets (not counting midplanes), since it resolves aggregates which are fused or not resolved yet in
+       the other frame (e.g. a lipid nanoparticle hemifused with a bilayer, which must not be part of its leaflets).
+    3. Otherwise the last frame is kept, which is the final state.
+    The kept frame is saved in the membrane mapping.
+    The trajectory goes back to its current frame afterwards since the universe is shared with other tasks.
     """
     trajectory = universe.trajectory
     current_frame = trajectory.frame
     last_frame = len(trajectory) - 1
     frames = [0, last_frame] if headgroup_ag and last_frame > 0 else [0]
+    mappings = []
     try:
         for frame in frames:
-            if frame > 0: print(f"No membranes found in the first frame, trying the last frame ({frame})")
+            if len(frames) > 1: print(f"Mapping membranes in frame {frame}")
             trajectory[frame]
-            membrane_map = find_leaflets(universe, headgroup_ag, tails, core_distance)
+            membrane_map = find_leaflets(universe, headgroup_ag, tails, core_distance, lipid_of)
             membrane_map['frame'] = frame
-            if membrane_map['n_mems'] > 0: break
+            mappings.append(membrane_map)
     finally:
         # The universe is shared with other tasks, some reading its current frame (e.g. channels), so restore it
         # also after an error, for callers which catch it (e.g. a Project used from a notebook)
         trajectory[current_frame]
-    return membrane_map
+    if len(mappings) == 1: return mappings[0]
+    (first_lipids, first_leaflets), (last_lipids, last_leaflets) = (mapping_size(mapping) for mapping in mappings)
+    if abs(first_lipids - last_lipids) > MIN_LEAFLET_LIPIDS:
+        kept, reason = int(last_lipids > first_lipids), 'more lipids in membranes'
+    elif first_leaflets > last_leaflets:
+        kept, reason = 0, 'more leaflets'
+    else:
+        kept, reason = 1, 'final state' if first_leaflets == last_leaflets else 'more leaflets'
+    print(f"Keeping the membranes of frame {frames[kept]} ({reason}): {first_lipids} lipids in {first_leaflets} leaflets "
+        f"in frame {frames[0]} and {last_lipids} lipids in {last_leaflets} leaflets in frame {frames[1]}")
+    return mappings[kept]
+
+
+def mapping_size(membrane_map: dict) -> tuple[int, int]:
+    """Get the number of lipids in membranes and the number of leaflets (not counting midplanes) of a membrane mapping."""
+    leaflets = [(name, atoms) for mem in membrane_map['mems'].values() for name, atoms in mem['polar_atoms'].items()]
+    n_lipids = sum(len(atoms) for _, atoms in leaflets)
+    n_leaflets = sum(1 for name, atoms in leaflets if name != MIDPLANE and len(atoms) > 0)
+    return n_lipids, n_leaflets
 
 
 def find_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tails: Optional['AtomGroup'] = None,
-        core_distance: float = CG_CORE_CONTACT_DISTANCE) -> dict:
+        core_distance: float = CG_CORE_CONTACT_DISTANCE, lipid_of: Optional[np.ndarray] = None) -> dict:
     """Find leaflets from the local normals of lipids and classify them into amphiphilic aggregates.
 
     Lipids are grouped into hydrophobic cores by the contacts of their tail atoms (see hydrophobic_cores), so
@@ -479,27 +569,29 @@ def find_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tai
     lipids, like in FATSLiM, so leaflets touching each other with opposite orientations are not merged.
     Then leaflets are classified by core (see classify_core) and lipids out of cores join the leaflet they touch, if any.
     Without enough lipids with tail atoms there are no cores: all lipids are classified together and lipids without
-    tail atoms point to their residue center.
+    tail atoms point to their center.
+    Lipids are the residues of the polar atoms, which represent all residues of their lipid in lipid_of (the residue
+    index representing the lipid of every residue, see lipid_molecules), or every residue is a lipid without it.
     """
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': MEMBRANE_MAPPING_VERSION}
     if not headgroup_ag:
         print("No headgroup atoms found, cannot assign leaflets.")
         return membrane_map
+    if lipid_of is None: lipid_of = np.arange(len(universe.residues))
     box = universe.dimensions[:3].copy() if universe.dimensions is not None else None
     if box is not None and not np.all(box > 0): box = None
     dimensions = universe.dimensions if box is not None else None
     # Head to tail directions and local normals of lipids
     positions = headgroup_ag.positions
-    directions = minimum_image(lipid_centers(headgroup_ag, tails)[headgroup_ag.resindices] - positions, box)
+    directions = minimum_image(lipid_centers(headgroup_ag, tails, lipid_of)[headgroup_ag.resindices] - positions, box)
     directions /= np.maximum(np.linalg.norm(directions, axis=1), 1e-6)[:, None]
     normals = local_normals(positions, directions, neighbour_pairs(positions, NORMAL_CUTOFF, dimensions), box)
-    cores, out_of_cores = hydrophobic_cores(headgroup_ag, tails, core_distance, dimensions)
+    cores, out_of_cores = hydrophobic_cores(headgroup_ag, tails, core_distance, dimensions, lipid_of)
     if cores is not None:
-        print(f" Found {len(cores)} hydrophobic cores with {', '.join(str(len(core)) for core in cores)} lipids"
-            f" and {len(out_of_cores)} lipids out of them")
+        core_sizes = f" with {', '.join(str(len(core)) for core in cores)} lipids" if cores else ''
+        print(f" Found {len(cores)} hydrophobic cores{core_sizes} and {len(out_of_cores)} lipids out of them")
     # Leaflets: neighbours of the same core with similar local normals
-    core_indices = [np.arange(len(headgroup_ag))] if cores is None else \
-        [np.flatnonzero(np.isin(headgroup_ag.indices, core.indices)) for core in cores]
+    core_indices = [np.arange(len(headgroup_ag))] if cores is None else cores
     core_of = np.full(len(headgroup_ag), -1)
     for k, indices in enumerate(core_indices): core_of[indices] = k
     pairs = neighbour_pairs(positions, LEAFLET_CUTOFF, dimensions)
@@ -511,17 +603,19 @@ def find_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tai
     no_mem_lipids = []
     for indices in core_indices:
         core_aggregates, core_unassigned = classify_core(headgroup_ag, indices, leaflet_labels, normals, box, dimensions,
-            whole_aggregate=cores is not None)
+            lipid_of, whole_aggregate=cores is not None)
         aggregates.extend(core_aggregates)
         no_mem_lipids.extend(core_unassigned)
-    no_mem_lipids += assign_lipids_by_contact(aggregates, out_of_cores, headgroup_ag, dimensions)
+    # Lipids out of cores only join the aggregates they touch, not through other lipids out of cores
+    no_mem_lipids += assign_lipids_by_contact(aggregates, out_of_cores, headgroup_ag, dimensions, lipid_of, repeat=False)
     aggregates.sort(key=lambda aggregate: AGGREGATE_TYPES.index(aggregate[0]))
     membrane_map['n_mems'] = len(aggregates)
 
     for i, (aggregate_type, groups) in enumerate(aggregates):
         memb_data = {
             'type': aggregate_type,
-            'leaflets': {name: group.residues.atoms.indices.tolist() for name, group in groups.items()},
+            'leaflets': {name: lipid_atoms(universe, lipid_of, group.resindices).indices.tolist()
+                for name, group in groups.items()},
             'polar_atoms': {name: group.atoms.indices.tolist() for name, group in groups.items()},
         }
         membrane_map['mems'][str(i)] = memb_data
@@ -531,14 +625,15 @@ def find_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tai
 
     if len(no_mem_lipids) > 0:
         print(f"Unassigned lipids: {len(no_mem_lipids)}.")
-        no_mem_lipids = universe.residues[no_mem_lipids].atoms.indices.tolist()
+        no_mem_lipids = lipid_atoms(universe, lipid_of, no_mem_lipids).indices.tolist()
     membrane_map['no_mem_lipid'] = no_mem_lipids
 
     return membrane_map
 
 
 def classify_core(headgroup_ag: 'AtomGroup', indices: np.ndarray, leaflet_labels: np.ndarray, normals: np.ndarray,
-        box: np.ndarray | None, dimensions: np.ndarray | None, whole_aggregate: bool) -> tuple[list[tuple[str, dict]], list[int]]:
+        box: np.ndarray | None, dimensions: np.ndarray | None, lipid_of: np.ndarray,
+        whole_aggregate: bool) -> tuple[list[tuple[str, dict]], list[int]]:
     """Classify the leaflets of a hydrophobic core (lipid positions in the headgroups) into amphiphilic aggregates.
 
     Leaflets (with at least MIN_LEAFLET_LIPIDS lipids) form bilayers and vesicles (see classify_leaflets).
@@ -551,27 +646,31 @@ def classify_core(headgroup_ag: 'AtomGroup', indices: np.ndarray, leaflet_labels
     groups = [indices[leaflet_labels[indices] == label] for label in np.unique(leaflet_labels[indices])]
     descriptions = [describe_leaflet(headgroup_ag[group], normals[group], box) for group in groups if len(group) >= MIN_LEAFLET_LIPIDS]
     aggregates, unpaired = classify_leaflets(descriptions, box)
-    if whole_aggregate and len(aggregates) == 0:
-        core = describe_leaflet(headgroup_ag[indices], normals[indices], box)
-        if not core['planar'] and core['radial'] < 0: return [(MICELLE, {'outer': headgroup_ag[indices]})], []
     if not whole_aggregate:
         aggregates.extend((MICELLE, {'outer': desc['group']}) for desc in unpaired if not desc['planar'] and desc['direction'] < 0)
+    elif len(aggregates) == 0:
+        core = describe_leaflet(headgroup_ag[indices], normals[indices], box)
+        if not core['planar'] and core['radial'] < 0: return [(MICELLE, {'outer': headgroup_ag[indices]})], []
     in_aggregates = [index for _, groups in aggregates for group in groups.values() for index in group.indices]
     remaining = headgroup_ag[indices]
     remaining = remaining[~np.isin(remaining.indices, in_aggregates)].resindices.tolist()
-    return aggregates, assign_lipids_by_contact(aggregates, remaining, headgroup_ag[indices], dimensions)
+    return aggregates, assign_lipids_by_contact(aggregates, remaining, headgroup_ag[indices], dimensions, lipid_of)
 
 
 def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindices: list[int],
-        headgroup_ag: 'AtomGroup', dimensions: np.ndarray | None) -> list[int]:
+        headgroup_ag: 'AtomGroup', dimensions: np.ndarray | None, lipid_of: np.ndarray,
+        repeat: bool = True) -> list[int]:
     """Add unassigned lipids to the leaflet they are in contact with.
 
     Lipids out of leaflets (e.g. lipids at the edge of a fusion stalk) are added to a leaflet
     when they have clearly more atom contacts with it than with any other leaflet. It is repeated until no more
     lipids are added, so lipids only touching other added lipids (e.g. sterol clusters) are also added.
+    Without repeat only lipids touching the leaflets are added, so lipids out of hydrophobic cores are not added
+    through chains of other lipids (e.g. lipids in solution touching each other by chance around an aggregate).
     Lipids in contact with both leaflets of a bilayer or vesicle alike (e.g. cholesterol between leaflets) are added to
     its midplane leaflet. Lipids in contact with several leaflets of different aggregates or with none remain unassigned.
     Leaflet groups are updated in place and the residue indices of lipids which remain unassigned are returned.
+    Lipids are the residue indices representing them and their atoms are in all their residues (see lipid_molecules).
     """
     if len(aggregates) == 0 or len(lipid_resindices) == 0: return lipid_resindices
     universe = headgroup_ag.universe
@@ -583,7 +682,7 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
     # Leaflet index of every atom, -1 for atoms out of leaflets
     owners = np.full(len(universe.atoms), -1)
     for leaflet_index, (groups, name) in enumerate(leaflets):
-        owners[groups[name].residues.atoms.indices] = leaflet_index
+        owners[lipid_atoms(universe, lipid_of, groups[name].resindices).indices] = leaflet_index
     # Midplane leaflet index of the aggregate of every leaflet, -1 for aggregates without midplane
     midplane_indices = {id(groups): index for index, (groups, name) in enumerate(leaflets) if name == MIDPLANE}
     midplanes = np.array([midplane_indices.get(id(groups), -1) for groups, _ in leaflets] + [-1])
@@ -594,10 +693,10 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
     new_atoms = np.where(owners >= 0)[0]
     while len(remaining) > 0 and len(new_atoms) > 0:
         rows[remaining] = np.arange(len(remaining))
-        unassigned_atoms = universe.residues[remaining].atoms
+        unassigned_atoms = lipid_atoms(universe, lipid_of, remaining)
         pairs = capped_distance(unassigned_atoms.positions, universe.atoms[new_atoms].positions, CONTACT_DISTANCE,
             box=dimensions, return_distances=False)
-        np.add.at(contacts, (rows[unassigned_atoms.resindices[pairs[:, 0]]], owners[new_atoms[pairs[:, 1]]]), 1)
+        np.add.at(contacts, (rows[lipid_of[unassigned_atoms.resindices[pairs[:, 0]]]], owners[new_atoms[pairs[:, 1]]]), 1)
         # Rank the leaflets of every lipid by contacts
         ranking = np.argsort(-contacts, axis=1, kind='stable')
         first, second = ranking[:, 0], ranking[:, 1]
@@ -613,9 +712,10 @@ def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindice
             resindices = remaining[targets == leaflet_index]
             merged = groups[name] + universe.atoms[polar_atoms[resindices]]
             groups[name] = merged[np.argsort(merged.indices)]
-            owners[universe.residues[resindices].atoms.indices] = leaflet_index
-        new_atoms = universe.residues[remaining[added]].atoms.indices
+            owners[lipid_atoms(universe, lipid_of, resindices).indices] = leaflet_index
+        new_atoms = lipid_atoms(universe, lipid_of, remaining[added]).indices
         remaining, contacts = remaining[~added], contacts[~added]
+        if not repeat: break
     n_assigned = len(lipid_resindices) - len(remaining)
     if n_assigned > 0:
         print(f' Assigned {n_assigned} unassigned lipids to the leaflets they are in contact with')
