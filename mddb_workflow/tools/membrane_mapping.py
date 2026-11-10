@@ -7,7 +7,7 @@ from mddb_workflow.utils.auxiliar import save_json, load_json, warn
 from mddb_workflow.tools.cg_lipids import coarse_grain_lipids
 from mddb_workflow.utils.type_hints import *
 
-MEMBRANE_MAPPING_VERSION = '0.3.0'
+MEMBRANE_MAPPING_VERSION = '0.4.0'
 # Amphiphilic aggregate types
 BILAYER = 'bilayer'
 VESICLE = 'vesicle'
@@ -77,10 +77,13 @@ def generate_membrane_mapping(
               - polar_atoms (dict): Polar atom indices (one per lipid) of each leaflet, with the same names.
             - no_mem_lipid (list): List of atom indices for lipids not assigned to any membrane.
             - version (str): Version of the membrane mapping format.
+            - frame (int): Trajectory frame where the membranes were found.
 
     Notes:
         - All atom lipids are the residues with lipid references (from their InChI keys), coarse grained lipids are
           found by residue and bead names (see coarse_grain_lipids).
+        - Membranes are found in the first frame or, if there are none, in the last frame, for lipids which assemble
+          along the trajectory (see find_frame_leaflets).
         - Lipids are grouped into hydrophobic cores by tail contacts (see hydrophobic_cores).
         - Leaflets are groups of at least 24 neighbour lipids of a core with similar local normals, like in FATSLiM
           (see find_leaflets), classified into aggregates from their shape and orientation (see classify_core).
@@ -91,13 +94,14 @@ def generate_membrane_mapping(
     if len(cg_residues) > 0 or len(ua_residues) > 0:
         no_inchikey_residues = list(cg_residues) + list(ua_residues)
         headgroup_ag, tails = coarse_grain_lipids(universe, no_inchikey_residues, input_forced_lipids)
-        membrane_map = find_leaflets(universe, headgroup_ag, tails, CG_CORE_CONTACT_DISTANCE)
+        core_distance = CG_CORE_CONTACT_DISTANCE
     else:
         # Select only the lipids from the InChIKeyData
         lipid_map = {key: inchikeys[key] for key in lipid_references.keys()}
         headgroup_ag = all_atom_headgroups(lipid_map, universe)
         tails = all_atom_tails(headgroup_ag.residues.atoms) if headgroup_ag else None
-        membrane_map = find_leaflets(universe, headgroup_ag, tails, AA_CORE_CONTACT_DISTANCE)
+        core_distance = AA_CORE_CONTACT_DISTANCE
+    membrane_map = find_frame_leaflets(universe, headgroup_ag, tails, core_distance)
 
     if membrane_map['n_mems'] > 0:
         save_json(membrane_map, output_file.path)
@@ -436,6 +440,32 @@ def classify_leaflets(descriptions: list[dict], box: np.ndarray | None) -> tuple
         aggregates.append((BILAYER, {'top': top['group'], 'bot': bot['group'], MIDPLANE: empty}))
 
     return aggregates, [desc for desc in descriptions if id(desc) not in used]
+
+
+def find_frame_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tails: Optional['AtomGroup'],
+        core_distance: float) -> dict:
+    """Find leaflets (see find_leaflets) in the first frame or, if there are no membranes, in the last frame.
+
+    Lipids may assemble along the trajectory (e.g. lipids in solution forming a micelle), so the first frame has no
+    membranes yet. The frame is saved in the membrane mapping: the one where membranes were found or the last one
+    tried. The trajectory goes back to its current frame afterwards since the universe is shared with other tasks.
+    """
+    trajectory = universe.trajectory
+    current_frame = trajectory.frame
+    last_frame = len(trajectory) - 1
+    frames = [0, last_frame] if headgroup_ag and last_frame > 0 else [0]
+    try:
+        for frame in frames:
+            if frame > 0: print(f"No membranes found in the first frame, trying the last frame ({frame})")
+            trajectory[frame]
+            membrane_map = find_leaflets(universe, headgroup_ag, tails, core_distance)
+            membrane_map['frame'] = frame
+            if membrane_map['n_mems'] > 0: break
+    finally:
+        # The universe is shared with other tasks, some reading its current frame (e.g. channels), so restore it
+        # also after an error, for callers which catch it (e.g. a Project used from a notebook)
+        trajectory[current_frame]
+    return membrane_map
 
 
 def find_leaflets(universe: 'Universe', headgroup_ag: Optional['AtomGroup'], tails: Optional['AtomGroup'] = None,

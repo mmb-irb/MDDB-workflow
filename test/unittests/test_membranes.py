@@ -1,6 +1,6 @@
 from mddb_workflow.mwf import Project, MD, input_files
 from mddb_workflow.core.dataclass import InChIKeyData
-from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping, find_leaflets, BILAYER, VESICLE, MICELLE, MIDPLANE
+from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping, find_leaflets, find_frame_leaflets, BILAYER, VESICLE, MICELLE, MIDPLANE, CG_CORE_CONTACT_DISTANCE
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.mda_spells import get_mda_universe, get_mda_universe_from_stopology
 from mddb_workflow.utils.cache import Cache
@@ -580,6 +580,61 @@ class TestAggregateClassification:
         save_json({'n_mems': 1, 'mems': {'0': membrane}, 'no_mem_lipid': [9]}, mapping_file)
         display_membrane_mapping(mapping_file, 'structure.pdb')
         assert '@6,7,8' in selections and '@6' in selections
+
+
+def lipid_trajectory(frames: list[tuple[np.ndarray, np.ndarray]], box: list[float]) -> tuple['mda.Universe', 'mda.AtomGroup']:
+    """Build a universe of 3 bead lipids (see build_lipids) with a frame for every pair of heads and tail directions."""
+    from MDAnalysis.coordinates.memory import MemoryReader
+    coordinates = np.stack([build_lipids(heads, directions, box)[0].atoms.positions for heads, directions in frames])
+    universe, _ = build_lipids(*frames[0], box)
+    universe.load_new(coordinates, format=MemoryReader, dimensions=list(box) + [90, 90, 90])
+    return universe, universe.select_atoms('name P')
+
+
+def scattered_lipids(n_lipids: int, spacing: float = 30) -> tuple[np.ndarray, np.ndarray]:
+    """Get the heads of lipids in solution on a grid, too far apart to be neighbours, and random tail directions."""
+    axis = np.arange(-2, 3) * spacing
+    grid = np.array([[x, y, z] for x in axis for y in axis for z in axis], dtype=float)
+    return grid[:n_lipids], np.random.default_rng(0).normal(size=(n_lipids, 3))
+
+
+class TestMembraneFrame:
+    """Membranes are found in the first frame or, if there are none, in the last frame."""
+    box = [200, 200, 200]
+
+    def micelle(self) -> tuple[np.ndarray, np.ndarray]:
+        heads = sphere_points(20)
+        return heads, -heads
+
+    def test_micelle_assembled_in_last_frame(self):
+        """Lipids in solution which assemble into a micelle along the trajectory are mapped in the last frame."""
+        heads, directions = self.micelle()
+        scattered = scattered_lipids(len(heads))
+        universe, headgroups = lipid_trajectory([scattered, scattered, (heads, directions)], self.box)
+        universe.trajectory[1]
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['frame'] == 2
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+        assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(heads)
+        # The universe is shared with other tasks so it goes back to its frame
+        assert universe.trajectory.frame == 1
+
+    def test_membrane_in_first_frame(self):
+        """Membranes in the first frame are mapped there, whatever happens later (e.g. a micelle falling apart)."""
+        heads, directions = self.micelle()
+        universe, headgroups = lipid_trajectory([(heads, directions), scattered_lipids(len(heads))], self.box)
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['frame'] == 0
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+
+    def test_no_membranes(self):
+        """Lipids which never assemble have no membranes, the last frame being the last one tried."""
+        scattered = scattered_lipids(len(self.micelle()[0]))
+        universe, headgroups = lipid_trajectory([scattered, scattered], self.box)
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['n_mems'] == 0
+        assert membrane_map['frame'] == 1
+        assert universe.trajectory.frame == 0
 
 
 class TestLipidOrder:
