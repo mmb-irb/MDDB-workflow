@@ -610,3 +610,25 @@ def test_forced_value_replaces_project_and_md_values(tmp_path):
     reloaded = ProjectInputs(File(str(inputs_path)), directory_name='demo')
     assert reloaded.file_inputs['pbc_selection'] == 'water or ions'
     assert 'pbc_selection' not in reloaded.file_inputs['mds'][0]
+
+
+@pytest.mark.parametrize(
+    ('input_topology', 'expected_topology'),
+    [
+        ('input.tpr', 'topology.tpr'),
+        # A standard topology (e.g. downloaded from a remote) is not named as the standard topology to be loaded
+        ('source_irb_A05TY_topology.json', 'processed_topology.json'),
+        ('topology.json', 'processed_topology.json'),
+    ],
+)
+def test_processed_topology_filename(tmp_path, input_topology, expected_topology):
+    (tmp_path / input_topology).write_text('{}', encoding='utf-8')
+    inputs_path = tmp_path / 'inputs.json'
+    inputs_path.write_text(json.dumps({
+        'input_topology_filepath': input_topology,
+        'mds': [{'name': 'md1', 'mdir': 'md1'}],
+    }), encoding='utf-8')
+    project = Project(directory=str(tmp_path), inputs_filepath=str(inputs_path))
+
+    assert File(project.get_topology_filepath()).filename == expected_topology
+    assert project.mds[0].topology_filepath == project.get_topology_filepath()

@@ -808,6 +808,11 @@ class MD:
         # If it is the raw charges file then return it as is
         if filename == RAW_CHARGES_FILENAME:
             return filename
+        # If it is a standard topology then do not name it as the standard topology which is loaded in the database
+        # Otherwise the database document size check and the loader would take this one (e.g. a remote topology,
+        # with expanded atom names and elements) for the output standard topology
+        if is_standard_topology(self.input_topology_file):
+            return PROCESSED_STANDARD_TOPOLOGY_FILENAME
         # Get the format
         standard_format = self.input_topology_file.format
         # If it is a .top topology then we have to check if it is a gromacs or an amber topology

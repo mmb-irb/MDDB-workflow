@@ -153,6 +153,9 @@ CORRECTED_TRAJECTORY = 'corrected.xtc'
 
 # Output core files
 STANDARD_TOPOLOGY_FILENAME = 'topology.json'
+# Processed topology when the input topology is a standard topology (e.g. downloaded from a remote project)
+# It must not be named as the standard topology, which is loaded in the database (see generate_topology)
+PROCESSED_STANDARD_TOPOLOGY_FILENAME = 'processed_topology.json'
 STRUCTURE_FILENAME = 'structure.cif'
 # Output structure filename in older versions of the workflow
 LEGACY_STRUCTURE_FILENAME = 'structure.pdb'
