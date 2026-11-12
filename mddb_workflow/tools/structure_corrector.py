@@ -246,6 +246,8 @@ def structure_corrector(
     trust: list[str],
     guess_bonds: bool,
     ignore_bonds: bool,
+    # Bonds already mined from the topology file, so they are not mined again
+    topology_bonds: Optional[list[list[int]]],
     chainer: Optional[dict] = None,
 ) -> bool:
     """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
@@ -308,7 +310,8 @@ def structure_corrector(
         register,
         cg_selection,
         guess_bonds,
-        ignore_bonds
+        ignore_bonds,
+        topology_bonds=topology_bonds,
     )
 
     # Check if the structure is missing bonds

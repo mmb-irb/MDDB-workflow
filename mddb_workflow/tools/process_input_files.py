@@ -20,7 +20,7 @@ from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajec
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
-from mddb_workflow.tools.get_bonds import find_safe_bonds
+from mddb_workflow.tools.get_bonds import find_safe_bonds, mine_topology_bonds
 
 
 def _prepare_incomplete_output(output_directory: str, output_filename: str) -> File:
@@ -312,12 +312,15 @@ def process_input_files(
         fit = bool(center_selection) and not already_fitted
         print(f' Automatic fit: {fit}')
 
+    # Mine bonds from the topology only once, since they are used in the imaging and in the structure correction
+    topology_bonds = mine_topology_bonds(filtered_topology_file)
+
     # Image only if molecules are split by the box boundaries, when the image is automatic
     # Without a usable box there is nothing to image
     # Save the value so the workflow may be run again with the image if the trajectory integrity test fails
     if image == AUTOMATIC_FLAG:
         image = bool(center_selection) and not ignore_box and not broken_pbc and find_split_molecules(
-            filtered_trajectory_file, filtered_topology_file, provisional_structure, center_selection)
+            filtered_trajectory_file, topology_bonds, provisional_structure, center_selection)
         print(f' Automatic image: {image}')
         self.cache.update(AUTO_IMAGE_FLAG, image)
 
@@ -361,8 +364,9 @@ def process_input_files(
             translation=translation,
             structure=provisional_structure,
             pbc_selection=provisional_pbc_selection,
+            topology_bonds=topology_bonds,
             # Bonds are found as the safe bonds further, but here with the provisional structure
-            find_bonds=lambda trajectory_file, frames_count, topology_bonds: find_safe_bonds(
+            find_bonds=lambda trajectory_file, frames_count: find_safe_bonds(
                 filtered_topology_file,
                 trajectory_file,
                 STABLE_BONDS_FLAG not in self.project.trust,
@@ -450,6 +454,7 @@ def process_input_files(
         trust=self.project.trust,
         guess_bonds=self.project.guess_bonds,
         ignore_bonds=self.project.ignore_bonds,
+        topology_bonds=topology_bonds,
         chainer=input_chainer,
     )
     # Save if chains were changed, since selections by chain may not select the same atoms after the correction

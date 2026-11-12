@@ -18,7 +18,6 @@ from mddb_workflow.utils.mdt_spells import rotate_boxes, iterate_xtc_frames
 from mddb_workflow.utils.mdt_spells import read_xtc_sample_frames, is_box_rotated, has_box
 from mddb_workflow.utils.mdt_spells import guess_translation_fitted, guess_rotation_fitted
 from mddb_workflow.analyses.mindist import find_frame_cross_contacts
-from mddb_workflow.tools.get_bonds import mine_topology_bonds
 from mddb_workflow.utils.type_hints import *
 
 # Set some constant values to handle NDX atom index selections
@@ -47,7 +46,8 @@ def image_and_fit(
     translation: list[float] | str,
     structure: 'Structure',
     pbc_selection: 'Selection',
-    find_bonds: Callable[['File', int, Optional[list[list[int]]]], list[list[int]]],
+    topology_bonds: Optional[list[list[int]]],
+    find_bonds: Callable[['File', int], list[list[int]]],
     ) -> str:
     """Image and fit a trajectory.
 
@@ -78,9 +78,11 @@ def image_and_fit(
             Set a selection to exclude PBC residues from both the centering and the fitting focuses.
             Selection of atoms which are to stay in PBC conditions after imaging.
             Note that this is an early provisional atom selection.
+        topology_bonds:
+            Bonds mined from the topology, or None if there are no bonds in the topology.
+            They are used to find the molecules in the no-jump step.
         find_bonds:
-            Function to find the bonds of the system, given a trajectory, its number of frames and the topology bonds.
-            Topology bonds are mined only once and passed to this function, so they are not mined again.
+            Function to find the bonds of the system, given a trajectory and its number of frames.
             Bonds may be guessed from atom distances, so they are found once the trajectory has no jumps.
 
     """
@@ -166,8 +168,6 @@ def image_and_fit(
         # run_gromacs(f'trjconv -s {latest_structure.path} \
         #     -f {latest_trajectory.path} -o {output_trajectory_file.path} \
         #     -pbc nojump', user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
-        # Bonds are mined from the topology only once and they are used in the no-jump and to put fragments in the box
-        topology_bonds = mine_topology_bonds(input_topology_file)
         atom_groups = find_no_jump_groups(topology_bonds, structure)
         must_translate = translation != [0, 0, 0]
         if must_translate: print(f'  Translation: {translation[0]} {translation[1]} {translation[2]} nm')
@@ -188,7 +188,7 @@ def image_and_fit(
         print(' Putting PBC fragments in the box')
         with mdt.formats.XTCTrajectoryFile(latest_trajectory.path) as reader:
             frames_count = len(reader)
-        atom_bonds = find_bonds(latest_trajectory, frames_count, topology_bonds)
+        atom_bonds = find_bonds(latest_trajectory, frames_count)
         boxed_trajectory_file = output_trajectory_file.get_prefixed_file('boxed.')
         put_fragments_in_box(latest_trajectory, boxed_trajectory_file, atom_bonds, structure, center_selection)
         boxed_trajectory_file.rename_to(output_trajectory_file)
@@ -509,19 +509,18 @@ def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', sel
 
 def find_split_molecules(
     trajectory_file: 'File',
-    topology_file: Union['File', Exception],
+    atom_bonds: Optional[list[list[int]]],
     structure: 'Structure',
     selection: 'Selection',
 ) -> bool:
     """Check if molecules in the selection are split by the box boundaries in some frames.
     Two bonded atoms are split when they are closer through the box boundaries than directly.
-    Bonds are taken from the topology. If they are missing then every atom is paired with the first atom of its residue.
+    Bonds are those mined from the topology. If they are missing then every atom is paired with the first atom of its residue.
     Only a few frames along the trajectory are checked, so short problems may be missed.
     """
     if trajectory_file.format != 'xtc':
         raise ValueError(f'Finding split molecules is only supported for xtc trajectories: {trajectory_file.path}')
     selected_atom_indices = set(selection.atom_indices)
-    atom_bonds = mine_topology_bonds(topology_file)
     if atom_bonds and any(bonds == MISSING_BONDS for bonds in atom_bonds):
         atom_bonds = None
     if atom_bonds:
