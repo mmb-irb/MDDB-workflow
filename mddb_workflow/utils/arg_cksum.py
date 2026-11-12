@@ -1,4 +1,5 @@
 import json
+from hashlib import md5
 
 from mddb_workflow.utils.auxiliar import safe_hasattr
 from mddb_workflow.utils.file import File
@@ -46,8 +47,10 @@ def get_cksum_id (value) -> Optional[int | float | str]:
         return get_cksum_id(mmcif_content)
     # For a MDAnalysis universe
     if isinstance(value, Universe): return get_mda_universe_cksum(value)
-    # For the parsed structure
-    if isinstance(value, Selection): return f'{len(value.atom_indices)}-{sum(value.atom_indices)}'
+    # For selections hash the atom indices, so different selections never share a cksum
+    if isinstance(value, Selection):
+        indices = ','.join(map(str, value.atom_indices))
+        return f'{len(value.atom_indices)}-{md5(indices.encode()).hexdigest()}'
     # For handler class instances it depends on every class
     # If classes can be compared then handle this here
     # If classes can not be compared (or it makes not sense) then:
