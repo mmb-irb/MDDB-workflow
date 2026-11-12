@@ -992,10 +992,8 @@ class MD:
     # To make things faster and more efficient, every MD process these selections using its own structure
     # Note that the project selections then are checked to be coherent among all MDs
 
-    def selection_getter(name: str, parse: Callable[['MD', 'Structure'], 'Selection'], fake_mass: Optional[int] = None):
-        """Get the getter of an input selection, which is parsed with the processed structure the first time.
-        Atoms which are not real atoms (e.g. coarse grain beads) get a fake mass in the gromacs masses file.
-        """
+    def selection_getter(name: str, parse: Callable[['MD', 'Structure'], 'Selection']):
+        """Get the getter of an input selection, which is parsed with the processed structure the first time."""
         attribute = f'_{name}_selection'
         def getter(self: 'MD') -> 'Selection':
             # If we already have a stored value then return it
@@ -1004,9 +1002,7 @@ class MD:
             # Get the structure first, since it may run the input files processing, which may set the definitive selection
             structure = self.structure
             if getattr(self, attribute) is MISSING_VALUE:
-                selection = parse(self, structure)
-                if fake_mass is not None: add_fake_gromacs_masses(structure, selection, fake_mass)
-                setattr(self, attribute, selection)
+                setattr(self, attribute, parse(self, structure))
             return getattr(self, attribute)
         return getter
 
@@ -1035,12 +1031,14 @@ class MD:
         reference_structure: 'Structure',
         guess: Optional[Callable[[], 'Selection']],
         must_select: bool = False,
+        fake_mass: Optional[int] = None,
         verbose: bool = False,
     ) -> 'Selection':
         """Parse an input atom selection using the reference structure.
         The input may be empty (no atoms), a VMD selection, or the automatic flag to guess atoms with the guess function.
         The automatic flag may be followed by an additional VMD selection (e.g. auto + resname LIG).
         If must select is set then a VMD selection which selects no atoms is an error.
+        If a fake mass is passed then selected atoms get it in the gromacs masses file, since they are not real atoms.
         """
         if verbose: print(f'Setting {name} atoms selection')
         is_automatic, additional_selection_string = parse_automatic_selection(selection_string)
@@ -1074,6 +1072,7 @@ class MD:
             example_residue_names = ', '.join(selected_residue_names[0:limit])
             if len(selected_residue_names) > limit: example_residue_names += ', etc.'
             print('  e.g. ' + example_residue_names)
+        if fake_mass is not None: add_fake_gromacs_masses(reference_structure, parsed_selection, fake_mass)
         return parsed_selection
 
     def _parse_pbc_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
@@ -1104,10 +1103,9 @@ class MD:
             return guess_cg_selection(reference_structure, trajectory_file, topology_file,
                 self.project.input_force_fields, verbose=verbose)
         return self._parse_input_selection('Coarse Grained (CG)', 'CG', self.input_cg_selection,
-            reference_structure, guess, verbose=verbose)
+            reference_structure, guess, fake_mass=1, verbose=verbose)
 
-    get_cg_selection = selection_getter('cg', lambda self, structure: self._parse_cg_selection(structure, self.trajectory_file, self.topology_file),
-        fake_mass=1)
+    get_cg_selection = selection_getter('cg', lambda self, structure: self._parse_cg_selection(structure, self.trajectory_file, self.topology_file))
     cg_selection = property(get_cg_selection, None, None, "Coarse grain atom selection (read only)")
     get_cg_residues = residues_getter('cg', 'CG')
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
@@ -1150,9 +1148,9 @@ class MD:
                         atom_indices.append(atom_index)
             return Selection(atom_indices)
         return self._parse_input_selection('dummy', 'dummy', self.input_dummy_selection,
-            reference_structure, guess, verbose=verbose)
+            reference_structure, guess, fake_mass=0, verbose=verbose)
 
-    get_dummy_selection = selection_getter('dummy', lambda self, structure: self._parse_dummy_selection(structure), fake_mass=0)
+    get_dummy_selection = selection_getter('dummy', lambda self, structure: self._parse_dummy_selection(structure))
     dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
 
     def _set_forced_class_selections(self, reference_structure: 'Structure', verbose: bool = True):

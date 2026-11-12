@@ -18,7 +18,6 @@ from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
 from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajectory, find_split_molecules
 from mddb_workflow.tools.get_charges import get_charges
-from mddb_workflow.tools.fix_gromacs_masses import add_fake_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
 from mddb_workflow.tools.get_bonds import find_safe_bonds
 
@@ -216,7 +215,6 @@ def process_input_files(
     # Logs are shown only once, so here only if atoms are not to be filtered
     provisional_cg_selection = self._parse_cg_selection(provisional_structure, skipped_trajectory_file, initial_topology_file,
         verbose=not filter_selection)
-    add_fake_gromacs_masses(provisional_structure, provisional_cg_selection, 1)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set also provisional forced class selections and apply them to the provisional structure
@@ -281,12 +279,10 @@ def process_input_files(
     if must_filter:
         provisional_cg_selection = self._parse_cg_selection(provisional_structure, filtered_trajectory_file, filtered_topology_file,
             verbose=True)
-        add_fake_gromacs_masses(provisional_structure, provisional_cg_selection, 1)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
     self._dummy_selection = self._parse_dummy_selection(provisional_structure)
-    add_fake_gromacs_masses(provisional_structure, self._dummy_selection, 0)
 
     # Set also provisional forced class selections and apply them to the provisional structure
     # This may be important for the automatic filtering
@@ -547,8 +543,6 @@ def process_input_files(
     # Set the final structure
     final_structure = Structure.from_file(output_structure_file.path)
     final_cg_selection = self._parse_cg_selection(final_structure, output_trajectory_file, output_topology_file)
-    # Atom names may have changed while correcting the structure
-    add_fake_gromacs_masses(final_structure, final_cg_selection, 1)
 
     # Make sure the CG selection is identical to the provisional selection
     if final_cg_selection != provisional_cg_selection:

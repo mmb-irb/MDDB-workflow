@@ -6,6 +6,7 @@ The automatic flag may be followed by an additional VMD selection (e.g. auto + r
 import pytest
 from types import SimpleNamespace
 
+import mddb_workflow.mwf as mwf
 from mddb_workflow.mwf import MD, Project
 from mddb_workflow.utils.auxiliar import InputError, MISSING_VALUE, REMOVED_MD
 from mddb_workflow.utils.selections import Selection
@@ -75,3 +76,25 @@ def test_coherent_md_values():
     project = FakeProject([ reference_md, SimpleNamespace(cg_residues=[1, 2]) ])
     with pytest.raises(InputError, match='Coarse grain residues must be the same in every MD'):
         project.cg_residues
+
+
+class FakeMD(MD):
+    """An MD with just the selection inputs."""
+    def __init__(self, **inputs):
+        self.inputs_values = inputs
+        self.name = 'replica 1'
+    input_cg_selection = property(lambda self: self.inputs_values.get('cg'))
+    input_dummy_selection = property(lambda self: self.inputs_values.get('dummy'))
+
+
+@pytest.mark.unit_int
+def test_fake_masses(monkeypatch):
+    """Coarse grain beads and dummy atoms get a fake gromacs mass every time they are parsed."""
+    added = []
+    monkeypatch.setattr(mwf, 'add_fake_gromacs_masses',
+        lambda structure, selection, mass: added.append((list(selection.atom_indices), mass)))
+    md = FakeMD(cg='resname NA', dummy='resname NA')
+    structure = build_structure()
+    md._parse_cg_selection(structure, None, None)
+    md._parse_dummy_selection(structure)
+    assert added == [ ([6], 1), ([6], 0) ]
