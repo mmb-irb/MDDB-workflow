@@ -37,8 +37,7 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     # If we have a set then make a list and sort it alphabetically
     # Thus we make sure the order is coherent between different
     if value_type == set:
-        standard = list(value).sort()
-        return get_cksum_id(standard)
+        return get_cksum_id(sorted(value))
     # For files use file last modification time and size
     if isinstance(value, File): return value.get_cksum(unsafe=True)
     # For the parsed structure
