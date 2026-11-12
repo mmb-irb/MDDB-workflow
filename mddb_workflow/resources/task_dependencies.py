@@ -140,7 +140,7 @@ DERIVED_DEPENDENCIES = {
         'structure': ('structure_file',),
         'pbc_selection': ('structure', 'input_pbc_selection'),
         'pbc_residues': ('structure', 'pbc_selection'),
-        'cg_selection': ('structure', 'input_cg_selection'),
+        'cg_selection': ('structure', 'trajectory_file', 'topology_file', 'input_force_fields', 'input_cg_selection'),
         'cg_residues': ('structure', 'cg_selection'),
         'ua_selection': ('structure', 'trajectory_file', 'cg_selection', 'input_ua_selection'),
         'ua_residues': ('structure', 'ua_selection'),
@@ -156,7 +156,7 @@ DERIVED_DEPENDENCIES = {
     'project': {
         'structure': ('structure_file',),
         'md_pbc_selections': ('structure', 'input_pbc_selection'),
-        'cg_selection': ('structure', 'input_cg_selection'),
+        'cg_selection': ('structure', 'trajectory_file', 'topology_file', 'input_force_fields', 'input_cg_selection'),
         'cg_residues': ('structure', 'cg_selection'),
         'ua_selection': ('structure', 'trajectory_file', 'cg_selection', 'input_ua_selection'),
         'ua_residues': ('structure', 'ua_selection'),

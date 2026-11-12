@@ -18,7 +18,6 @@ from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
 from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajectory, find_split_molecules
 from mddb_workflow.tools.get_charges import get_charges
-from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
 from mddb_workflow.tools.get_bonds import find_safe_bonds, mine_topology_bonds
 
@@ -64,6 +63,7 @@ def process_input_files(
     # However we must add them as arguments, so this task will be run again if they change
     input_pbc_selection: Optional[str],
     input_cg_selection: Optional[str],
+    input_ua_selection: Optional[str],
     input_dummy_selection: Optional[str],
     input_forced_class_selections: dict,
     # The cross-PBC contacts test depends on the simulation box
@@ -212,9 +212,9 @@ def process_input_files(
     provisional_structure = Structure.from_file(converted_structure_file.path)
     # Now we can set a provisional coarse grain selection
     # This selection is useful to avoid problems with CG atom elements
-    # Since this is proviosonal we will make it silent
-    self._set_cg_selection(provisional_structure, skipped_trajectory_file, initial_topology_file, verbose=False)
-    provisional_cg_selection = self.cg_selection
+    # Logs are shown only once, so here only if atoms are not to be filtered
+    provisional_cg_selection = self._parse_cg_selection(provisional_structure, skipped_trajectory_file, initial_topology_file,
+        verbose=not filter_selection)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set also provisional forced class selections and apply them to the provisional structure
@@ -275,13 +275,14 @@ def process_input_files(
     provisional_structure = Structure.from_file(filtered_structure_file.path)
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
-    # Logs are shown only here, since this structure is already filtered
-    self._set_cg_selection(provisional_structure, filtered_trajectory_file, filtered_topology_file, verbose=True)
-    provisional_cg_selection = self.cg_selection
+    # The selection must be parsed again only if atoms were filtered
+    if must_filter:
+        provisional_cg_selection = self._parse_cg_selection(provisional_structure, filtered_trajectory_file, filtered_topology_file,
+            verbose=True)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
-    self._set_dummy_selection(provisional_structure)
+    self._dummy_selection = self._parse_dummy_selection(provisional_structure)
 
     # Set also provisional forced class selections and apply them to the provisional structure
     # This may be important for the automatic filtering
@@ -293,7 +294,7 @@ def process_input_files(
     # This selection is useful both for imaging/fitting and for the correction
     # We will make sure that the provisonal and the final PBC selections match
     # Since this is proviosonal we will make it silent
-    provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
+    provisional_pbc_selection = self._parse_pbc_selection(provisional_structure)
 
     # --- FITTED TRAJECTORY AND BROKEN PBC CHECK -----------------------------------------
 
@@ -433,6 +434,10 @@ def process_input_files(
     corrected_trajectory_filepath = f'{output_directory}/{CORRECTED_TRAJECTORY}'
     corrected_trajectory_file = File(corrected_trajectory_filepath)
 
+    # Set a provisional united atom selection
+    # Atoms in united atom residues may have their hydrogens absorbed, so the coherent bonds test expects less bonds
+    provisional_ua_selection = self._parse_ua_selection(provisional_structure, imaged_trajectory_file, provisional_cg_selection)
+
     # Correct the structure
     # This function reads and or modifies the following MD variables:
     #   snapshots, reference_bonds, register, cache, mercy, trust
@@ -447,6 +452,7 @@ def process_input_files(
         MD=self,
         pbc_selection=provisional_pbc_selection,
         cg_selection=provisional_cg_selection,
+        ua_selection=provisional_ua_selection,
         dummy_selection=self.dummy_selection,
         snapshots=snapshots,
         register=self.register,
@@ -542,15 +548,14 @@ def process_input_files(
 
     # Set the final structure
     final_structure = Structure.from_file(output_structure_file.path)
-    self._set_cg_selection(final_structure, output_trajectory_file, output_topology_file, verbose=False)
-    final_cg_selection = self.cg_selection
+    final_cg_selection = self._parse_cg_selection(final_structure, output_trajectory_file, output_topology_file)
 
     # Make sure the CG selection is identical to the provisional selection
     if final_cg_selection != provisional_cg_selection:
         print(f'Provisional CG selection ({len(provisional_cg_selection)})')
-        print(f'Final CG selection ({len(self.cg_selection)})')
+        print(f'Final CG selection ({len(final_cg_selection)})')
         provisional_atom_indices = set(provisional_cg_selection.atom_indices)
-        final_atom_indices = set(self.cg_selection.atom_indices)
+        final_atom_indices = set(final_cg_selection.atom_indices)
         different_atom_indices = (provisional_atom_indices - final_atom_indices) \
             | (final_atom_indices - provisional_atom_indices)
         different_atoms_vmd_selection = Selection(different_atom_indices).to_vmd()
@@ -558,6 +563,14 @@ def process_input_files(
         raise InputError('Coarse grain selection is not consistent after correcting the structure. '
             'Please consider using a different CG selection. '
             'Avoid relying in atom distances or elements to avoid this problem.')
+    self._cg_selection = final_cg_selection
+
+    # The united atom selection only relaxes the coherent bonds test, so a difference is not critical
+    # Atoms may be sorted while correcting the structure, so the final selection is the one to keep
+    final_ua_selection = self._parse_ua_selection(final_structure, output_trajectory_file, final_cg_selection, verbose=False)
+    if final_ua_selection != provisional_ua_selection:
+        warn(f'United atom selection changed after correcting the structure ({len(provisional_ua_selection)} -> {len(final_ua_selection)} atoms)')
+    self._ua_selection = final_ua_selection
 
     # Make sure the PBC selection is identical to the provisional selection
     if self.pbc_selection != provisional_pbc_selection:

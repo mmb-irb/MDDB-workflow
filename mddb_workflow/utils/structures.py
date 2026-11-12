@@ -70,6 +70,17 @@ coherent_bonds_without_hydrogen = {
     'S': {'min': 1, 'max': 4},
     'P': {'min': 2, 'max': 4},
 }
+# Set the expected number of bonds for atoms in united atom residues (e.g. GROMOS, Berger lipids)
+# Their carbons have the hydrogens absorbed so they may have as few bonds as in a structure without hydrogens
+# e.g. a terminal methyl is a single carbon with 1 bond
+# However polar hydrogens may be still explicit and absorbed hydrogens never add bonds
+# So they may have as many bonds as in a structure with hydrogens (e.g. quaternary carbons, ammonium nitrogens)
+coherent_bonds_united_atom = {
+    element: {
+        'min': coherent_bonds_without_hydrogen.get(element, limits)['min'],
+        'max': limits['max'],
+    } for element, limits in coherent_bonds_with_hydrogen.items()
+}
 
 # Set the limit of residue numbers according to PDB format (4 characters, starts count at 1)
 # This means the last number is 9999 and it is equivalent to index 9998
@@ -3172,16 +3183,20 @@ class Structure:
         """Select all atoms in the structure which are explicitly missing bonds."""
         return Selection([ atom_index for atom_index, bonds in enumerate(self.bonds) if bonds == MISSING_BONDS ])
 
-    def check_incoherent_bonds(self) -> list[int]:
+    def check_incoherent_bonds(self, ua_selection: Optional['Selection'] = None) -> list[int]:
         """Check bonds to be incoherent i.e. check atoms not to have more or less
         bonds than expected according to their element.
+        Atoms in the united atom selection may have their hydrogens absorbed, so they may have less bonds.
         Return the indices of atoms with incoherent bonds, so an empty list means bonds are fine.
         Only the first atom is detailed in the logs.
         """
         # Find out if there are hydrogens in the structure
         # It may happen that we encounter an structure without hydrogens
         has_hydrogen = next((True for atom in self.atoms if atom.element == 'H'), False)
-        coherent_bonds = coherent_bonds_with_hydrogen if has_hydrogen else coherent_bonds_without_hydrogen
+        default_coherent_bonds = coherent_bonds_with_hydrogen if has_hydrogen else coherent_bonds_without_hydrogen
+        # Note that a structure with united atoms may still have explicit hydrogens (e.g. water, polar hydrogens)
+        # Thus the united atom limits are set per atom, no matter the rest of the structure
+        ua_atom_indices = set(ua_selection.atom_indices) if ua_selection else set()
         incoherent_atom_indices = []
         # Check coherent bonds atom by atom
         for atom in self.atoms:
@@ -3200,6 +3215,7 @@ class Structure:
             max_nbonds = len(atom.get_bonds(skip_ions = False, skip_dummies = True))
             # Get the accepted range of number of bonds for the current atom according to its element
             element = atom.element
+            coherent_bonds = coherent_bonds_united_atom if atom.index in ua_atom_indices else default_coherent_bonds
             element_coherent_bonds = coherent_bonds.get(element, None)
             # If there are no specficiations for the current atom element then skip it
             if not element_coherent_bonds:

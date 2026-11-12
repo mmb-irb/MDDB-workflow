@@ -105,7 +105,8 @@ def get_frames_coordinates(structure: 'Structure', trajectory_file: 'File') -> n
     structure.generate_mmcif_file(auxiliar_mmcif_filepath)
     snapshots = count_xtc_frames(trajectory_file)
     reduced_trajectory, _, _ = get_reduced_pytraj_trajectory(auxiliar_mmcif_filepath, trajectory_file.path, snapshots, FRAMES_LIMIT)
-    coordinates = np.array([ frame.xyz for frame in reduced_trajectory.iterframe() ])
+    # Copy every frame, since pytraj may reuse the same coordinates buffer for every frame (e.g. with few frames)
+    coordinates = np.array([ frame.xyz.copy() for frame in reduced_trajectory.iterframe() ])
     os.remove(auxiliar_mmcif_filepath)
     return coordinates
 

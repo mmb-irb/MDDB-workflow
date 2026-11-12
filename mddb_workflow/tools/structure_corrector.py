@@ -11,7 +11,7 @@ from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import save_json, warn
 from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 from mddb_workflow.utils.constants import STABLE_BONDS_VIEW_FILENAME, COHERENT_BONDS_VIEW_FILENAME
-from mddb_workflow.utils.constants import LARGE_AMINOACID_FLAG
+from mddb_workflow.utils.constants import LARGE_AMINOACID_FLAG, AUTOMATIC_FLAG
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure, Residue, get_next_letter, get_chain_name
 from mddb_workflow.utils.type_hints import *
@@ -239,6 +239,7 @@ def structure_corrector(
     # Note that this is an early provisional atom selection
     pbc_selection: 'Selection',
     cg_selection: 'Selection',
+    ua_selection: 'Selection',
     dummy_selection: 'Selection',
     snapshots: int,
     register: 'Register',
@@ -259,6 +260,7 @@ def structure_corrector(
       -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are stable
     * Incoherent atom bonds -> If an atom has unexpected bonds then the simulation may be wrong
       -> Stop the workflow and warn the user
+      -> Atoms in the united atom selection may have less bonds, since their hydrogens may be absorbed
     * Forced chains -> Chains are set according to the 'chainer' input, if passed
       -> Missing chains are not fixed and forced chains must not be modified by further corrections
     * Missing chains -> Chains are added through VMD
@@ -560,13 +562,15 @@ def structure_corrector(
         coherent_bonds_view_filename = MD.pathify(COHERENT_BONDS_VIEW_FILENAME)
         remove_view_script(coherent_bonds_view_filename)
         # If the test is not passed then report it
-        incoherent_atom_indices = structure.check_incoherent_bonds()
+        incoherent_atom_indices = structure.check_incoherent_bonds(ua_selection)
         if incoherent_atom_indices:
             print('FAIL: Uncoherent bonds were found')
             message = 'Some atoms may have a higher or lower number of bonds than they should according to their element.'
             # Keep atoms instead of indices, since atoms may be sorted further
             incoherent_atoms = [ structure.atoms[index] for index in incoherent_atom_indices ]
             atom_bonded_atoms = [ (atom, [ structure.atoms[index] for index in atom.get_bonds() ]) for atom in incoherent_atoms ]
+            # Carbons with a single bond are usually methyl groups whose hydrogens were absorbed in a united atom force field
+            single_bond_carbons = any(atom.element == 'C' and len(bonded_atoms) == 1 for atom, bonded_atoms in atom_bonded_atoms)
             must_be_killed = COHERENT_BONDS_FLAG not in mercy
             def report_coherent_bonds():
                 description = f'{len(incoherent_atoms)} atoms have a wrong number of bonds:'
@@ -576,6 +580,9 @@ def structure_corrector(
                     if bonded_atoms: description += ': ' + ', '.join(bonded_atom.label for bonded_atom in bonded_atoms)
                 if len(incoherent_atoms) > MAX_REPORTED_ATOMS:
                     description += f'\n  etc. ({len(incoherent_atoms)} atoms)'
+                if single_bond_carbons:
+                    description += ('\nCarbons with a single bond may be methyl groups in a united atom force field (e.g. GROMOS, Berger lipids).'
+                        f'\nIf so, add them to the united atom selection (e.g. set the "ua_selection" input to "{AUTOMATIC_FLAG}").')
                 # Atom indices are read now, once atoms are sorted
                 incoherent_selection = Selection(sorted(atom.index for atom in incoherent_atoms))
                 bonds = sorted(set( tuple(sorted((atom.index, bonded_atom.index)))

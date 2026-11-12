@@ -107,3 +107,14 @@ def extend_gromacs_masses (new_masses : set[tuple]):
             # Add the new mass
             if residue_name is None: residue_name = ANY_RESIDUE_NAME
             file.write(f'{residue_name} {atom_name} {mass}\n')
+
+# Add a fake mass for every residue and atom name in a selection
+# This is meant for atoms which are not real atoms, so gromacs can not guess their masses (e.g. coarse grain beads, dummy atoms)
+def add_fake_gromacs_masses (structure : 'Structure', selection : 'Selection', mass : float, verbose : bool = False):
+    if not selection: return
+    fake_masses = set()
+    for atom_index in selection.atom_indices:
+        atom = structure.atoms[atom_index]
+        fake_masses.add((atom.residue.name, atom.name, mass))
+    if verbose: print(f' {len(fake_masses)} residue and atom names may be added to the gromacs masses file with mass = {mass}')
+    extend_gromacs_masses(fake_masses)
