@@ -211,6 +211,7 @@ class MD:
         self._cg_selection = MISSING_VALUE
         self._cg_residues = MISSING_VALUE
         self._ua_selection = MISSING_VALUE
+        self._ua_residues = MISSING_VALUE
         self._qm_selection = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
@@ -1100,7 +1101,7 @@ class MD:
         # Otherwise we must set the CG selection
         self._set_cg_selection(self.structure, self.trajectory_file, self.topology_file)
         return self._cg_selection
-    cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
+    cg_selection = property(get_cg_selection, None, None, "Coarse grain atom selection (read only)")
 
     # WARNING: Do not inherit project cg residues
     # WARNING: It may trigger all the processing logic of the reference MD when there is no need
@@ -1109,7 +1110,7 @@ class MD:
         # If we already have a stored value then return it
         if self._cg_residues is not MISSING_VALUE:
             return self._cg_residues
-        # If there is no inputs file then asume there are no cg residues
+        # If there are no coarse grain atoms then there are no coarse grain residues
         if not self.cg_selection:
             self._cg_residues = []
             return self._cg_residues
@@ -1146,9 +1147,21 @@ class MD:
         return self._ua_selection
     ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
 
+    # WARNING: Do not inherit project ua residues
+    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
     def get_ua_residues(self) -> list[int]:
         """Get indices of residues in united atom."""
-        return self.structure.get_selection_residue_indices(self.ua_selection)
+        # If we already have a stored value then return it
+        if self._ua_residues is not MISSING_VALUE:
+            return self._ua_residues
+        # If there are no united atoms then there are no united atom residues
+        if not self.ua_selection:
+            self._ua_residues = []
+            return self._ua_residues
+        # Otherwise we parse the selection and return the list of residue indices
+        self._ua_residues = self.structure.get_selection_residue_indices(self.ua_selection)
+        print(f'UA residues "{self.input_ua_selection}" -> {len(self._ua_residues)} residues')
+        return self._ua_residues
     ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
 
     def get_qm_selection(self) -> 'Selection':
@@ -1867,6 +1880,7 @@ class Project:
         self._cg_selection = MISSING_VALUE
         self._cg_residues = MISSING_VALUE
         self._ua_selection = MISSING_VALUE
+        self._ua_residues = MISSING_VALUE
         self._qm_selection = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
@@ -2264,14 +2278,14 @@ class Project:
             raise InputError('Coarse grain selection is not coherent among MDs. Please change the input value.')
         self._cg_selection = self.reference_md.cg_selection
         return self._cg_selection
-    cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
+    cg_selection = property(get_cg_selection, None, None, "Coarse grain atom selection (read only)")
 
     def get_cg_residues(self) -> list[int]:
         """Get indices of coarse grain residues. Make sure they are coherent among all MDs."""
         # If we already have a stored value then return it
         if self._cg_residues is not MISSING_VALUE:
             return self._cg_residues
-        # If there is no inputs file then asume there are no cg residues
+        # If there are no coarse grain atoms then there are no coarse grain residues
         if not self.cg_selection:
             self._cg_residues = []
             return self._cg_residues
@@ -2282,10 +2296,10 @@ class Project:
         reference_set = set(reference_cg_residues)
         for md in self.mds:
             # Skip the reference MD since we are using its residues
-            if md is self.reference_md: continue
+            if md is self.reference_md or md is REMOVED_MD: continue
             md_set = set(md.cg_residues)
             if reference_set != md_set:
-                raise ValueError('Coarse grain residues are not coherent among MDs.')
+                raise InputError('Coarse grain residues are not coherent among MDs.')
         self._cg_residues = reference_cg_residues
         print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
         return self._cg_residues
@@ -2305,8 +2319,28 @@ class Project:
     ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
 
     def get_ua_residues(self) -> list[int]:
-        """Get indices of residues in united atom."""
-        return self.structure.get_selection_residue_indices(self.ua_selection)
+        """Get indices of united atom residues. Make sure they are coherent among all MDs."""
+        # If we already have a stored value then return it
+        if self._ua_residues is not MISSING_VALUE:
+            return self._ua_residues
+        # If there are no united atoms then there are no united atom residues
+        if not self.ua_selection:
+            self._ua_residues = []
+            return self._ua_residues
+        # Otherwise we must set the list of residues
+        # Get a sample from the reference MD and make a copy to prevent further mutation
+        reference_ua_residues = [residue_index for residue_index in self.reference_md.ua_residues]
+        # Make sure this is coherent among all MDs
+        reference_set = set(reference_ua_residues)
+        for md in self.mds:
+            # Skip the reference MD since we are using its residues
+            if md is self.reference_md or md is REMOVED_MD: continue
+            md_set = set(md.ua_residues)
+            if reference_set != md_set:
+                raise InputError('United atom residues are not coherent among MDs.')
+        self._ua_residues = reference_ua_residues
+        print(f'UA residues "{self.input_ua_selection}" -> {len(self._ua_residues)} residues')
+        return self._ua_residues
     ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
 
     def get_qm_selection(self) -> 'Selection':
