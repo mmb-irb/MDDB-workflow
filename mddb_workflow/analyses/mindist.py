@@ -308,6 +308,9 @@ def check_cross_periodic_contacts(
             description += f'\n  {label_a} — {label_b} ({distance * 10:.2f} Å)'
         if len(example_pairs) > MAX_REPORTED_PAIRS:
             description += f'\n  etc. ({len(example_pairs)} pairs)'
+        # Directions in which periodic images are in contact, where opposite shifts are the same direction
+        directions = sorted({ name_cell_shift(cell_shift) for cell_shift in example_cell_shifts }, key=lambda name: (len(name), name))
+        description += f'\nPeriodic images in contact through: {", ".join(directions)}'
         # Atoms overlapping through the boundary are not physical, so the box is likely wrong
         if closest_distance < OVERLAP_DISTANCE:
             description += (f'\nSome atoms overlap their periodic neighbours (down to {closest_distance * 10:.2f} Å).'
@@ -323,6 +326,7 @@ def check_cross_periodic_contacts(
             image_selection = Selection([ int(index) for index in np.unique(shift_pairs[:, 1]) ])
             images.append((cell_shift, image_selection))
         data['frame'] = example_frame
+        data['directions'] = directions
         data['selection'] = format_selection(structure, contact_selection)
         data['images'] = [ { 'shift': cell_shift.tolist(), 'selection': format_selection(structure, image_selection) }
             for cell_shift, image_selection in images ]
@@ -412,6 +416,18 @@ def write_view_script(
     ]
     with open(script_filename, 'w') as script_file:
         script_file.write('\n'.join(commands) + '\n')
+
+
+def name_cell_shift(cell_shift : np.ndarray) -> str:
+    """Name the direction of a cell shift, e.g. [1, 0, -1] is 'x-z'.
+
+    Opposite shifts get the same name (e.g. [-1, 0, 1] is also 'x-z'), since both are the same contact seen from each side.
+    In non orthogonal boxes x, y and z stand for the first, second and third box vectors.
+    """
+    # Flip the shift so the first non-zero value is positive
+    if cell_shift[np.nonzero(cell_shift)[0][0]] < 0: cell_shift = -cell_shift
+    name = ''.join(f'{"+" if shift > 0 else "-"}{axis}' for axis, shift in zip('xyz', cell_shift) if shift != 0)
+    return name[1:]
 
 
 def to_tcl_vector(vector : np.ndarray) -> str:
