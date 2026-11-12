@@ -992,55 +992,45 @@ class MD:
     # To make things faster and more efficient, every MD process these selections using its own structure
     # Note that the project selections then are checked to be coherent among all MDs
 
-    def _set_pbc_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
-        """Set PBC selection.
-        It may parse the inputs file selection string if it is available or guess it otherwise.
+    @staticmethod
+    def _parse_input_selection(
+        name: str,
+        label: str,
+        selection_string: Optional[str],
+        reference_structure: 'Structure',
+        guess: Callable[[], 'Selection'],
+        must_select: bool = False,
+        verbose: bool = False,
+    ) -> 'Selection':
+        """Parse an input atom selection using the reference structure.
+        The input may be empty (no atoms), a VMD selection, or the automatic flag to guess atoms with the guess function.
+        The automatic flag may be followed by an additional VMD selection (e.g. auto + resname LIG).
+        If must select is set then a VMD selection which selects no atoms is an error.
         """
-        # Otherwise we must set the PBC selection
-        if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
-        selection_string = None
-        # If there is inputs file then get the input pbc selection
-        if self.project.inputs.is_file_available:
-            if verbose: print(' Using selection string in the inputs file')
-            selection_string = self.input_pbc_selection
-        # If there is no inputs file then get the default value
-        else:
-            selection_string = self.project.inputs.get_default('pbc_selection')
-        # Parse the selection string using the reference structure
-        parsed_selection = None
-        # The automatic flag may be combined with an additional user selection
-        # e.g. auto + resname LIG
+        if verbose: print(f'Setting {name} atoms selection')
         is_automatic, additional_selection_string = parse_automatic_selection(selection_string)
-        # If the input PBC selection is the automatic flag then guess it automatically
         if is_automatic:
-            # To guess PBC atoms (with the current implementation) we must make sure ther eis no CG
-            if reference_structure.has_cg():
-                raise InputError('We can not guess which atoms are under Periodic Boundary Conditions (PBC) in Coarse Grained (CG) systems. Please set PBC atoms manually.\n'
-                    ' Please provide an atom selection (VMD syntax) aiming for all atoms under PBC.\n'
-                    ' Use the "-pbc" argument or set the "pbc_selection" field in the inputs file.\n'
-                    ' e.g. -pbc "resname DPPC"')
-            if verbose: print(' Guessing PBC atoms as solvent, counter ions and lipids')
-            parsed_selection = reference_structure.select_pbc_guess()
+            if verbose: print(f' Guessing {label} atoms')
+            parsed_selection = guess()
             # Add the additional user selection, if any
             if additional_selection_string:
-                if verbose: print(f' Adding PBC atoms "{additional_selection_string}"')
+                if verbose: print(f' Adding {label} atoms "{additional_selection_string}"')
                 additional_selection = reference_structure.select(additional_selection_string)
                 if not additional_selection:
-                    raise InputError(f'PBC selection "{additional_selection_string}" selected no atoms')
+                    raise InputError(f'{label} selection "{additional_selection_string}" selected no atoms')
                 parsed_selection += additional_selection
-        # If we have a valid input value then use it
         elif selection_string:
-            if verbose: print(f' Selecting PBC atoms "{selection_string}"')
+            if verbose: print(f' Selecting {label} atoms "{selection_string}"')
             parsed_selection = reference_structure.select(selection_string)
-            if not parsed_selection:
-                raise InputError(f'PBC selection "{selection_string}" selected no atoms')
-        # If we have an input value but it is empty then we set an empty selection
+            if must_select and not parsed_selection:
+                raise InputError(f'{label} selection "{selection_string}" selected no atoms')
         else:
-            if verbose: print(' No PBC atoms selected')
+            if verbose: print(f' Empty selection -> There are no {label} atoms')
             parsed_selection = Selection()
-        # Log a few of the selected residue names
+        # Log the selection size and a few of the selected residue names
+        if verbose:
+            print(f' {label} selection has {len(parsed_selection)} atoms')
         if verbose and parsed_selection:
-            print(f' Parsed PBC selection has {len(parsed_selection)} atoms')
             selected_residues = reference_structure.get_selection_residues(parsed_selection)
             selected_residue_names = list(set([residue.name for residue in selected_residues]))
             limit = 3  # Show a maximum of 3 residue names
@@ -1049,13 +1039,28 @@ class MD:
             print('  e.g. ' + example_residue_names)
         return parsed_selection
 
+    def _parse_pbc_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
+        """Parse the periodic boundary conditions selection input.
+        Solvent, counter ions and lipids are guessed as PBC atoms.
+        """
+        def guess() -> 'Selection':
+            # To guess PBC atoms (with the current implementation) we must make sure there is no CG
+            if reference_structure.has_cg():
+                raise InputError('We can not guess which atoms are under Periodic Boundary Conditions (PBC) in Coarse Grained (CG) systems. Please set PBC atoms manually.\n'
+                    ' Please provide an atom selection (VMD syntax) aiming for all atoms under PBC.\n'
+                    ' Use the "-pbc" argument or set the "pbc_selection" field in the inputs file.\n'
+                    ' e.g. -pbc "resname DPPC"')
+            return reference_structure.select_pbc_guess()
+        return self._parse_input_selection('Periodic Boundary Conditions (PBC)', 'PBC', self.input_pbc_selection,
+            reference_structure, guess, must_select=True, verbose=verbose)
+
     def get_pbc_selection(self) -> 'Selection':
         """Get the periodic boundary conditions atom selection."""
         # If we already have a stored value then return it
         if self._pbc_selection is not MISSING_VALUE:
             return self._pbc_selection
         # Otherwise we must set the PBC selection
-        self._pbc_selection = self._set_pbc_selection(self.structure)
+        self._pbc_selection = self._parse_pbc_selection(self.structure)
         return self._pbc_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
@@ -1080,36 +1085,11 @@ class MD:
         """Parse the coarse grain selection input.
         Trajectory and topology files must match the reference structure, since they may be used to guess CG atoms.
         """
-        if verbose: print('Setting Coarse Grained (CG) atoms selection')
-        # Get the input selection string
-        selection_string = self.input_cg_selection
-        # If the selection is empty, again, assume there is no CG selection
-        if not selection_string:
-            if verbose: print(' Empty selection -> There is no CG at all')
-            return Selection()
-        # If the input CG selection is the automatic flag then guess it
-        if selection_string == AUTOMATIC_FLAG:
-            if verbose: print(' Guessing CG atoms')
-            parsed_selection = guess_cg_selection(reference_structure, trajectory_file, topology_file,
+        def guess() -> 'Selection':
+            return guess_cg_selection(reference_structure, trajectory_file, topology_file,
                 self.project.input_force_fields, verbose=verbose)
-            if verbose:
-                if parsed_selection: print(f' Found {len(parsed_selection)} coarse grain atoms')
-                else: print(' There are no coarse grain atoms')
-            return parsed_selection
-        # Otherwise, process it
-        if verbose: print(f' Selecting CG atoms "{selection_string}"')
-        parsed_selection = reference_structure.select(selection_string)
-        # Log the parsed selection size
-        if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
-        # Log a few of the selected residue names
-        if verbose and parsed_selection:
-            selected_residues = reference_structure.get_selection_residues(parsed_selection)
-            selected_residue_names = list(set([residue.name for residue in selected_residues]))
-            limit = 3  # Show a maximum of 3 residue names
-            example_residue_names = ', '.join(selected_residue_names[0:limit])
-            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
-            print('  e.g. ' + example_residue_names)
-        return parsed_selection
+        return self._parse_input_selection('Coarse Grained (CG)', 'CG', self.input_cg_selection,
+            reference_structure, guess, verbose=verbose)
 
     def get_cg_selection(self) -> 'Selection':
         """Get the coarse grain atom selection."""
@@ -1146,19 +1126,10 @@ class MD:
         """Parse the united atom selection input.
         The trajectory file must match the reference structure, since it may be used to guess UA atoms.
         """
-        if verbose: print('Setting United Atom (UA) atoms selection')
-        selection_string = self.input_ua_selection
-        if not selection_string:
-            if verbose: print(' Empty selection -> There is no UA at all')
-            ua_selection = Selection()
-        elif selection_string == AUTOMATIC_FLAG:
-            if verbose: print(' Guessing UA atoms')
-            ua_selection = guess_ua_selection(reference_structure, trajectory_file, cg_selection, verbose=verbose)
-        else:
-            if verbose: print(f' Selecting UA atoms "{selection_string}"')
-            ua_selection = reference_structure.select(selection_string)
-        if verbose: print(f' UA selection has {len(ua_selection)} atoms')
-        return ua_selection
+        def guess() -> 'Selection':
+            return guess_ua_selection(reference_structure, trajectory_file, cg_selection, verbose=verbose)
+        return self._parse_input_selection('United Atom (UA)', 'UA', self.input_ua_selection,
+            reference_structure, guess, verbose=verbose)
 
     def get_ua_selection(self) -> 'Selection':
         """Get the united atom selection."""
@@ -1209,46 +1180,32 @@ class MD:
     # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
     # This function may be called for the first time while in the 'inpro' task
     # Thus this function is called when we still have no structure, but we us a provisional structure
-    def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = False):
-        def parse_dummy_selection() -> 'Selection':
-            if verbose: print(f'Setting dummy atoms selection in MD {self.name}')
-            input_dummy_selection = self.input_dummy_selection
-            # If no input selection was passed assume there are no dummy atoms in the system
-            if not input_dummy_selection:
-                if verbose: print(' Empty selection -> There are no dummy atoms at all')
-                return Selection()
-            # If the input dummy selection is the automatic flag then guess dummy atoms from their atom names
-            if input_dummy_selection == AUTOMATIC_FLAG:
-                if verbose: print(' Guessing dummy atoms by their atom names')
-                # Get atom indices of all atoms with names matching a dummy atom name patter
-                atom_indices = []
-                for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
-                    for atom_index, atom in enumerate(reference_structure.atoms):
-                        if re.fullmatch(dummy_name, atom.name):
-                            atom_indices.append(atom_index)
-                dummy_atoms_count = len(atom_indices)
-                if verbose:
-                    print(f' {dummy_atoms_count} dummy atoms were found')
-                    example = reference_structure.atoms[atom_indices[0]] if dummy_atoms_count > 0 else None
-                    if example: print(f' e.g. {example.label}')
-                return Selection(atom_indices)
-            # If we have and actual VMD selection then parse it
-            parsed_selection = reference_structure.select(input_dummy_selection, syntax='vmd')
-            if verbose: print(f' Parsed dummy atoms selection has {len(parsed_selection)} atoms')
-            return parsed_selection
-        # Save the parsed dummy selection
-        self._dummy_selection = parse_dummy_selection()
-        # Dummy atoms are not real atoms, so gromacs needs a fake mass for them: 0
-        add_fake_gromacs_masses(reference_structure, self._dummy_selection, 0, verbose)
+    def _parse_dummy_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
+        """Parse the dummy atoms selection input.
+        Dummy atoms are guessed by their atom names.
+        """
+        def guess() -> 'Selection':
+            # Get atom indices of all atoms with names matching a dummy atom name patter
+            atom_indices = []
+            for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
+                for atom_index, atom in enumerate(reference_structure.atoms):
+                    if re.fullmatch(dummy_name, atom.name):
+                        atom_indices.append(atom_index)
+            return Selection(atom_indices)
+        return self._parse_input_selection('dummy', 'dummy', self.input_dummy_selection,
+            reference_structure, guess, verbose=verbose)
 
     def get_dummy_selection(self) -> 'Selection':
         """Get the dummy atoms selection."""
         # If we already have a stored value then return it
         if self._dummy_selection is not MISSING_VALUE:
             return self._dummy_selection
-        # Otherwise we must set the dummy selection
-        self._set_dummy_selection(self.structure)
-        # Finally return the selection
+        # Get the structure first, since it may run the input files processing, which sets the selection
+        structure = self.structure
+        if self._dummy_selection is MISSING_VALUE:
+            self._dummy_selection = self._parse_dummy_selection(structure)
+            # Dummy atoms are not real atoms, so gromacs needs a fake mass for them: 0
+            add_fake_gromacs_masses(structure, self._dummy_selection, 0)
         return self._dummy_selection
     dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
 

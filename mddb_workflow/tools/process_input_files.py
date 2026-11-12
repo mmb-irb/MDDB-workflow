@@ -285,7 +285,8 @@ def process_input_files(
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
-    self._set_dummy_selection(provisional_structure)
+    self._dummy_selection = self._parse_dummy_selection(provisional_structure)
+    add_fake_gromacs_masses(provisional_structure, self._dummy_selection, 0)
 
     # Set also provisional forced class selections and apply them to the provisional structure
     # This may be important for the automatic filtering
@@ -297,7 +298,7 @@ def process_input_files(
     # This selection is useful both for imaging/fitting and for the correction
     # We will make sure that the provisonal and the final PBC selections match
     # Since this is proviosonal we will make it silent
-    provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
+    provisional_pbc_selection = self._parse_pbc_selection(provisional_structure)
 
     # --- FITTED TRAJECTORY AND BROKEN PBC CHECK -----------------------------------------
 
