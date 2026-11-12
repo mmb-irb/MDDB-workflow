@@ -1,6 +1,6 @@
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frames, get_starting_pdb_frames
 from mddb_workflow.utils.auxiliar import load_json, warn, MISSING_TOPOLOGY, is_standard_topology
-from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
+from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS, MISSING_VALUE
 from mddb_workflow.utils.constants import MISSING_BONDS_FLAG
 from mddb_workflow.utils.vmd_spells import get_covalent_bonds
 from mddb_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
@@ -373,7 +373,9 @@ def find_safe_bonds(
     guess_bonds: bool = False,
     ignore_bonds: bool = False,
     # Optional file with bonds sorted according a new atom order
-    resorted_bonds_file: Optional['File'] = None
+    resorted_bonds_file: Optional['File'] = None,
+    # Bonds already mined from the topology file, so they are not mined again
+    topology_bonds: Optional[list[list[int]]] = MISSING_VALUE,
 ) -> list[list[int]]:
     """Find reference safe bonds in the system.
     First try to mine bonds from a topology files.
@@ -394,7 +396,7 @@ def find_safe_bonds(
     if guess_bonds:
         print('Bonds were forced to be guessed, so bonds in the topology file will be ignored')
     else:
-        safe_bonds = mine_topology_bonds(topology_file)
+        safe_bonds = mine_topology_bonds(topology_file) if topology_bonds is MISSING_VALUE else topology_bonds
         if safe_bonds:
             return safe_bonds
     # If all bonds are in coarse grain then set all bonds "wrong" already

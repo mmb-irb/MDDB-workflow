@@ -362,7 +362,7 @@ def process_input_files(
             structure=provisional_structure,
             pbc_selection=provisional_pbc_selection,
             # Bonds are found as the safe bonds further, but here with the provisional structure
-            find_bonds=lambda trajectory_file, frames_count: find_safe_bonds(
+            find_bonds=lambda trajectory_file, frames_count, topology_bonds: find_safe_bonds(
                 filtered_topology_file,
                 trajectory_file,
                 STABLE_BONDS_FLAG not in self.project.trust,
@@ -372,6 +372,7 @@ def process_input_files(
                 provisional_cg_selection,
                 self.project.guess_bonds,
                 self.project.ignore_bonds,
+                topology_bonds=topology_bonds,
             ),
         )
         _commit_incomplete_output(incompleted_imaged_trajectory_file, imaged_trajectory_file)

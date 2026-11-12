@@ -47,7 +47,7 @@ def image_and_fit(
     translation: list[float] | str,
     structure: 'Structure',
     pbc_selection: 'Selection',
-    find_bonds: Callable[['File', int], list[list[int]]],
+    find_bonds: Callable[['File', int, Optional[list[list[int]]]], list[list[int]]],
     ) -> str:
     """Image and fit a trajectory.
 
@@ -79,7 +79,8 @@ def image_and_fit(
             Selection of atoms which are to stay in PBC conditions after imaging.
             Note that this is an early provisional atom selection.
         find_bonds:
-            Function to find the bonds of the system, given a trajectory and its number of frames.
+            Function to find the bonds of the system, given a trajectory, its number of frames and the topology bonds.
+            Topology bonds are mined only once and passed to this function, so they are not mined again.
             Bonds may be guessed from atom distances, so they are found once the trajectory has no jumps.
 
     """
@@ -165,7 +166,9 @@ def image_and_fit(
         # run_gromacs(f'trjconv -s {latest_structure.path} \
         #     -f {latest_trajectory.path} -o {output_trajectory_file.path} \
         #     -pbc nojump', user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
-        atom_groups = find_no_jump_groups(input_topology_file, structure)
+        # Bonds are mined from the topology only once and they are used in the no-jump and to put fragments in the box
+        topology_bonds = mine_topology_bonds(input_topology_file)
+        atom_groups = find_no_jump_groups(topology_bonds, structure)
         must_translate = translation != [0, 0, 0]
         if must_translate: print(f'  Translation: {translation[0]} {translation[1]} {translation[2]} nm')
         atom_residues = np.array([ atom.residue_index for atom in structure.atoms ])
@@ -185,7 +188,7 @@ def image_and_fit(
         print(' Putting PBC fragments in the box')
         with mdt.formats.XTCTrajectoryFile(latest_trajectory.path) as reader:
             frames_count = len(reader)
-        atom_bonds = find_bonds(latest_trajectory, frames_count)
+        atom_bonds = find_bonds(latest_trajectory, frames_count, topology_bonds)
         boxed_trajectory_file = output_trajectory_file.get_prefixed_file('boxed.')
         put_fragments_in_box(latest_trajectory, boxed_trajectory_file, atom_bonds, structure, center_selection)
         boxed_trajectory_file.rename_to(output_trajectory_file)
@@ -251,12 +254,11 @@ def image_and_fit(
 # Auxiliar functions to aid in the automatic imaging process
 # Mostly made by Claude
 
-def find_no_jump_groups(topology_file: Union['File', Exception], structure: 'Structure') -> np.ndarray:
+def find_no_jump_groups(atom_bonds: Optional[list[list[int]]], structure: 'Structure') -> np.ndarray:
     """Set the group of every atom for the no-jump step, as atoms in the same group move together.
     Molecules are used when there are bonds in the topology, and residues otherwise.
     Bonds are not guessed here since guessing them requires the trajectory to be imaged already.
     """
-    atom_bonds = mine_topology_bonds(topology_file)
     if atom_bonds and any(bonds == MISSING_BONDS for bonds in atom_bonds):
         print('  Some atoms are missing bonds in the topology')
         atom_bonds = None
