@@ -13,6 +13,7 @@ from scipy import special
 from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, InputsUpdated, warn, fail
 from mddb_workflow.utils.auxiliar import round_to_hundredths
 from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG, BIMODALITY_BIC_CUTOFF, BIMODALITY_SEPARATION_CUTOFF
+from mddb_workflow.utils.constants import META_BIMODALITY_SEPARATION_CUTOFF
 from mddb_workflow.utils.constants import RED_HEADER, COLOR_END
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory
 from mddb_workflow.utils.mdt_spells import iterate_xtc_frames, unrotate_box
@@ -363,7 +364,9 @@ def check_trajectory_integrity (
             bimodality_score, bigger_probabilities, group_means = check_bimodality(scaled_jumps)
             separation = math.sqrt(group_means[1] / group_means[0])
         bimodal_frames = 0
-        if check_bimodal and bimodality_score > BIMODALITY_BIC_CUTOFF and separation > BIMODALITY_SEPARATION_CUTOFF:
+        is_meta_fragment = fragment_name == META_FRAGMENT_NAME
+        separation_cutoff = META_BIMODALITY_SEPARATION_CUTOFF if is_meta_fragment else BIMODALITY_SEPARATION_CUTOFF
+        if check_bimodal and bimodality_score > BIMODALITY_BIC_CUTOFF and separation > separation_cutoff:
             # Find the frames in the group of bigger jumps
             bigger_group_frames = np.where(bigger_probabilities > 0.5)[0] + 1
             # If bigger jumps are all in the first frames then these frames are not equilibrated
@@ -388,6 +391,7 @@ def check_trajectory_integrity (
             'bypass': bypassed_frames,
             'bimodality': bimodality_score,
             'separation': separation,
+            'separation_cutoff': separation_cutoff,
             'bimodal_frames': bimodal_frames,
             'jumps' : rmsd_jumps,
             'scaled_jumps': scaled_jumps,
@@ -497,7 +501,7 @@ def check_trajectory_integrity (
         description = (f'{failed_count} of {len(fragment_reports)} fragments failed. The worst one is "{worst_report["name"]}"'
             f', with a maximum z-score of {round_to_hundredths(worst_report["score"])} (cutoff {standard_deviations_cutoff})'
             f', a bimodality score of {round_to_hundredths(worst_report["bimodality"])} (cutoff {BIMODALITY_BIC_CUTOFF})'
-            f' and a separation of {round_to_hundredths(worst_report["separation"])} (cutoff {BIMODALITY_SEPARATION_CUTOFF})')
+            f' and a separation of {round_to_hundredths(worst_report["separation"])} (cutoff {worst_report["separation_cutoff"]})')
         if worst_report['bypass'] > 0:
             description += f', and {worst_report["bypass"]} bypassed frames at the beginning'
         description += f'.\n{jumps_description}'

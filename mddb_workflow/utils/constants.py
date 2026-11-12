@@ -277,6 +277,10 @@ BIMODALITY_BIC_CUTOFF = 50
 # How many times bigger the average jump of the bigger group must be than the one of the smaller group
 # Fragments with many bonds have very regular jumps, so even tiny differences fit better as two groups
 BIMODALITY_SEPARATION_CUTOFF = 1.5
+# The same but for distances between molecules, which are not bonds and change much more irregularly
+# e.g. a ligand moves less while bound to the protein than while free
+# Whole molecules jumping across the box still give much bigger separations
+META_BIMODALITY_SEPARATION_CUTOFF = 3
 DEFAULT_INTERACTION_CUTOFF = 0.1
 
 # Set register cache flags
