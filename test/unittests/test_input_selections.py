@@ -1,12 +1,13 @@
-"""Tests for the parsing of input atom selections (PBC, CG, UA and dummy atoms).
+"""Tests for the input atom selections (PBC, CG, UA, QM and dummy atoms) of MDs and projects.
 
 Every selection input may be empty (no atoms), a VMD selection, or the automatic flag to guess atoms.
 The automatic flag may be followed by an additional VMD selection (e.g. auto + resname LIG).
 """
 import pytest
+from types import SimpleNamespace
 
-from mddb_workflow.mwf import MD
-from mddb_workflow.utils.auxiliar import InputError
+from mddb_workflow.mwf import MD, Project
+from mddb_workflow.utils.auxiliar import InputError, MISSING_VALUE, REMOVED_MD
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
 
@@ -52,3 +53,25 @@ def test_automatic_selection():
     assert parse('auto + resname NA') == [0, 1, 2, 6]
     with pytest.raises(InputError, match='TEST selection "resname LIG" selected no atoms'):
         parse('auto + resname LIG')
+
+
+class FakeProject(Project):
+    """A project with just the MDs needed to get values which must be the same in every MD."""
+    def __init__(self, mds: list):
+        self._mds_values = mds
+        self._cg_residues = MISSING_VALUE
+    mds = property(lambda self: self._mds_values)
+    reference_md = property(lambda self: self._mds_values[0])
+
+
+@pytest.mark.unit_int
+def test_coherent_md_values():
+    """Project values come from the reference MD and must be the same in every MD, removed MDs apart."""
+    reference_md = SimpleNamespace(cg_residues=[3, 1, 2])
+    project = FakeProject([ reference_md, REMOVED_MD, SimpleNamespace(cg_residues=[1, 2, 3]) ])
+    assert project.cg_residues == [3, 1, 2]
+    # It is a copy, so changing it does not change the MD value
+    assert project.cg_residues is not reference_md.cg_residues
+    project = FakeProject([ reference_md, SimpleNamespace(cg_residues=[1, 2]) ])
+    with pytest.raises(InputError, match='Coarse grain residues must be the same in every MD'):
+        project.cg_residues

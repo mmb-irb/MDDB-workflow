@@ -992,13 +992,48 @@ class MD:
     # To make things faster and more efficient, every MD process these selections using its own structure
     # Note that the project selections then are checked to be coherent among all MDs
 
+    def selection_getter(name: str, parse: Callable[['MD', 'Structure'], 'Selection'], fake_mass: Optional[int] = None):
+        """Get the getter of an input selection, which is parsed with the processed structure the first time.
+        Atoms which are not real atoms (e.g. coarse grain beads) get a fake mass in the gromacs masses file.
+        """
+        attribute = f'_{name}_selection'
+        def getter(self: 'MD') -> 'Selection':
+            # If we already have a stored value then return it
+            if getattr(self, attribute) is not MISSING_VALUE:
+                return getattr(self, attribute)
+            # Get the structure first, since it may run the input files processing, which may set the definitive selection
+            structure = self.structure
+            if getattr(self, attribute) is MISSING_VALUE:
+                selection = parse(self, structure)
+                if fake_mass is not None: add_fake_gromacs_masses(structure, selection, fake_mass)
+                setattr(self, attribute, selection)
+            return getattr(self, attribute)
+        return getter
+
+    # WARNING: Do not inherit project residues
+    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
+    def residues_getter(name: str, label: str):
+        """Get the getter of the indices of residues with atoms in an input selection."""
+        attribute = f'_{name}_residues'
+        def getter(self: 'MD') -> list[int]:
+            # If we already have a stored value then return it
+            if getattr(self, attribute) is not MISSING_VALUE:
+                return getattr(self, attribute)
+            selection = getattr(self, f'{name}_selection')
+            # If there are no selected atoms then there are no residues
+            residues = self.structure.get_selection_residue_indices(selection) if selection else []
+            if selection: print(f'{label} residues "{getattr(self, f"input_{name}_selection")}" -> {len(residues)} residues')
+            setattr(self, attribute, residues)
+            return residues
+        return getter
+
     @staticmethod
     def _parse_input_selection(
         name: str,
         label: str,
         selection_string: Optional[str],
         reference_structure: 'Structure',
-        guess: Callable[[], 'Selection'],
+        guess: Optional[Callable[[], 'Selection']],
         must_select: bool = False,
         verbose: bool = False,
     ) -> 'Selection':
@@ -1010,6 +1045,8 @@ class MD:
         if verbose: print(f'Setting {name} atoms selection')
         is_automatic, additional_selection_string = parse_automatic_selection(selection_string)
         if is_automatic:
+            if not guess:
+                raise InputError(f'{label} atoms can not be guessed. Please provide an atom selection instead of "{AUTOMATIC_FLAG}"')
             if verbose: print(f' Guessing {label} atoms')
             parsed_selection = guess()
             # Add the additional user selection, if any
@@ -1054,31 +1091,9 @@ class MD:
         return self._parse_input_selection('Periodic Boundary Conditions (PBC)', 'PBC', self.input_pbc_selection,
             reference_structure, guess, must_select=True, verbose=verbose)
 
-    def get_pbc_selection(self) -> 'Selection':
-        """Get the periodic boundary conditions atom selection."""
-        # If we already have a stored value then return it
-        if self._pbc_selection is not MISSING_VALUE:
-            return self._pbc_selection
-        # Otherwise we must set the PBC selection
-        self._pbc_selection = self._parse_pbc_selection(self.structure)
-        return self._pbc_selection
+    get_pbc_selection = selection_getter('pbc', lambda self, structure: self._parse_pbc_selection(structure))
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
-
-    # WARNING: Do not inherit project pbc residues
-    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
-    def get_pbc_residues(self) -> list[int]:
-        """Get indices of residues in periodic boundary conditions."""
-        # If we already have a stored value then return it
-        if self._pbc_residues is not MISSING_VALUE:
-            return self._pbc_residues
-        # If there is no inputs file then asume there are no PBC residues
-        if not self.pbc_selection:
-            self._pbc_residues = []
-            return self._pbc_residues
-        # Otherwise we parse the selection and return the list of residue indices
-        self._pbc_residues = self.structure.get_selection_residue_indices(self.pbc_selection)
-        print(f'PBC residues "{self.input_pbc_selection}" -> {len(self._pbc_residues)} residues')
-        return self._pbc_residues
+    get_pbc_residues = residues_getter('pbc', 'PBC')
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
     def _parse_cg_selection(self, reference_structure: 'Structure', trajectory_file: 'File', topology_file: Union['File', Exception], verbose: bool = False) -> 'Selection':
@@ -1091,35 +1106,10 @@ class MD:
         return self._parse_input_selection('Coarse Grained (CG)', 'CG', self.input_cg_selection,
             reference_structure, guess, verbose=verbose)
 
-    def get_cg_selection(self) -> 'Selection':
-        """Get the coarse grain atom selection."""
-        # If we already have a stored value then return it
-        if self._cg_selection is not MISSING_VALUE:
-            return self._cg_selection
-        # Get the structure first, since it may run the input files processing, which sets the definitive selection
-        structure = self.structure
-        if self._cg_selection is MISSING_VALUE:
-            self._cg_selection = self._parse_cg_selection(structure, self.trajectory_file, self.topology_file)
-            # Coarse grain beads have no real mass, so gromacs needs a fake mass for them: 1
-            add_fake_gromacs_masses(structure, self._cg_selection, 1)
-        return self._cg_selection
+    get_cg_selection = selection_getter('cg', lambda self, structure: self._parse_cg_selection(structure, self.trajectory_file, self.topology_file),
+        fake_mass=1)
     cg_selection = property(get_cg_selection, None, None, "Coarse grain atom selection (read only)")
-
-    # WARNING: Do not inherit project cg residues
-    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
-    def get_cg_residues(self) -> list[int]:
-        """Get indices of residues in coarse grain."""
-        # If we already have a stored value then return it
-        if self._cg_residues is not MISSING_VALUE:
-            return self._cg_residues
-        # If there are no coarse grain atoms then there are no coarse grain residues
-        if not self.cg_selection:
-            self._cg_residues = []
-            return self._cg_residues
-        # Otherwise we parse the selection and return the list of residue indices
-        self._cg_residues = self.structure.get_selection_residue_indices(self.cg_selection)
-        print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
-        return self._cg_residues
+    get_cg_residues = residues_getter('cg', 'CG')
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
     def _parse_ua_selection(self, reference_structure: 'Structure', trajectory_file: 'File', cg_selection: 'Selection', verbose: bool = True) -> 'Selection':
@@ -1131,50 +1121,17 @@ class MD:
         return self._parse_input_selection('United Atom (UA)', 'UA', self.input_ua_selection,
             reference_structure, guess, verbose=verbose)
 
-    def get_ua_selection(self) -> 'Selection':
-        """Get the united atom selection."""
-        # If we already have a stored value then return it
-        if self._ua_selection is not MISSING_VALUE:
-            return self._ua_selection
-        # Get the structure first, since it may run the input files processing, which sets the definitive selection
-        structure = self.structure
-        if self._ua_selection is MISSING_VALUE:
-            self._ua_selection = self._parse_ua_selection(structure, self.trajectory_file, self.cg_selection)
-        return self._ua_selection
+    get_ua_selection = selection_getter('ua', lambda self, structure: self._parse_ua_selection(structure, self.trajectory_file, self.cg_selection))
     ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
-
-    # WARNING: Do not inherit project ua residues
-    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
-    def get_ua_residues(self) -> list[int]:
-        """Get indices of residues in united atom."""
-        # If we already have a stored value then return it
-        if self._ua_residues is not MISSING_VALUE:
-            return self._ua_residues
-        # If there are no united atoms then there are no united atom residues
-        if not self.ua_selection:
-            self._ua_residues = []
-            return self._ua_residues
-        # Otherwise we parse the selection and return the list of residue indices
-        self._ua_residues = self.structure.get_selection_residue_indices(self.ua_selection)
-        print(f'UA residues "{self.input_ua_selection}" -> {len(self._ua_residues)} residues')
-        return self._ua_residues
+    get_ua_residues = residues_getter('ua', 'UA')
     ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
 
-    def get_qm_selection(self) -> 'Selection':
-        """Get the quantum mechanics atom selection."""
-        # If we already have a stored value then return it
-        if self._qm_selection is not MISSING_VALUE:
-            return self._qm_selection
-        print('Setting Quantum Mechanics (QM) atoms selection')
-        selection_string = self.input_qm_selection
-        if not selection_string:
-            print(' Empty selection -> There is no QM at all')
-            self._qm_selection = Selection()
-        else:
-            print(f' Selecting QM atoms "{selection_string}"')
-            self._qm_selection = self.structure.select(selection_string)
-        print(f' QM selection has {len(self._qm_selection)} atoms')
-        return self._qm_selection
+    def _parse_qm_selection(self, reference_structure: 'Structure', verbose: bool = True) -> 'Selection':
+        """Parse the quantum mechanics selection input. QM atoms can not be guessed."""
+        return self._parse_input_selection('Quantum Mechanics (QM)', 'QM', self.input_qm_selection,
+            reference_structure, None, verbose=verbose)
+
+    get_qm_selection = selection_getter('qm', lambda self, structure: self._parse_qm_selection(structure))
     qm_selection = property(get_qm_selection, None, None, "Quantum mechanics atom selection (read only)")
 
     # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
@@ -1195,18 +1152,7 @@ class MD:
         return self._parse_input_selection('dummy', 'dummy', self.input_dummy_selection,
             reference_structure, guess, verbose=verbose)
 
-    def get_dummy_selection(self) -> 'Selection':
-        """Get the dummy atoms selection."""
-        # If we already have a stored value then return it
-        if self._dummy_selection is not MISSING_VALUE:
-            return self._dummy_selection
-        # Get the structure first, since it may run the input files processing, which sets the selection
-        structure = self.structure
-        if self._dummy_selection is MISSING_VALUE:
-            self._dummy_selection = self._parse_dummy_selection(structure)
-            # Dummy atoms are not real atoms, so gromacs needs a fake mass for them: 0
-            add_fake_gromacs_masses(structure, self._dummy_selection, 0)
-        return self._dummy_selection
+    get_dummy_selection = selection_getter('dummy', lambda self, structure: self._parse_dummy_selection(structure), fake_mass=0)
     dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
 
     def _set_forced_class_selections(self, reference_structure: 'Structure', verbose: bool = True):
@@ -2262,108 +2208,36 @@ class Project:
     input_cv19_abs = inputs_property('cv19_abs', "Input Covid-19 antibodies (read only)")
     input_cv19_nanobs = inputs_property('cv19_nanobs', "Input Covid-19 nanobodies (read only)")
 
-    def get_cg_selection(self) -> 'Selection':
-        """Get the coarse grain atom selection. Make sure it is coherent among all MDs."""
-        # If we already have a stored value then return it
-        if self._cg_selection is not MISSING_VALUE:
-            return self._cg_selection
-        # Otherwise we must set the selection
-        # Make sure it is coherent among all MDs
-        unique_md_selections = set([md.cg_selection for md in self.mds if md is not REMOVED_MD])
-        if len(unique_md_selections) > 1:
-            raise InputError('Coarse grain selection is not coherent among MDs. Please change the input value.')
-        self._cg_selection = self.reference_md.cg_selection
-        return self._cg_selection
+    def coherent_md_getter(name: str, description: str, key: Callable = lambda value: value):
+        """Get the getter of a value which is taken from the reference MD and must be the same in every MD.
+        The key makes values comparable (e.g. residue indices in any order).
+        """
+        attribute = f'_{name}'
+        def getter(self: 'Project'):
+            # If we already have a stored value then return it
+            if getattr(self, attribute) is not MISSING_VALUE:
+                return getattr(self, attribute)
+            # Make sure it is coherent among all MDs
+            md_values = set([ key(getattr(md, name)) for md in self.mds if md is not REMOVED_MD ])
+            if len(md_values) > 1:
+                raise InputError(f'{description} must be the same in every MD. Please change the input value.')
+            # Copy lists from the reference MD to prevent further mutation
+            value = getattr(self.reference_md, name)
+            setattr(self, attribute, list(value) if type(value) is list else value)
+            return getattr(self, attribute)
+        return getter
+
+    get_cg_selection = coherent_md_getter('cg_selection', 'Coarse grain selection')
     cg_selection = property(get_cg_selection, None, None, "Coarse grain atom selection (read only)")
-
-    def get_cg_residues(self) -> list[int]:
-        """Get indices of coarse grain residues. Make sure they are coherent among all MDs."""
-        # If we already have a stored value then return it
-        if self._cg_residues is not MISSING_VALUE:
-            return self._cg_residues
-        # If there are no coarse grain atoms then there are no coarse grain residues
-        if not self.cg_selection:
-            self._cg_residues = []
-            return self._cg_residues
-        # Otherwise we must set the list of residues
-        # Get a sample from the reference MD and make a copy to prevent further mutation
-        reference_cg_residues = [residue_index for residue_index in self.reference_md.cg_residues]
-        # Make sure this is coherent among all MDs
-        reference_set = set(reference_cg_residues)
-        for md in self.mds:
-            # Skip the reference MD since we are using its residues
-            if md is self.reference_md or md is REMOVED_MD: continue
-            md_set = set(md.cg_residues)
-            if reference_set != md_set:
-                raise InputError('Coarse grain residues are not coherent among MDs.')
-        self._cg_residues = reference_cg_residues
-        print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
-        return self._cg_residues
+    get_cg_residues = coherent_md_getter('cg_residues', 'Coarse grain residues', frozenset)
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
-
-    def get_ua_selection(self) -> 'Selection':
-        """Get the united atom selection. Make sure it is coherent among all MDs."""
-        # If we already have a stored value then return it
-        if self._ua_selection is not MISSING_VALUE:
-            return self._ua_selection
-        # Make sure it is coherent among all MDs
-        unique_md_selections = set([md.ua_selection for md in self.mds if md is not REMOVED_MD])
-        if len(unique_md_selections) > 1:
-            raise InputError('United atom selection is not coherent among MDs. Please change the input value.')
-        self._ua_selection = self.reference_md.ua_selection
-        return self._ua_selection
+    get_ua_selection = coherent_md_getter('ua_selection', 'United atom selection')
     ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
-
-    def get_ua_residues(self) -> list[int]:
-        """Get indices of united atom residues. Make sure they are coherent among all MDs."""
-        # If we already have a stored value then return it
-        if self._ua_residues is not MISSING_VALUE:
-            return self._ua_residues
-        # If there are no united atoms then there are no united atom residues
-        if not self.ua_selection:
-            self._ua_residues = []
-            return self._ua_residues
-        # Otherwise we must set the list of residues
-        # Get a sample from the reference MD and make a copy to prevent further mutation
-        reference_ua_residues = [residue_index for residue_index in self.reference_md.ua_residues]
-        # Make sure this is coherent among all MDs
-        reference_set = set(reference_ua_residues)
-        for md in self.mds:
-            # Skip the reference MD since we are using its residues
-            if md is self.reference_md or md is REMOVED_MD: continue
-            md_set = set(md.ua_residues)
-            if reference_set != md_set:
-                raise InputError('United atom residues are not coherent among MDs.')
-        self._ua_residues = reference_ua_residues
-        print(f'UA residues "{self.input_ua_selection}" -> {len(self._ua_residues)} residues')
-        return self._ua_residues
+    get_ua_residues = coherent_md_getter('ua_residues', 'United atom residues', frozenset)
     ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")
-
-    def get_qm_selection(self) -> 'Selection':
-        """Get the quantum mechanics atom selection. Make sure it is coherent among all MDs."""
-        # If we already have a stored value then return it
-        if self._qm_selection is not MISSING_VALUE:
-            return self._qm_selection
-        # Make sure it is coherent among all MDs
-        unique_md_selections = set([md.qm_selection for md in self.mds if md is not REMOVED_MD])
-        if len(unique_md_selections) > 1:
-            raise InputError('Quantum mechanics selection is not coherent among MDs. Please change the input value.')
-        self._qm_selection = self.reference_md.qm_selection
-        return self._qm_selection
+    get_qm_selection = coherent_md_getter('qm_selection', 'Quantum mechanics selection')
     qm_selection = property(get_qm_selection, None, None, "Quantum mechanics atom selection (read only)")
-
-    def get_dummy_selection(self) -> 'Selection':
-        """Get the dummy atoms selection. Make sure it is coherent among all MDs."""
-        # If we already have a stored value then return it
-        if self._dummy_selection is not MISSING_VALUE:
-            return self._dummy_selection
-        # Otherwise we must set the selection
-        # Make sure it is coherent among all MDs
-        unique_md_selections = set([md.dummy_selection for md in self.mds if md is not REMOVED_MD])
-        if len(unique_md_selections) > 1:
-            raise InputError('Dummy atoms selection is not coherent among MDs. Please change the input value.')
-        self._dummy_selection = self.reference_md.dummy_selection
-        return self._dummy_selection
+    get_dummy_selection = coherent_md_getter('dummy_selection', 'Dummy atoms selection')
     dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
 
     # Set additional values infered from input values
