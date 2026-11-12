@@ -19,6 +19,7 @@ import sys
 import threading
 import shutil
 from pathlib import Path
+from collections import deque
 from enum import Enum
 from contextlib import contextmanager
 import importlib.util
@@ -964,6 +965,7 @@ class Dataset:
     def show_logs(self,
             error: bool = False,
             n_projects: int = 50,
+            tail: int = 0,
             query_path: list[str] = ['*'],
             query_state: list[str] = [],
             query_message: list[str] = [],
@@ -978,6 +980,8 @@ class Dataset:
                 Show the most recent error logs instead of the output logs.
             n_projects (int):
                 Number of projects to show, the most recently modified ones. 0 for all projects.
+            tail (int):
+                Number of lines to show from the end of each log. 0 for the whole log.
             query_path (list[str]):
                 List of directory glob patterns to filter the projects from the dataset.
             query_state (list[str]):
@@ -1019,7 +1023,9 @@ class Dataset:
             print('=' * width)
             if log_path is None: continue
             with open(log_path) as file:
-                print(file.read(), end='')
+                # Keep only the last lines when a tail is requested
+                if tail == 0: print(file.read(), end='')
+                else: print(''.join(deque(file, maxlen=tail)), end='')
 
     def set_inputs_field(self,
             field: str,

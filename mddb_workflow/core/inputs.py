@@ -18,6 +18,7 @@ from mddb_workflow.utils.constants import (
     DEFAULT_INPUT_VALUE_WARNINGS,
     DEFAULT_INPUT_VALUES,
     FORBIDDEN_DIRECTORY_CHARACTERS,
+    INCOMPLETE_PREFIX,
     MD_DIRECTORY,
     MD_NAME,
     MD_REMOVED_FLAG,
@@ -345,6 +346,18 @@ class ProjectInputs:
         # Replace underscores with white spaces
         return normpath(directory).split('/')[-1].replace('_', ' ')
 
+    @staticmethod
+    def _check_md_directory_prefix(md_index: int, directory: str, name: str | None):
+        """Make sure an MD directory does not use the prefix reserved for incomplete outputs."""
+        # The workflow uses this prefix for outputs which are not finished yet
+        # The loader skips these directories, so an MD directory like this would never be loaded
+        # The normpath prevents a possible ending '/' which would make this not work
+        if not normpath(directory).split('/')[-1].startswith(INCOMPLETE_PREFIX): return
+        source = f'name "{name}"' if name is not None else f'directory "{directory}"'
+        raise InputError(f'MD {md_index} has {source} which results in directory "{directory}".' +
+            f' The "{INCOMPLETE_PREFIX}" header is reserved for incomplete outputs and these directories are never loaded.' +
+            ' Please use a different MD name or directory.')
+
     def validate_md_config(self, md_config: list[dict]) -> list[dict]:
         """Validate MD presence, fill identifiers, and enforce uniqueness."""
         # There must be at least one MD configuration
@@ -364,10 +377,14 @@ class ProjectInputs:
             if not directory and not name:
                 raise InputError(f'There is a MD (index {md_index}) with no name and no directory.' +
                     ' Please define at least one of them.')
+            # Make sure a given directory does not use a reserved prefix
+            if directory: self._check_md_directory_prefix(md_index, directory, None)
             # Now fill the gaps
             # If there is a name and not a directory then issue a directory using the name
             if directory is None and name is not None:
                 directory = self._name_to_directory(name)
+                # Check the directory before it is persisted in the inputs file
+                self._check_md_directory_prefix(md_index, directory, name)
                 # Update before md_inputs
                 self.update_file_inputs(f'mds.{md_index}.{MD_DIRECTORY}', directory)
                 md_inputs[MD_DIRECTORY] = directory
