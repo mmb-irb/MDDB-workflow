@@ -1951,6 +1951,9 @@ class Structure:
         # Overwrite current coordinates with the new coordinates
         for i, atom in enumerate(self.atoms):
             atom.coords = tuple(new_coordinates[i])
+        # Unsafe bonds are guessed from coordinates so they must be guessed again
+        # e.g. atoms split by the periodic boundary have no bonds until the structure is imaged
+        self._unsafe_bonds = None
 
     def get_ion_atom_indices(self) -> set:
         """Get all supported ion atom indices together in a set."""
