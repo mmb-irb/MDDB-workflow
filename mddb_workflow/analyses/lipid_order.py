@@ -226,8 +226,7 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     a single chain (index "0"), preserving the order they appear in the YAML.
     """
     yaml_out = os.path.join(output_directory, 'lorder.yaml')
-    analysis = gorder.Analysis(
-        structure=topology_file.absolute_path,
+    analysis_kwargs = dict(
         trajectory=universe.trajectory.filename,
         analysis_type=gorder.analysis_types.UAOrder(selection),
         estimate_error=gorder.estimate_error.EstimateError(),
@@ -235,7 +234,20 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
         output_yaml=yaml_out,
         handle_pbc=False,
     )
-    results = analysis.run()
+    try:
+        results = gorder.Analysis(structure=topology_file.absolute_path, **analysis_kwargs).run()
+    except gorder.exceptions.AnalysisError as error:
+        # gorder can not read TPRs from old GROMACS versions (e.g. 4.0.x)
+        # Use the workflow structure and bonds instead, since gorder needs bonds to place the implicit hydrogens
+        if 'tpr' not in str(error): raise
+        warn(f'gorder can not read the topology file ({error}). The workflow structure and bonds are used instead.')
+        structure_file = os.path.join(output_directory, 'lorder.gro')
+        universe.atoms.write(structure_file)
+        bonds_file = os.path.join(output_directory, 'lorder.bonds')
+        write_gorder_bonds(universe, bonds_file)
+        results = gorder.Analysis(structure=structure_file, bonds=bonds_file, **analysis_kwargs).run()
+        os.remove(structure_file)
+        os.remove(bonds_file)
     results.write()
 
     with open(yaml_out, 'r') as f:
@@ -292,6 +304,16 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
         if chains: order_parameters_dict[resname] = chains
 
     return order_parameters_dict
+
+
+def write_gorder_bonds(universe, bonds_file: str):
+    """Write the universe bonds in the gorder bonds file format.
+
+    Every line is the number of one atom followed by the numbers of its bonded atoms, starting at 1.
+    """
+    with open(bonds_file, 'w') as file:
+        for atom_from, atom_to in universe.bonds.indices + 1:
+            file.write(f'{atom_from} {atom_to}\n')
 
 
 def find_CH_bonds(universe, lipid_resindices, atom_names):
