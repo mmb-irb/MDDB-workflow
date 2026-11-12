@@ -1,5 +1,5 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.utils.auxiliar import save_json, load_json, warn
+from mddb_workflow.utils.auxiliar import save_json, load_json, warn, get_available_cpus
 from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPID_INTERACTIONS_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_head_tail_split, get_all_acyl_chains
 from mddb_workflow.tools.cg_lipids import coarse_grain_head_tail_split
@@ -49,7 +49,7 @@ def lipid_interactions(
         universe=universe,
         snapshots=snapshots,
         frames_limit=frames_limit,
-        n_jobs=multiprocessing.cpu_count(),
+        n_jobs=get_available_cpus(),
     )
 
     # Choose the method according to the type of lipids present
@@ -138,7 +138,7 @@ def _iterate_protein_residues(universe, snapshots, frames_limit, lipid_group, ac
     tasks = (_build_frame_task(fi, universe, protein_residx, lipid_group) for fi in frame_indices)
 
     if n_jobs != 1:
-        n_workers = multiprocessing.cpu_count() if n_jobs == -1 else n_jobs
+        n_workers = get_available_cpus() if n_jobs == -1 else n_jobs
         with multiprocessing.Pool(n_workers) as worker_pool:
             _accumulate_results(worker_pool.imap(_per_frame_contacts, tasks, chunksize=1), accumulate_fn)
     else:

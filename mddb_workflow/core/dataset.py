@@ -1,4 +1,4 @@
-from mddb_workflow.utils.auxiliar import InputError, load_yaml, load_json, save_yaml, save_json, is_glob
+from mddb_workflow.utils.auxiliar import InputError, load_yaml, load_json, save_yaml, save_json, is_glob, get_available_cpus
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import CACHE_FILENAME, ACCEPTED_INPUT_FILENAMES, REGISTER_FILENAME
@@ -1765,9 +1765,9 @@ class Dataset:
                 template_str = f.read()
 
         # Determine pool size for parallel execution
-        pool_size = min(pool_size, os.cpu_count())
+        pool_size = min(pool_size, get_available_cpus())
         if pool_size <= 0 and not slurm:
-            pool_size = os.cpu_count()
+            pool_size = get_available_cpus()
         parallel = pool_size > 1 and not slurm
         jobs_to_run = []
 

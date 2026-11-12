@@ -983,6 +983,25 @@ def get_first_list_values_missmatch(list_a: list, list_b: list) -> bool:
     return None
 
 
+def get_available_cpus() -> int:
+    """Count the CPUs this process may use.
+
+    The CPU count of the machine is wrong in clusters: a SLURM job gets only the CPUs it requested,
+    and memory for them, while its node has many more (56 or 64 in the MMB partitions of the IRB cluster).
+    """
+    # CPUs this process is allowed to run on, restricted by cgroups and taskset
+    try:
+        cpus = len(os.sched_getaffinity(0))
+    # Not available in macOS
+    except AttributeError:
+        cpus = os.cpu_count() or 1
+    # SLURM does not always pin the job to its CPUs, but it says how many were requested
+    slurm_cpus = os.environ.get('SLURM_CPUS_PER_TASK') or os.environ.get('SLURM_CPUS_ON_NODE')
+    if slurm_cpus and slurm_cpus.isdigit():
+        cpus = min(cpus, int(slurm_cpus))
+    return max(cpus, 1)
+
+
 def _timeout_worker(func, result_queue, args, kwargs):
     """Worker function that runs in a separate process for timeout support."""
     try:

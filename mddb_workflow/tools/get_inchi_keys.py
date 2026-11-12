@@ -5,7 +5,7 @@ from os.path import abspath, dirname
 from collections import Counter
 from mddb_workflow.analyses.mindist import remove_view_script
 from mddb_workflow.tools.structure_corrector import get_focus_commands
-from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout, DatabaseUnavailableError, InputError
+from mddb_workflow.utils.auxiliar import warn, save_json, get_available_cpus, SocketTimeout, DatabaseUnavailableError, InputError
 from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCOMPLETE_REFERENCE_VERSION, LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG
 from mddb_workflow.utils.constants import INCHI_FAILURE_VIEW_FILENAME
 from mddb_workflow.core.dataclass import InChIKeyData
@@ -241,16 +241,20 @@ def generate_inchikeys(
     script_filename = dirname(abspath(structure_file.path)) + '/' + INCHI_FAILURE_VIEW_FILENAME
     remove_view_script(script_filename)
     results = []
-    # Starting workers is slow, so a single residue is processed directly
+    # Every spawned worker imports the whole workflow again (about 200 MB each), so there is
+    # one per CPU of this process at most. Counting all the CPUs of a cluster node instead of
+    # the ones of the SLURM job starts dozens of workers, more than the job memory can hold.
+    # Starting workers is slow, so a single residue or a single CPU is processed directly
+    workers = min(len(tasks), get_available_cpus())
     try:
-        if parallel and len(tasks) > 1:
+        if parallel and workers > 1:
             # Execute tasks in parallel
             # Use 'spawn' context to avoid fork-safety issues with threading (RDKit?)
             # https://pythonspeed.com/articles/python-multiprocessing/
             ctx = multiprocessing.get_context('spawn')
-            with ctx.Pool(processes=min(len(tasks), multiprocessing.cpu_count())) as pool:
+            with ctx.Pool(processes=workers) as pool:
                 try:
-                    print(f'Processing {len(tasks)} residues to get InChI keys (parallel mode)...')
+                    print(f'Processing {len(tasks)} residues to get InChI keys (parallel mode, {workers} workers)...')
                     async_results = pool.map_async(residue_to_inchi, tasks)
                     # Add timeout (e.g., 60 seconds = 1 minute per task)
                     results = async_results.get(timeout=60 * len(tasks))

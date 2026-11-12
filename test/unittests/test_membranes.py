@@ -1231,6 +1231,23 @@ class TestInChIKeys:
         assert len(inchikeys) == 2
         assert self.processes == [2]
 
+    def test_pool_processes_capped_by_slurm_cpus(self, tmp_path, monkeypatch):
+        """A SLURM job gets as many workers as CPUs it requested, not as CPUs its node has."""
+        universe, structure, cg_selection = self.molecules(['CCO', 'CC(=O)O', 'CCN'])
+        structure_file = types.SimpleNamespace(path=str(tmp_path / 'structure.pdb'))
+        monkeypatch.setenv('SLURM_CPUS_PER_TASK', '2')
+        inchikeys = self.generate_inchikeys(universe, structure, structure_file, cg_selection, cg_selection, parallel=True)
+        assert len(inchikeys) == 3
+        assert self.processes == [2]
+
+    def test_single_cpu_without_pool(self, tmp_path, monkeypatch):
+        universe, structure, cg_selection = self.molecules(['CCO', 'CC(=O)O'])
+        structure_file = types.SimpleNamespace(path=str(tmp_path / 'structure.pdb'))
+        monkeypatch.setenv('SLURM_CPUS_PER_TASK', '1')
+        inchikeys = self.generate_inchikeys(universe, structure, structure_file, cg_selection, cg_selection, parallel=True)
+        assert len(inchikeys) == 2
+        assert self.processes == []
+
 
 class TestUpdateReferences:
     """Remaking database references with mwf upref, with the database and the reference maker monkeypatched."""
