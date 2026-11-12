@@ -430,6 +430,7 @@ def main():
             dataset.show_logs(
                 error=args.error,
                 n_projects=args.n_rows,
+                tail=args.tail,
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_message=args.query_message,
@@ -1084,6 +1085,7 @@ ds_ls.add_argument('-l', '--include_logs', help=ds_help['list_projects']['includ
 ds_logs = dataset_subparsers.add_parser("logs", formatter_class=CustomHelpFormatter, help="Show the most recent output logs of the dataset projects.", parents=[common_ds_parser, query_parser])
 ds_logs.add_argument("-e", "--error", help=ds_help['show_logs']['error'], action='store_true')
 ds_logs.add_argument('-n', '--n_rows', help=ds_help['show_logs']['n_projects'], default=50, type=int)
+ds_logs.add_argument('-t', '--tail', help=ds_help['show_logs']['tail'], default=0, type=int)
 
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser, scope_parser])
