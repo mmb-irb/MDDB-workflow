@@ -8,6 +8,7 @@ import numpy as np
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components, breadth_first_order
 from scipy.spatial import cKDTree
+from tqdm import tqdm
 
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_BONDS, InputError, warn
@@ -329,13 +330,17 @@ def no_jump(
     group_count = atom_groups.max() + 1
     all_atoms = np.zeros(len(atom_groups), dtype=int)
     previous_positions = None
+    with mdt.formats.XTCTrajectoryFile(input_trajectory_file.path) as reader:
+        frames_count = len(reader)
     with mdt.formats.XTCTrajectoryFile(input_trajectory_file.path) as reader, \
-        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer:
+        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer, \
+        tqdm(total=frames_count, desc='  Frame', unit='frame') as pbar:
         while True:
             xyz, time, step, boxes = reader.read(n_frames=NO_JUMP_CHUNK_SIZE)
             if len(xyz) == 0: break
             output_xyz = np.empty_like(xyz)
             for i, (positions, box_vectors) in enumerate(zip(xyz, boxes)):
+                pbar.update(1)
                 positions = positions.astype(np.float64) + translation
                 if previous_positions is None:
                     if prepare_first_frame: positions = prepare_first_frame(positions, box_vectors.astype(np.float64))
@@ -437,13 +442,17 @@ def put_fragments_in_box(
     boxed_atom_fragments = np.unique(atom_fragments[boxed_atom_indices], return_inverse=True)[1]
     boxed_fragment_sizes = np.bincount(boxed_atom_fragments)
     print(f'  {len(centered_fragments)} fragments are centered and {len(boxed_fragment_sizes)} fragments are put in the box')
+    with mdt.formats.XTCTrajectoryFile(input_trajectory_file.path) as reader:
+        frames_count = len(reader)
     with mdt.formats.XTCTrajectoryFile(input_trajectory_file.path) as reader, \
-        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer:
+        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer, \
+        tqdm(total=frames_count, desc='  Frame', unit='frame') as pbar:
         while True:
             xyz, time, step, boxes = reader.read(n_frames=NO_JUMP_CHUNK_SIZE)
             if len(xyz) == 0: break
             output_xyz = np.empty_like(xyz)
             for i, (positions, box_vectors) in enumerate(zip(xyz, boxes)):
+                pbar.update(1)
                 if not box_vectors.any():
                     raise InputError(f'Frame {step[i]} has no box, so fragments can not be put in the box')
                 positions, box_vectors = positions.astype(np.float64), box_vectors.astype(np.float64)

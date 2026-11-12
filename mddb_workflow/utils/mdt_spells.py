@@ -4,6 +4,7 @@ from subprocess import run, PIPE
 
 import mdtraj as mdt
 import numpy as np
+from tqdm import tqdm
 
 from mddb_workflow.utils.auxiliar import ToolError, InputError, reprint
 from mddb_workflow.utils.file import File
@@ -619,9 +620,12 @@ def rotate_boxes(
     for trajectory_file in [original_trajectory_file, fitted_trajectory_file, output_trajectory_file]:
         if trajectory_file.format != 'xtc':
             raise ValueError(f'Rotating boxes is only supported for xtc trajectories: {trajectory_file.path}')
+    with mdt.formats.XTCTrajectoryFile(fitted_trajectory_file.path) as reader:
+        frames_count = len(reader)
     with mdt.formats.XTCTrajectoryFile(original_trajectory_file.path) as original_reader, \
         mdt.formats.XTCTrajectoryFile(fitted_trajectory_file.path) as fitted_reader, \
-        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer:
+        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer, \
+        tqdm(total=frames_count, desc='  Frame', unit='frame') as pbar:
         while True:
             original_xyz, _, _, _ = original_reader.read(n_frames=ROTATION_CHUNK_SIZE)
             fitted_xyz, time, step, boxes = fitted_reader.read(n_frames=ROTATION_CHUNK_SIZE)
@@ -630,6 +634,7 @@ def rotate_boxes(
             if len(fitted_xyz) == 0: break
             rotated_boxes = np.empty_like(boxes)
             for i, (original_coordinates, fitted_coordinates) in enumerate(zip(original_xyz, fitted_xyz)):
+                pbar.update(1)
                 rotation, residual = find_rotation(original_coordinates.astype(np.float64), fitted_coordinates.astype(np.float64))
                 if residual > MAX_ROTATION_RESIDUAL:
                     raise ValueError(f'Fitted coordinates are not a rigid rotation of the original coordinates (RMSD {residual:.4f} nm)')
