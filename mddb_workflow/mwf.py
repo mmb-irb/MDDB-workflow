@@ -57,7 +57,7 @@ from mddb_workflow.tools.get_project_screenshot import get_project_screenshot
 from mddb_workflow.tools.process_input_files import process_input_files
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
+from mddb_workflow.tools.fix_gromacs_masses import add_fake_gromacs_masses
 from mddb_workflow.tools.structure_corrector import get_excluded_atoms_indices
 from mddb_workflow.tools.get_box_data import mine_simulation_box_data
 
@@ -1039,67 +1039,52 @@ class MD:
         return self._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    # RUBEN: Mover a structure?
-    def _set_cg_selection(self, reference_structure: 'Structure', trajectory_file: 'File', topology_file: Union['File', Exception], verbose: bool = False) -> 'Selection':
-        """Set the coarse grain selection.
+    def _parse_cg_selection(self, reference_structure: 'Structure', trajectory_file: 'File', topology_file: Union['File', Exception], verbose: bool = False) -> 'Selection':
+        """Parse the coarse grain selection input.
         Trajectory and topology files must match the reference structure, since they may be used to guess CG atoms.
         """
-        def parse_cg_selection() -> 'Selection':
-            if verbose: print('Setting Coarse Grained (CG) atoms selection')
-            # Get the input selection string
-            selection_string = self.input_cg_selection
-            # If the selection is empty, again, assume there is no CG selection
-            if not selection_string:
-                if verbose: print(' Empty selection -> There is no CG at all')
-                return Selection()
-            # If the input CG selection is the automatic flag then guess it
-            if selection_string == AUTOMATIC_FLAG:
-                if verbose: print(' Guessing CG atoms')
-                parsed_selection = guess_cg_selection(reference_structure, trajectory_file, topology_file,
-                    self.project.input_force_fields, verbose=verbose)
-                if verbose:
-                    if parsed_selection: print(f' Found {len(parsed_selection)} coarse grain atoms')
-                    else: print(' There are no coarse grain atoms')
-                return parsed_selection
-            # Otherwise, process it
-            # If we have a valid input value then use it
-            elif selection_string:
-                if verbose: print(f' Selecting CG atoms "{selection_string}"')
-                parsed_selection = reference_structure.select(selection_string)
-            # If we have an input value but it is empty then we set an empty selection
-            else:
-                if verbose: print(' No CG atoms selected')
-                parsed_selection = Selection()
-            # Lof the parsed selection size
-            if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
-            # Log a few of the selected residue names
-            if verbose and parsed_selection:
-                selected_residues = reference_structure.get_selection_residues(parsed_selection)
-                selected_residue_names = list(set([residue.name for residue in selected_residues]))
-                limit = 3  # Show a maximum of 3 residue names
-                example_residue_names = ', '.join(selected_residue_names[0:limit])
-                if len(selected_residue_names) > limit: example_residue_names += ', etc.'
-                print('  e.g. ' + example_residue_names)
+        if verbose: print('Setting Coarse Grained (CG) atoms selection')
+        # Get the input selection string
+        selection_string = self.input_cg_selection
+        # If the selection is empty, again, assume there is no CG selection
+        if not selection_string:
+            if verbose: print(' Empty selection -> There is no CG at all')
+            return Selection()
+        # If the input CG selection is the automatic flag then guess it
+        if selection_string == AUTOMATIC_FLAG:
+            if verbose: print(' Guessing CG atoms')
+            parsed_selection = guess_cg_selection(reference_structure, trajectory_file, topology_file,
+                self.project.input_force_fields, verbose=verbose)
+            if verbose:
+                if parsed_selection: print(f' Found {len(parsed_selection)} coarse grain atoms')
+                else: print(' There are no coarse grain atoms')
             return parsed_selection
-        # Save the parsed coarse grain selection
-        self._cg_selection = parse_cg_selection()
-        # If there are no coarse grain atoms then stop here
-        if not self._cg_selection: return
-        # Update gromacs masses by setting fake masses for coarse grain beads: 1
-        if verbose: print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
-        fake_masses = set()
-        for atom_index in self._cg_selection.atom_indices:
-            atom = reference_structure.atoms[atom_index]
-            fake_masses.add((atom.residue.name, atom.name, 1))
-        extend_gromacs_masses(fake_masses)
+        # Otherwise, process it
+        if verbose: print(f' Selecting CG atoms "{selection_string}"')
+        parsed_selection = reference_structure.select(selection_string)
+        # Log the parsed selection size
+        if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
+        # Log a few of the selected residue names
+        if verbose and parsed_selection:
+            selected_residues = reference_structure.get_selection_residues(parsed_selection)
+            selected_residue_names = list(set([residue.name for residue in selected_residues]))
+            limit = 3  # Show a maximum of 3 residue names
+            example_residue_names = ', '.join(selected_residue_names[0:limit])
+            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+            print('  e.g. ' + example_residue_names)
+        return parsed_selection
 
     def get_cg_selection(self) -> 'Selection':
         """Get the coarse grain atom selection."""
         # If we already have a stored value then return it
         if self._cg_selection is not MISSING_VALUE:
             return self._cg_selection
-        # Otherwise we must set the CG selection
-        self._set_cg_selection(self.structure, self.trajectory_file, self.topology_file)
+        # Get the structure first, since it may run the input files processing, which sets the definitive selection
+        structure = self.structure
+        if self._cg_selection is MISSING_VALUE:
+            self._cg_selection = self._parse_cg_selection(structure, self.trajectory_file, self.topology_file)
+            # Coarse grain beads have no real mass, so gromacs needs a fake mass for them: 1
+            add_fake_gromacs_masses(structure, self._cg_selection, 1)
         return self._cg_selection
     cg_selection = property(get_cg_selection, None, None, "Coarse grain atom selection (read only)")
 
@@ -1120,22 +1105,22 @@ class MD:
         return self._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
-    def _parse_ua_selection(self, reference_structure: 'Structure', trajectory_file: 'File', cg_selection: 'Selection') -> 'Selection':
+    def _parse_ua_selection(self, reference_structure: 'Structure', trajectory_file: 'File', cg_selection: 'Selection', verbose: bool = True) -> 'Selection':
         """Parse the united atom selection input.
         The trajectory file must match the reference structure, since it may be used to guess UA atoms.
         """
-        print('Setting United Atom (UA) atoms selection')
+        if verbose: print('Setting United Atom (UA) atoms selection')
         selection_string = self.input_ua_selection
         if not selection_string:
-            print(' Empty selection -> There is no UA at all')
+            if verbose: print(' Empty selection -> There is no UA at all')
             ua_selection = Selection()
         elif selection_string == AUTOMATIC_FLAG:
-            print(' Guessing UA atoms')
-            ua_selection = guess_ua_selection(reference_structure, trajectory_file, cg_selection, verbose=True)
+            if verbose: print(' Guessing UA atoms')
+            ua_selection = guess_ua_selection(reference_structure, trajectory_file, cg_selection, verbose=verbose)
         else:
-            print(f' Selecting UA atoms "{selection_string}"')
+            if verbose: print(f' Selecting UA atoms "{selection_string}"')
             ua_selection = reference_structure.select(selection_string)
-        print(f' UA selection has {len(ua_selection)} atoms')
+        if verbose: print(f' UA selection has {len(ua_selection)} atoms')
         return ua_selection
 
     def get_ua_selection(self) -> 'Selection':
@@ -1143,7 +1128,10 @@ class MD:
         # If we already have a stored value then return it
         if self._ua_selection is not MISSING_VALUE:
             return self._ua_selection
-        self._ua_selection = self._parse_ua_selection(self.structure, self.trajectory_file, self.cg_selection)
+        # Get the structure first, since it may run the input files processing, which sets the definitive selection
+        structure = self.structure
+        if self._ua_selection is MISSING_VALUE:
+            self._ua_selection = self._parse_ua_selection(structure, self.trajectory_file, self.cg_selection)
         return self._ua_selection
     ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
 
@@ -1213,15 +1201,8 @@ class MD:
             return parsed_selection
         # Save the parsed dummy selection
         self._dummy_selection = parse_dummy_selection()
-        # If there are no dummy atoms then stop here
-        if not self._dummy_selection: return
-        # Update gromacs masses by setting fake masses for dummy atoms: 0
-        if verbose: print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
-        fake_masses = set()
-        for atom_index in self._dummy_selection.atom_indices:
-            atom = reference_structure.atoms[atom_index]
-            fake_masses.add((atom.residue.name, atom.name, 0))
-        extend_gromacs_masses(fake_masses)
+        # Dummy atoms are not real atoms, so gromacs needs a fake mass for them: 0
+        add_fake_gromacs_masses(reference_structure, self._dummy_selection, 0, verbose)
 
     def get_dummy_selection(self) -> 'Selection':
         """Get the dummy atoms selection."""

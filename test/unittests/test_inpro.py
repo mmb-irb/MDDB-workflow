@@ -164,6 +164,45 @@ def test_ua_selection(ua_selection: str):
         Structure.check_incoherent_bonds = old_fn
 
 
+def test_selections_parsed_once():
+    """Test the input processing sets the definitive CG and UA selections, so they are not guessed again."""
+    regenerate_test_fld()
+    shutil.copy(dummy_dir/"inputs.yaml", test_fld)
+    shutil.copy(dummy_dir/"gromacs/ala_ala.tpr", test_fld)
+    (test_fld/"replica_1").mkdir(exist_ok=True)
+    shutil.copy(dummy_dir/"gromacs/raw_trajectory.xtc", test_fld/"replica_1")
+
+    # Count how many times every selection is parsed
+    parsed = { 'cg': 0, 'ua': 0 }
+    old_parsers = MD._parse_cg_selection, MD._parse_ua_selection
+    def parse_cg_selection(*args, **kwargs):
+        parsed['cg'] += 1
+        return old_parsers[0](*args, **kwargs)
+    def parse_ua_selection(*args, **kwargs):
+        parsed['ua'] += 1
+        return old_parsers[1](*args, **kwargs)
+    MD._parse_cg_selection, MD._parse_ua_selection = parse_cg_selection, parse_ua_selection
+    cwd = pathlib.Path.cwd()
+    os.chdir(test_fld)
+    try:
+        project = Project(
+            input_topology_filepath=str("ala_ala.tpr"),
+            input_md_config=[['replica_1', 'raw_trajectory.xtc']],
+            cg_selection='auto',
+            ua_selection='auto',
+            trust=DUMMY_GROMACS_TRUST)
+        md: MD = project.mds[0]
+        md.input_files_processing(md)
+        # With no atoms filtered, the provisional and the definitive selections only
+        assert parsed == { 'cg': 2, 'ua': 2 }
+        # The dipeptide is atomistic
+        assert not md.cg_selection and not md.ua_selection
+        assert parsed == { 'cg': 2, 'ua': 2 }
+    finally:
+        os.chdir(cwd)
+        MD._parse_cg_selection, MD._parse_ua_selection = old_parsers
+
+
 if __name__ == "__main__":
     test_amber_prmtop_nc()
     test_amber_top_nc()
