@@ -6,7 +6,7 @@ import re
 
 from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, RequestError, NoReferableException
 from mddb_workflow.utils.auxiliar import DatabaseUnavailableError
-from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
+from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data, retry_request
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_LETTERS, PROTEIN_REFERENCE_VERSION
@@ -350,6 +350,9 @@ class ProteinMapper:
         # Get matched uniprot ids
         matched_references = [chain_data['match']['ref'] for chain_data in self.protein_parsed_chains]
         matched_uniprot_ids = set([ref['uniprot'] for ref in matched_references if type(ref) == dict])
+        # Isoforms of the forced references are aligned too and may score better than the canonical sequence
+        # A chain matching an isoform (e.g. P12345-2) is then a match of its entry (P12345)
+        matched_uniprot_ids |= {uniprot_id.split('-')[0] for uniprot_id in matched_uniprot_ids}
         # Check the difference
         unmatched_uniprot_ids = forced_uniprot_ids - matched_uniprot_ids
         if len(unmatched_uniprot_ids) > 0:
@@ -754,6 +757,15 @@ def get_protein_reference(
     return cached_get_uniprot_reference(uniprot_accession)
 
 
+# The EBI Proteins API answers server errors (e.g. 503) for a few minutes now and then
+# Keep trying for about 8 minutes (15 + 30 + 60 + 120 + 240 seconds) before giving up
+@retry_request(max_retries=6, retry_delay=15.0)
+def read_uniprot_response(request: urllib.request.Request) -> dict:
+    """Send a request to the UniProt API and parse its response."""
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
     """Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database."""
     # Request Uniprot
@@ -763,8 +775,7 @@ def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
     # One day the API was returning a 'Secure Connection Failed' error and this header fixed the problem
     request.add_header('Referer', 'https://www.uniprot.org/')
     try:
-        with urllib.request.urlopen(request) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
+        parsed_response = read_uniprot_response(request)
     # If the accession is not found in UniProt then the id is not valid
     except urllib.error.HTTPError as error:
         if error.code == 404:

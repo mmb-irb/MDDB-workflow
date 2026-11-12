@@ -34,6 +34,18 @@ _UNSET = object()
 _MISSING_INPUT = object()
 
 
+def forced_value_wins(forced_value: Any, file_value: Any) -> bool:
+    """Check if a forced value from the command line replaces a value in the inputs file.
+
+    Forced values always win, except for a plain automatic flag against an extended automatic value.
+    e.g. '-pbc auto' does not replace 'auto + resname LIG', which was set by the workflow from 'auto'.
+    """
+    forced_automatic, forced_additional = aux.parse_automatic_selection(forced_value)
+    if not forced_automatic or forced_additional: return True
+    file_automatic, file_additional = aux.parse_automatic_selection(file_value)
+    return not (file_automatic and file_additional)
+
+
 class ProjectInputs:
     """Load and resolve the inputs document for one project.
 
@@ -106,10 +118,20 @@ class ProjectInputs:
         return {name: value for name, value in forced_inputs}
 
     def apply_forced_inputs(self) -> None:
-        """Persist forced values in the input document when it is available."""
+        """Persist forced values in the input document when it is available.
+        MD values for the same fields are removed, so the forced value is used by all MDs.
+        """
+        if not self.is_file_available: return
         # Overwrite input file values
         for input_name, input_value in self.forced_inputs.items():
-            self.update_file_inputs(input_name, input_value)
+            file_value = self.file_inputs.get(input_name, None)
+            if forced_value_wins(input_value, file_value):
+                self.update_file_inputs(input_name, input_value)
+            # Remove MD values which are replaced by the forced value
+            for md_index, md_config in enumerate(self.file_inputs.get('mds') or []):
+                if input_name not in md_config: continue
+                if not forced_value_wins(input_value, md_config[input_name]): continue
+                self.remove_file_inputs(f'mds.{md_index}.{input_name}')
 
     def _ensure_file_available(self) -> bool:
         """Make the input file available, downloading it when configured."""
@@ -183,7 +205,24 @@ class ProjectInputs:
         # Set the new value
         aux.write_ndict(self.file_inputs, nested_key, new_value)
         print(f'* Field "{nested_key}" in the inputs file will be permanently modified')
-        # Write the new inputs to disk
+        self._save_file_inputs()
+        return True
+
+    def remove_file_inputs(self, nested_key: str) -> bool:
+        """Permanently remove a field from the inputs file.
+        Return True if the field is removed. Return False if it was not in the inputs file.
+        """
+        if not self.is_file_available: return False
+        *parent_keys, last_key = nested_key.split('.')
+        parent = aux.read_ndict(self.file_inputs, '.'.join(parent_keys), _MISSING_INPUT) if parent_keys else self.file_inputs
+        if parent is _MISSING_INPUT or last_key not in parent: return False
+        del parent[last_key]
+        print(f'* Field "{nested_key}" in the inputs file will be permanently removed')
+        self._save_file_inputs()
+        return True
+
+    def _save_file_inputs(self):
+        """Write the current inputs to the inputs file."""
         if self.inputs_file.format == 'json':
             aux.save_json(self.file_inputs, self.inputs_file.path)
         elif self.inputs_file.format in ['yaml', 'yml']:
@@ -191,7 +230,6 @@ class ProjectInputs:
             aux.save_yaml(self.file_inputs, self.inputs_file.path)
         else:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
-        return True
 
     def merge_md_config(
         self,
@@ -405,20 +443,23 @@ class ProjectInputs:
         implicit defaults into persistent file values.
         """
         values = deepcopy(self.file_inputs) if self.is_file_available else {}
-        values.update(self.forced_inputs)
+        for name, forced_value in self.forced_inputs.items():
+            if name not in values or forced_value_wins(forced_value, values[name]):
+                values[name] = forced_value
         return values
 
     def get(self, name: str, default: Any = _UNSET) -> Any:
         """Resolve one value using forced, file, and default precedence."""
+        # Get the input value from the inputs file, if available
+        file_value = self.file_inputs.get(name, _UNSET) if self.is_file_available else _UNSET
         # Check if the value was forced from the command line
         if name in self.forced_inputs:
-            return self.forced_inputs[name]
-        # If the inputs file is available, get the input value from it
-        if self.is_file_available:
-            value = self.file_inputs.get(name, _UNSET)
-            # If we had a value then return it
-            if value is not _UNSET:
-                return value
+            forced_value = self.forced_inputs[name]
+            if file_value is _UNSET or forced_value_wins(forced_value, file_value):
+                return forced_value
+        # If we had a value in the inputs file then return it
+        if file_value is not _UNSET:
+            return file_value
 
         # If the field is not specified in the inputs file then return the
         # explicitly provided fallback, when one exists

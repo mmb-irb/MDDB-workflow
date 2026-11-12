@@ -3,7 +3,8 @@
 .vscode
 .ruff_cache
 .qwen
-.claude
+.claude/*
+!.claude/process-dataset/
 __pycache__
 **.log
 loader_nodes.yaml

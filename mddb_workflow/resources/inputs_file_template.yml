@@ -366,6 +366,7 @@ interactions:
 # If this field is set to 'auto' then PBC residues are set automatically.
 # Solvent, counter ions and membrane lipids are selected in this cases.
 # Note that these are the most tipical residues under periodic boundary conditions.
+# You may also add your own selection to the automatic one using 'auto + <selection>' (e.g. auto + resname LIG).
 #
 # This field is also useful for those scenarions with several protein or nucleic acid molecules floating around.
 # In this situation you can not image and fit all molecules.
@@ -375,7 +376,9 @@ interactions:
 #
 # Example:
 #
-# pbc_selection: water or ions
+# pbc_selection: auto
+# pbc_selection: auto + resname LIG
+# pbc_selection: chain X
 
 pbc_selection: auto
 
@@ -625,6 +628,8 @@ filter_selection:
 
 # Set if the trajectory is to be imaged so atoms stay in the PBC box.
 # See the "pbc_selection" field for more information.
+# Use 'auto' to image only if non-PBC molecules are split by the box boundaries in some frames.
+# If the image was not done and the trajectory integrity test fails then the workflow is run again with the image.
 # Equivalent to the "-img" command line argument.
 #
 # Example:
@@ -636,6 +641,7 @@ image:
 # Set the translation (x y z in nm) applied to the trajectory before imaging.
 # The goal is that non-PBC molecules are not split by the box boundaries in the first frame.
 # Use 'auto' to find a translation which places the box boundaries away from non-PBC atoms.
+# If all atoms are PBC then lipids are used instead, so membranes are not split along their normal.
 # This has no effect if the trajectory is not to be imaged.
 # Equivalent to the "-trans" command line argument.
 #

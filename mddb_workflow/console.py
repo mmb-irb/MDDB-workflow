@@ -198,8 +198,8 @@ class custom (Action):
             setattr(namespace, self.dest, self.const)
 
 
-class fit_action (Action):
-    """Custom argparse action to accept the fit flag alone or with 'auto'."""
+class flag_or_auto_action (Action):
+    """Custom argparse action to accept a flag alone or with 'auto' (e.g. image and fit)."""
 
     def __call__(self, parser, namespace, values, option_string=None):
         if values is None:
@@ -789,8 +789,8 @@ for flags, kwargs in run_parser_input_args:
 # Set a group for the workflow control options
 run_parser_workflow_group = run_parser.add_argument_group('WORKFLOW CONTROL OPTIONS')
 run_parser_workflow_args = [
-    (['-img', '--image'], {'action': 'store_true', 'help': project_init_help['image']}),
-    (['-fit', '--fit'], {'nargs': '?', 'action': fit_action, 'metavar': 'auto', 'default': False, 'help': project_init_help['fit']}),
+    (['-img', '--image'], {'nargs': '?', 'action': flag_or_auto_action, 'metavar': 'auto', 'default': False, 'help': project_init_help['image']}),
+    (['-fit', '--fit'], {'nargs': '?', 'action': flag_or_auto_action, 'metavar': 'auto', 'default': False, 'help': project_init_help['fit']}),
     (['-trans', '--translation'], {'nargs': '+', 'action': translation_action, 'metavar': 'auto|X Y Z', 'default': None, 'help': project_init_help['translation']}),
     (['-d', '--download'], {'action': 'store_true', 'help': workflow_help['download']}),
     (['-s', '--setup'], {'action': 'store_true', 'help': workflow_help['setup']}),

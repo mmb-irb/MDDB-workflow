@@ -1,6 +1,6 @@
 from mddb_workflow.mwf import Project, MD, input_files
 from mddb_workflow.core.dataclass import InChIKeyData
-from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping, find_leaflets, BILAYER, VESICLE, MICELLE, MIDPLANE
+from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping, find_leaflets, find_frame_leaflets, BILAYER, VESICLE, MICELLE, MIDPLANE, CG_CORE_CONTACT_DISTANCE
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.mda_spells import get_mda_universe, get_mda_universe_from_stopology
 from mddb_workflow.utils.cache import Cache
@@ -31,11 +31,12 @@ def generate_test_caches(cache_str: str, test_file: str, keep_refbonds: list = F
 
 
 # Expected aggregate types for the test accessions which are not a single bilayer
-EXPECTED_TYPES = {'A05SA': [VESICLE], 'A05RV': [MICELLE], 'A05Q3': [VESICLE], 'A05T5': [BILAYER, MICELLE]}
+EXPECTED_TYPES = {'A05SA': [VESICLE], 'A05RV': [MICELLE], 'A05Q3': [VESICLE], 'A05T5': [BILAYER, MICELLE],
+    'A05TW': [MICELLE], 'A05TX': [VESICLE], 'A05TY': [MICELLE]}
 # Expected number of unassigned lipids for the test accessions which have some (none by default)
 EXPECTED_UNASSIGNED = {'A01JD': 1}
 # Coarse grained residues of the test accessions
-CG_SELECTIONS = {'cg_test': 'resname DPPC', 'A05T5': 'all'}
+CG_SELECTIONS = {'cg_test': 'resname DPPC', 'A05T5': 'all', 'A05TW': 'all', 'A05TX': 'all'}
 # United atom residues of the test accessions
 UA_SELECTIONS = {'A01JD': 'resname DPPC'}
 # Residue names which must be only in one membrane of the test accessions, by membrane index
@@ -43,10 +44,12 @@ EXPECTED_MEMBRANE_RESNAMES = {'A05T5': ({'MC3', 'MC3H', 'DSPC', 'DPG2'}, '1')}
 
 
 def download_project(project: 'Project'):
-    """Download the project files."""
+    """Download the project topology and trajectory.
+    The structure is only downloaded when the universe needs it, since the inputs file of some remote projects points
+    to a structure.pdb they do not have.
+    """
     input_files['itopology'](project)
     md: MD = project.mds[0]
-    input_files['istructure'](md)
     input_files['itrajectory'](md)
 
 
@@ -58,16 +61,23 @@ class TestMembraneMapping:
     - A02F9: only lipids
     - OTRMG: no topology/charges, this should fail with the current implementation, leaflets are not similar size when they should
     - cg_test: coarse-grained system
-    - cg_test_04: coarse-grained system with changing membranes
     - A05SA: LNP-endosome fusion stalk vesicle, leaflets are close at the stalk in the first frame, MC3 and MC3H forced as lipids
     - A05RV: empty lipid nanoparticle micelle, no topology/charges, MC3H and DPG2 forced as lipids
     - A05Q3: LNP-endosome fusion stalk vesicle, no topology/charges, MC3T forced as lipid
     - A01JD: united atoms channel with a lipid inside the pore which must remain unassigned
-    - A05T5: coarse grained lipid nanoparticle touching a bilayer with its headgroups, both must be separate aggregates.
+    - A05T5: coarse grained lipid nanoparticle touching a bilayer with its headgroups in the first frame and hemifused
+      with its top leaflet later, so the first frame is kept (more leaflets) and both must be separate aggregates.
       Half of the bilayer lipids (DPSM, PAPS, DIPE, PAPC, SAP6) and the PEG-lipid are only found by their bead names
+    - A05TW: coarse grained empty lipid nanoparticle forming along the trajectory: small micelles in the first frame
+      fuse into a single lipid nanoparticle
+    - A05TX: coarse grained LNP-endosome fusion stalk vesicle, whose leaflets are not resolved at the stalk in the first
+      frame (a micelle), only later
+    - A05TY: all atom siRNA lipid nanoparticle self-assembling from lipids in water/ethanol, so there is no membrane in
+      the first frame. PEG-lipids span 21 residues (DPGL and 20 PEGM) and must count as one lipid each
 
     """
-    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A05SA', 'A05RV', 'A05Q3', 'A01JD', 'A05T5'])
+    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A05SA', 'A05RV', 'A05Q3', 'A01JD', 'A05T5',
+        'A05TW', 'A05TX', 'A05TY'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -86,10 +96,10 @@ class TestMembraneMapping:
         lipid_references = cache.data['lipmap_task_output']
         top = project.input_topology_file.absolute_path
         trajectory_file = project.mds[0].input_trajectory_files[0]
-        structure_file = project.mds[0].input_structure_file
         if top.endswith('.top'):
             universe = mda.Universe(top, trajectory_file.absolute_path, topology_format='ITP')
         elif top.endswith('.json') and 'refbonds_task_output' in cache.data:
+            structure_file = project.mds[0].input_structure_file
             universe = get_mda_universe(structure_file, trajectory_file, Structure.from_pdb_file(structure_file.path), cache.data['refbonds_task_output'], charges=None)
         elif top.endswith('.json'):
             # Bonds are read from the standard topology, too big to be cached for large systems
@@ -347,6 +357,39 @@ class TestAggregateClassification:
         assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(heads)
         assert membrane_map['no_mem_lipid'] == []
 
+    def test_chain_of_lipids_is_not_a_core(self):
+        """Lipids in solution touching each other by chance form chains, where every lipid touches the tails of only
+        one or two other lipids, which are not hydrophobic cores however long they are.
+        """
+        from mddb_workflow.tools.membrane_mapping import hydrophobic_cores
+        # Tails of every lipid touch the ones of the previous and next lipids, 6 Å apart, and no other
+        heads = np.array([[6 * i - 120, 0, 0] for i in range(40)], dtype=float)
+        universe, headgroups = build_lipids(heads, np.tile([0, 0, 1], (len(heads), 1)), [300, 300, 300])
+        tails = universe.select_atoms('name C1 C2')
+        cores, out_of_cores = hydrophobic_cores(headgroups, tails, CG_CORE_CONTACT_DISTANCE, universe.dimensions,
+            np.arange(len(universe.residues)))
+        assert cores == []
+        assert len(out_of_cores) == len(heads)
+        assert find_leaflets(universe, headgroups, tails)['n_mems'] == 0
+
+    def test_border_lipids_join_core(self):
+        """A lipid whose tails touch a packed lipid of a core, but not enough of them to be packed, is in the core, like
+        border points in DBSCAN, so it joins leaflets by its normal. A lipid touching only that lipid is not in the core.
+        """
+        from mddb_workflow.tools.membrane_mapping import hydrophobic_cores
+        shell = sphere_points(20)
+        axis = shell[0] / np.linalg.norm(shell[0])
+        # Tails of the first lipid of the column touch the ones of a micelle lipid, 6 Å apart, and the ones of the next
+        # lipid of the column touch only the ones of the first lipid
+        column = np.array([33 * axis, 46 * axis])
+        heads = np.concatenate([shell, column])
+        universe, headgroups = build_lipids(heads, np.concatenate([-shell, -column]), [200, 200, 200])
+        tails = universe.select_atoms('name C1 C2')
+        cores, out_of_cores = hydrophobic_cores(headgroups, tails, CG_CORE_CONTACT_DISTANCE, universe.dimensions,
+            np.arange(len(universe.residues)))
+        assert [len(core) for core in cores] == [len(shell) + 1]
+        assert out_of_cores == [len(shell) + 1]
+
     def test_contact_rounds_query_added_lipids(self, monkeypatch):
         """A column of lipids out of a micelle, where only the first one touches it, joins it in successive rounds.
         After the first round only the lipids added in the previous round are queried for new contacts.
@@ -580,6 +623,165 @@ class TestAggregateClassification:
         save_json({'n_mems': 1, 'mems': {'0': membrane}, 'no_mem_lipid': [9]}, mapping_file)
         display_membrane_mapping(mapping_file, 'structure.pdb')
         assert '@6,7,8' in selections and '@6' in selections
+
+
+def lipid_trajectory(frames: list[tuple[np.ndarray, np.ndarray]], box: list[float]) -> tuple['mda.Universe', 'mda.AtomGroup']:
+    """Build a universe of 3 bead lipids (see build_lipids) with a frame for every pair of heads and tail directions."""
+    from MDAnalysis.coordinates.memory import MemoryReader
+    coordinates = np.stack([build_lipids(heads, directions, box)[0].atoms.positions for heads, directions in frames])
+    universe, _ = build_lipids(*frames[0], box)
+    universe.load_new(coordinates, format=MemoryReader, dimensions=list(box) + [90, 90, 90])
+    return universe, universe.select_atoms('name P')
+
+
+def scattered_lipids(n_lipids: int, spacing: float = 30) -> tuple[np.ndarray, np.ndarray]:
+    """Get the heads of lipids in solution on a grid, too far apart to be neighbours, and random tail directions."""
+    axis = np.arange(-2, 3) * spacing
+    grid = np.array([[x, y, z] for x in axis for y in axis for z in axis], dtype=float)
+    return grid[:n_lipids], np.random.default_rng(0).normal(size=(n_lipids, 3))
+
+
+class TestMembraneFrame:
+    """Membranes are found in the first and the last frames, keeping the mapping with clearly more lipids in membranes,
+    then the one with more leaflets, then the last one.
+    """
+    box = [200, 200, 200]
+
+    def micelle(self, n_lipids: int | None = None, center: tuple = (0, 0, 0)) -> tuple[np.ndarray, np.ndarray]:
+        """Get the heads and tail directions of a micelle with heads 8 Å apart."""
+        heads = sphere_points(20) if n_lipids is None else fibonacci_sphere(n_lipids, np.sqrt(n_lipids * 64 / (4 * np.pi)))
+        return heads + np.array(center, dtype=float), -heads
+
+    def test_micelle_assembled_in_last_frame(self):
+        """Lipids in solution which assemble into a micelle along the trajectory are mapped in the last frame."""
+        heads, directions = self.micelle()
+        scattered = scattered_lipids(len(heads))
+        universe, headgroups = lipid_trajectory([scattered, scattered, (heads, directions)], self.box)
+        universe.trajectory[1]
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['frame'] == 2
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+        assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(heads)
+        # The universe is shared with other tasks so it goes back to its frame
+        assert universe.trajectory.frame == 1
+
+    def test_same_membranes_keep_last_frame(self):
+        """Membranes with the same lipids and leaflets in both frames are mapped in the last one, their final state."""
+        heads, directions = self.micelle()
+        universe, headgroups = lipid_trajectory([(heads, directions), (heads + 10, directions)], self.box)
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['frame'] == 1
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+
+    def test_membrane_in_first_frame(self):
+        """Membranes only in the first frame (e.g. a micelle falling apart) are mapped there."""
+        heads, directions = self.micelle()
+        universe, headgroups = lipid_trajectory([(heads, directions), scattered_lipids(len(heads))], self.box)
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['frame'] == 0
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+
+    def test_more_leaflets_in_first_frame(self):
+        """With the same lipids in membranes, the frame with more leaflets is kept: aggregates which fuse later (e.g. a
+        lipid nanoparticle hemifused with a bilayer) are separate aggregates.
+        """
+        first_heads, first_directions = zip(self.micelle(center=(-40, 0, 0)), self.micelle(center=(40, 0, 0)))
+        first = (np.concatenate(first_heads), np.concatenate(first_directions))
+        fused = self.micelle(len(first[0]))
+        universe, headgroups = lipid_trajectory([first, fused], [300, 300, 300])
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['frame'] == 0
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE, MICELLE]
+
+    def test_more_lipids_in_last_frame(self):
+        """The frame with clearly more lipids in membranes is kept, even with less leaflets: small micelles and lipids in
+        solution fusing into a lipid nanoparticle are mapped in the last frame.
+        """
+        first_heads, first_directions = zip(self.micelle(center=(-110, 0, 0)), self.micelle(center=(-30, 0, 0)))
+        # Lipids in solution, far from the micelles and from each other
+        grid = np.array([[x, y, z] for x in (60, 90, 120) for y in (-45, -15, 15, 45) for z in (-60, -30, 0, 30, 60)], dtype=float)
+        directions = np.random.default_rng(0).normal(size=(len(grid), 3))
+        first = (np.concatenate([*first_heads, grid]), np.concatenate([*first_directions, directions]))
+        fused = self.micelle(len(first[0]))
+        universe, headgroups = lipid_trajectory([first, fused], [400, 400, 400])
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['frame'] == 1
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+        assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == len(first[0])
+
+    def test_no_membranes(self):
+        """Lipids which never assemble have no membranes in any frame, so the last frame is kept."""
+        scattered = scattered_lipids(len(self.micelle()[0]))
+        universe, headgroups = lipid_trajectory([scattered, scattered], self.box)
+        membrane_map = find_frame_leaflets(universe, headgroups, None, CG_CORE_CONTACT_DISTANCE)
+        assert membrane_map['n_mems'] == 0
+        assert membrane_map['frame'] == 1
+        assert universe.trajectory.frame == 0
+
+
+PEG_LIPID_SMILES = 'CCCCCCCCCCCCCC(=O)OCC(COCCOCCOCCOC)OC(=O)CCCCCCCCCCCCC'
+# Heavy atoms of the PEG chain in the SMILES, from the ether oxygen bonded to the glycerol
+PEG_ATOMS = set(range(19, 30))
+
+
+def two_residue_peg_lipid() -> 'mda.Universe':
+    """Get a PEG-lipid with the PEG chain in the first residue and the glycerol and tails in the second one, as
+    force fields split PEG-lipids in several residues (e.g. DPGL and PEGM in CHARMM).
+    """
+    lipid = mda.Universe.from_smiles(PEG_LIPID_SMILES, generate_coordinates=False)
+    # Hydrogens go to the residue of their heavy atom
+    anchors = [atom if atom.element != 'H' else atom.bonded_atoms[0] for atom in lipid.atoms]
+    resindices = [0 if anchor.index in PEG_ATOMS else 1 for anchor in anchors]
+    universe = mda.Universe.empty(len(lipid.atoms), n_residues=2, atom_resindex=resindices, trajectory=True)
+    universe.add_TopologyAttr('names', lipid.atoms.names)
+    universe.add_TopologyAttr('elements', lipid.atoms.elements)
+    universe.add_TopologyAttr('resnames', ['PEGM', 'DPGL'])
+    universe.add_TopologyAttr('bonds', lipid.bonds.indices)
+    return universe
+
+
+class TestLipidMolecules:
+    """Lipids spanning several residues (e.g. PEG-lipids or gangliosides) are one lipid each."""
+
+    def test_lipid_molecule_residue(self):
+        """A lipid spanning several residues is represented by its residue with most tail atoms."""
+        from mddb_workflow.tools.membrane_mapping import lipid_molecules, all_atom_headgroups
+        universe = two_residue_peg_lipid()
+        lipid_map = {'PEGLIPID': InChIKeyData(inchi='', resindices=[0, 1], fragments=[[0, 1]], moltype='fragment')}
+        lipid_resindices, lipid_of = lipid_molecules(lipid_map, universe)
+        assert lipid_resindices.tolist() == [1]
+        assert lipid_of.tolist() == [1, 1]
+        # Only one polar atom, in the glycerol, instead of one per residue
+        headgroups = all_atom_headgroups(lipid_map, universe)
+        assert len(headgroups) == 1
+        assert headgroups[0].resindex == 1 and headgroups[0].element == 'O'
+
+    def test_tails_in_another_residue(self, capsys):
+        """Lipids whose tails are not in the residue of their polar atom form a hydrophobic core and their leaflets
+        have the atoms of all their residues.
+        """
+        heads = sphere_points(20)
+        directions = -heads / np.linalg.norm(heads, axis=1)[:, None]
+        n_lipids = len(heads)
+        # Every lipid has a residue with its polar atom and two PEG beads in the solvent and a residue with two tail beads
+        positions = np.stack([heads, heads - 5 * directions, heads - 10 * directions,
+            heads + 7 * directions, heads + 14 * directions], axis=1).reshape(-1, 3)
+        resindices = np.repeat(np.arange(2 * n_lipids), [3, 2] * n_lipids)
+        universe = mda.Universe.empty(5 * n_lipids, n_residues=2 * n_lipids, atom_resindex=resindices, trajectory=True)
+        universe.add_TopologyAttr('names', ['P', 'O1', 'O2', 'C1', 'C2'] * n_lipids)
+        universe.atoms.positions = positions + 75
+        universe.dimensions = [150, 150, 150, 90, 90, 90]
+        headgroups, tails = universe.select_atoms('name P'), universe.select_atoms('name C1 C2')
+        # Without the lipid of every residue the tails belong to no lipid
+        find_leaflets(universe, headgroups, tails, CG_CORE_CONTACT_DISTANCE)
+        assert 'hydrophobic cores' not in capsys.readouterr().out
+        lipid_of = np.repeat(np.arange(0, 2 * n_lipids, 2), 2)
+        membrane_map = find_leaflets(universe, headgroups, tails, CG_CORE_CONTACT_DISTANCE, lipid_of)
+        assert 'Found 1 hydrophobic cores' in capsys.readouterr().out
+        assert [mem['type'] for mem in membrane_map['mems'].values()] == [MICELLE]
+        assert len(membrane_map['mems']['0']['polar_atoms']['outer']) == n_lipids
+        assert membrane_map['mems']['0']['leaflets']['outer'] == list(range(5 * n_lipids))
+        assert membrane_map['no_mem_lipid'] == []
 
 
 class TestLipidOrder:

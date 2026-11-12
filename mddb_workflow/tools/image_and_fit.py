@@ -6,7 +6,7 @@ from collections import deque
 import mdtraj as mdt
 import numpy as np
 from scipy.sparse import coo_matrix
-from scipy.sparse.csgraph import connected_components
+from scipy.sparse.csgraph import connected_components, breadth_first_order
 from scipy.spatial import cKDTree
 
 from mddb_workflow.utils.structures import Structure
@@ -31,6 +31,9 @@ AUTO_TRANSLATION_CUTOFF = 0.5
 # Number of frames read at once in the no-jump step
 NO_JUMP_CHUNK_SIZE = 100
 
+# Number of frames along the trajectory where split molecules are searched when the image is automatic
+SPLIT_CHECK_FRAMES = 10
+
 
 def image_and_fit(
     input_structure_file: 'File',
@@ -43,6 +46,7 @@ def image_and_fit(
     translation: list[float] | str,
     structure: 'Structure',
     pbc_selection: 'Selection',
+    find_bonds: Callable[['File', int], list[list[int]]],
     ) -> str:
     """Image and fit a trajectory.
 
@@ -66,12 +70,16 @@ def image_and_fit(
         translation:
             Set how it must be translated during imaging, in nm.
             Use 'auto' to find a translation which keeps non-PBC atoms away from the box boundaries.
+            If all atoms are PBC then lipids are used instead, so membranes are not split along their normal.
         structure:
             The structure of the system. Note that this is an early provisional structure.
         pbc_selection:
             Set a selection to exclude PBC residues from both the centering and the fitting focuses.
             Selection of atoms which are to stay in PBC conditions after imaging.
             Note that this is an early provisional atom selection.
+        find_bonds:
+            Function to find the bonds of the system, given a trajectory and its number of frames.
+            Bonds may be guessed from atom distances, so they are found once the trajectory has no jumps.
 
     """
     print(f' Image: {image} | Fit: {fit}')
@@ -87,15 +95,10 @@ def image_and_fit(
             ' Please do not ask for the imaging (i.e. remove the "image" input or the "-img" argument).')
 
     # Using a TPR topology may provide some advantage in the imaging process
-    # This includes connectivity and atom mass data
-    # This is important to keep atoms together when using -pbc res, mol or whole
+    # Bonds are taken from the topology instead of being guessed from atom distances
     is_tpr_available = input_topology_file != MISSING_TOPOLOGY and input_topology_file.format == 'tpr'
     if not is_tpr_available:
         warn('Since we are missing a TPR file the automatic imaging protocol is more prone to fail.')
-    # Check if we have PBC atoms
-    # LORE: We were running the '-pbc nojump' step only when no pbc atoms were present in the system
-    # LORE: However now we always run a no-jump followed by a '-pbc res' step thus recovering PBC atoms
-    has_pbc_atoms = bool(pbc_selection)
 
     # Gromacs can not read mmCIF so we work with PDB files, where chains do not matter
     # At the end, the output structure is written with the input structure data and the new coordinates
@@ -133,88 +136,59 @@ def image_and_fit(
         print(' Running imaging steps')
 
         # Find the translation automatically if requested
+        # If all atoms are PBC then use lipids, so membranes are not split by the box boundaries (e.g. lipid-only systems)
+        # Note that lipids are still PBC atoms in the rest of the imaging, so they may be periodic (e.g. membranes)
+        # Periodic non-PBC atoms (e.g. a nanoparticle touching its own image) still fail, since they can not be kept whole
         if translation == AUTOMATIC_FLAG:
-            translation = find_automatic_translation(latest_trajectory, center_selection)
-
-        # Check if coordinates are to be translated
-        must_translate = translation != [0, 0, 0]
-
-        # Translate the system if requested
-        # Then put residues back in the box, moving each residue as a whole
-        # Gromacs applies the translation before putting residues in the box
-        if must_translate:
-            print(' Running translation')
-            run_gromacs(f'trjconv -s {latest_structure.path} \
-                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-                -trans {translation[0]} {translation[1]} {translation[2]} -pbc res',
-                user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
-            latest_trajectory = output_trajectory_file
-
-            # Select the first frame of the recently imaged trayectory as the new structure
-            reset_structure(
-                latest_structure.path,
-                latest_trajectory.path,
-                gromacs_structure_file.path)
-            latest_structure = gromacs_structure_file
-
-        # Run an intial -pbc res step just to keep residue atoms together before the no-jump step
-        # Note that this can be done only if we have the TPR file
-        if is_tpr_available:
-            print(' Running initial -pbc res')
-            run_gromacs(f'trjconv -s {input_topology_file.path} \
-                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-                -pbc res -n {INDEX_FILEPATH}',
-                user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
-            latest_trajectory = output_trajectory_file
-            # Select the first frame of the recently imaged trayectory as the new structure
-            reset_structure(
-                latest_structure.path,
-                latest_trajectory.path,
-                gromacs_structure_file.path)
-            latest_structure = gromacs_structure_file
+            if center_selection:
+                translation = find_automatic_translation(latest_trajectory, center_selection)
+            else:
+                lipid_selection = structure.select_lipids()
+                if lipid_selection: print(' There are only PBC atoms, so lipids are used to find the automatic translation')
+                translation = find_automatic_translation(latest_trajectory, lipid_selection, ignore_periodic=True)
 
         # !!! We assume that at this point (after a possible translation) the first frame is "correct"
         # This means that the different molecules are placed as desired
         # e.g. two protein monomers are together, and not interacting across boundaries
         # To keep things like this we will run a no-jump step
+        # The translation is applied in the no-jump step as well
+        # In the first frame residues are made whole and, if translated, non-PBC residues are put in the box
+        # This way non-PBC objects are together, since the automatic translation places the box boundaries between them
+        # PBC residues are not put in the box here since molecules of many residues would be split
+        # LORE: We were translating with '-trans -pbc res' and running an initial '-pbc res' step with the TPR
+        # LORE: However '-pbc res' split PBC molecules of many residues, and the no-jump kept them split
         # DANI: The nojump step may cause artifacts, specially in already pre-imaged simulations
-        if center_selection:
-            print(' Running no-jump')
-            # LORE: We were using the Gromacs no-jump, but it decides every atom jump independently
-            # LORE: Atoms of the same molecule could end in different periodic images when they moved around half box
-            # run_gromacs(f'trjconv -s {latest_structure.path} \
-            #     -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-            #     -pbc nojump', user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
-            # Input and output trajectories may be the same file so we write an intermediate file
-            atom_groups = find_no_jump_groups(input_topology_file, structure)
-            no_jump_trajectory_file = output_trajectory_file.get_prefixed_file('nojump.')
-            no_jump(latest_trajectory, no_jump_trajectory_file, atom_groups)
-            no_jump_trajectory_file.rename_to(output_trajectory_file)
-            latest_trajectory = output_trajectory_file
+        print(' Running no-jump')
+        # LORE: We were using the Gromacs no-jump, but it decides every atom jump independently
+        # LORE: Atoms of the same molecule could end in different periodic images when they moved around half box
+        # run_gromacs(f'trjconv -s {latest_structure.path} \
+        #     -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+        #     -pbc nojump', user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
+        atom_groups = find_no_jump_groups(input_topology_file, structure)
+        must_translate = translation != [0, 0, 0]
+        if must_translate: print(f'  Translation: {translation[0]} {translation[1]} {translation[2]} nm')
+        atom_residues = np.array([ atom.residue_index for atom in structure.atoms ])
+        prepare_first_frame = lambda positions, box_vectors: place_first_frame(
+            positions, box_vectors, atom_residues, center_selection.atom_indices, must_translate)
+        # Input and output trajectories may be the same file so we write an intermediate file
+        no_jump_trajectory_file = output_trajectory_file.get_prefixed_file('nojump.')
+        no_jump(latest_trajectory, no_jump_trajectory_file, atom_groups,
+            translation=np.array(translation, dtype=np.float64), prepare_first_frame=prepare_first_frame)
+        no_jump_trajectory_file.rename_to(output_trajectory_file)
+        latest_trajectory = output_trajectory_file
 
-            # Place all residues in the box again in case we have PBC residues
-            # This is critical to recover all PBC residues which were diluted because of the no-jump step
-            # Also center the non-PBC region if there is a center selection
-            # We try to do both processes in a single step just to be more efficient
-            # WARNING: If there is no center selection then there is no need with the initial -pbc res we should be good
-            if has_pbc_atoms:
-                print(' Running center -pbc res')
-                run_gromacs(f'trjconv -s {latest_structure.path} \
-                    -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-                    -pbc res -center -n {INDEX_FILEPATH}',
-                    user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
-                    show_error_logs=True)
-                latest_trajectory = output_trajectory_file
-            # If there are no PBC residues then just center the system
-            else:
-                print(' Running center')
-                run_gromacs(f'trjconv -s {latest_structure.path} \
-                    -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-                    -center -n {INDEX_FILEPATH}',
-                    user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
-                    show_error_logs=True)
-                latest_trajectory = output_trajectory_file
-        # If there is no center and no PBC then do nothing, but this should never happen
+        # Now that there are no jumps the bonds may be guessed from atom distances
+        # Then every bonded fragment is made whole, the non-PBC atoms are centered and PBC fragments are put in the box
+        # LORE: We were using '-pbc res -center', but it split PBC molecules of many residues (e.g. RNA, PEG lipids)
+        # LORE: Gromacs '-pbc mol' is not used either since its molecules may be much bigger (e.g. a whole membrane)
+        print(' Putting PBC fragments in the box')
+        with mdt.formats.XTCTrajectoryFile(latest_trajectory.path) as reader:
+            frames_count = len(reader)
+        atom_bonds = find_bonds(latest_trajectory, frames_count)
+        boxed_trajectory_file = output_trajectory_file.get_prefixed_file('boxed.')
+        put_fragments_in_box(latest_trajectory, boxed_trajectory_file, atom_bonds, structure, center_selection)
+        boxed_trajectory_file.rename_to(output_trajectory_file)
+        latest_trajectory = output_trajectory_file
 
         # Select the first frame of the recently imaged trayectory as the new structure
         reset_structure(latest_structure.path, latest_trajectory.path, gromacs_structure_file.path)
@@ -339,8 +313,11 @@ def no_jump(
     input_trajectory_file: 'File',
     output_trajectory_file: 'File',
     atom_groups: np.ndarray,
+    translation: np.ndarray = np.zeros(3),
+    prepare_first_frame: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
 ):
     """Remove jumps across the box boundaries along the trajectory, keeping the first frame as it is.
+    All frames may be translated, and the first frame may be changed before (e.g. to make residues whole).
     In every frame, each atom is placed in the periodic image closest to where it would be if it moved like its group.
     The movement of every group is found from the previous frame, and it is chosen as the closest to the movement of the whole system.
     This way atoms of a group stay together even if they move around half box, and molecules broken in the input are fixed.
@@ -359,8 +336,9 @@ def no_jump(
             if len(xyz) == 0: break
             output_xyz = np.empty_like(xyz)
             for i, (positions, box_vectors) in enumerate(zip(xyz, boxes)):
-                positions = positions.astype(np.float64)
+                positions = positions.astype(np.float64) + translation
                 if previous_positions is None:
+                    if prepare_first_frame: positions = prepare_first_frame(positions, box_vectors.astype(np.float64))
                     previous_positions = positions
                     output_xyz[i] = positions
                     continue
@@ -378,6 +356,108 @@ def no_jump(
                 jumps = closest_images(displacements - group_displacements[atom_groups], box_vectors)
                 positions = positions - jumps @ box_vectors
                 previous_positions = positions
+                output_xyz[i] = positions
+            writer.write(output_xyz, time=time, step=step, box=boxes)
+
+
+def place_first_frame(
+    positions: np.ndarray,
+    box_vectors: np.ndarray,
+    atom_residues: np.ndarray,
+    selected_atom_indices: list[int],
+    put_in_box: bool,
+) -> np.ndarray:
+    """Make every residue whole, by placing every atom in the image closest to the first atom of its residue.
+    If requested, also put the selected atoms in the box, moving every residue as a whole.
+    """
+    inverse_box = np.linalg.inv(box_vectors)
+    residues, residue_first_atoms = np.unique(atom_residues, return_index=True)
+    first_atoms = residue_first_atoms[np.searchsorted(residues, atom_residues)]
+    fractional = (positions - positions[first_atoms]) @ inverse_box
+    positions = positions - closest_images(fractional, box_vectors) @ box_vectors
+    if not put_in_box or len(selected_atom_indices) == 0: return positions
+    selected_residues = np.unique(atom_residues[selected_atom_indices], return_inverse=True)[1]
+    fractional = positions[selected_atom_indices] @ inverse_box
+    sizes = np.bincount(selected_residues)
+    centers = np.stack([ np.bincount(selected_residues, weights=fractional[:, axis]) / sizes for axis in range(3) ], axis=1)
+    positions[selected_atom_indices] -= np.floor(centers)[selected_residues] @ box_vectors
+    return positions
+
+
+def find_bond_tree(atom_bonds: list[list[int]], structure: 'Structure') -> tuple[np.ndarray, np.ndarray, list[np.ndarray]]:
+    """Find the bonded fragments and a path along bonds from the first atom of every fragment to the rest of atoms.
+    Atoms with missing bonds (e.g. coarse grain) are joined to the first atom of their residue instead.
+    Return the fragment of every atom, the previous atom in the path of every atom and the atoms at every step of the paths.
+    """
+    atom_count = structure.atom_count
+    if len(atom_bonds) != atom_count:
+        raise ValueError(f'There are bonds for {len(atom_bonds)} atoms, but the structure has {structure.atom_count} atoms')
+    pairs = []
+    for atom_index, bonds in enumerate(atom_bonds):
+        if bonds == MISSING_BONDS:
+            pairs.append((structure.atoms[atom_index].residue.atom_indices[0], atom_index))
+            continue
+        pairs += [ (atom_index, bonded) for bonded in bonds if atom_index < bonded ]
+    pairs = np.array(pairs, dtype=int).reshape(-1, 2)
+    graph = coo_matrix((np.ones(len(pairs), dtype=bool), (pairs[:, 0], pairs[:, 1])), shape=(atom_count, atom_count))
+    _, atom_fragments = connected_components(graph, directed=False)
+    # An extra atom is bonded to the first atom of every fragment, so a single search covers all fragments
+    roots = np.unique(atom_fragments, return_index=True)[1]
+    extra_atom = atom_count
+    sources = np.concatenate([pairs[:, 0], np.full(len(roots), extra_atom)])
+    targets = np.concatenate([pairs[:, 1], roots])
+    graph = coo_matrix((np.ones(len(sources), dtype=bool), (sources, targets)), shape=(atom_count + 1, atom_count + 1))
+    order, parents = breadth_first_order(graph, extra_atom, directed=False, return_predecessors=True)
+    depths = np.zeros(atom_count + 1, dtype=int)
+    for atom_index in order[1:]:
+        depths[atom_index] = depths[parents[atom_index]] + 1
+    # Roots are at depth 1, so their atoms are not moved
+    steps = [ order[depths[order] == depth] for depth in range(2, depths.max() + 1) ]
+    return atom_fragments, parents[:atom_count], steps
+
+
+def put_fragments_in_box(
+    input_trajectory_file: 'File',
+    output_trajectory_file: 'File',
+    atom_bonds: list[list[int]],
+    structure: 'Structure',
+    center_selection: 'Selection',
+):
+    """In every frame, make every bonded fragment whole, center the selection and put fragments out of the selection in the box.
+    Fragments are put in the box as a whole, according to their center.
+    Fragments with any atom in the selection are never put in the box, since they are expected to have no jumps already.
+    """
+    for trajectory_file in [input_trajectory_file, output_trajectory_file]:
+        if trajectory_file.format != 'xtc':
+            raise ValueError(f'Putting fragments in the box is only supported for xtc trajectories: {trajectory_file.path}')
+    atom_fragments, parents, steps = find_bond_tree(atom_bonds, structure)
+    center_atom_indices = center_selection.atom_indices
+    centered_fragments = np.unique(atom_fragments[center_atom_indices])
+    boxed_atom_indices = np.flatnonzero(~np.isin(atom_fragments, centered_fragments))
+    boxed_atom_fragments = np.unique(atom_fragments[boxed_atom_indices], return_inverse=True)[1]
+    boxed_fragment_sizes = np.bincount(boxed_atom_fragments)
+    print(f'  {len(centered_fragments)} fragments are centered and {len(boxed_fragment_sizes)} fragments are put in the box')
+    with mdt.formats.XTCTrajectoryFile(input_trajectory_file.path) as reader, \
+        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer:
+        while True:
+            xyz, time, step, boxes = reader.read(n_frames=NO_JUMP_CHUNK_SIZE)
+            if len(xyz) == 0: break
+            output_xyz = np.empty_like(xyz)
+            for i, (positions, box_vectors) in enumerate(zip(xyz, boxes)):
+                if not box_vectors.any():
+                    raise InputError(f'Frame {step[i]} has no box, so fragments can not be put in the box')
+                positions, box_vectors = positions.astype(np.float64), box_vectors.astype(np.float64)
+                inverse_box = np.linalg.inv(box_vectors)
+                for atom_indices in steps:
+                    fractional = (positions[atom_indices] - positions[parents[atom_indices]]) @ inverse_box
+                    positions[atom_indices] -= closest_images(fractional, box_vectors) @ box_vectors
+                if len(center_atom_indices) > 0:
+                    positions += box_vectors.sum(axis=0) / 2 - positions[center_atom_indices].mean(axis=0)
+                if len(boxed_atom_indices) > 0:
+                    fractional = positions[boxed_atom_indices] @ inverse_box
+                    centers = np.stack([ np.bincount(boxed_atom_fragments, weights=fractional[:, axis]) / boxed_fragment_sizes
+                        for axis in range(3) ], axis=1)
+                    positions[boxed_atom_indices] -= np.floor(centers)[boxed_atom_fragments] @ box_vectors
                 output_xyz[i] = positions
             writer.write(output_xyz, time=time, step=step, box=boxes)
 
@@ -416,6 +496,48 @@ def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', sel
     return fitted, True
 
 
+def find_split_molecules(
+    trajectory_file: 'File',
+    topology_file: Union['File', Exception],
+    structure: 'Structure',
+    selection: 'Selection',
+) -> bool:
+    """Check if molecules in the selection are split by the box boundaries in some frames.
+    Two bonded atoms are split when they are closer through the box boundaries than directly.
+    Bonds are taken from the topology. If they are missing then every atom is paired with the first atom of its residue.
+    Only a few frames along the trajectory are checked, so short problems may be missed.
+    """
+    if trajectory_file.format != 'xtc':
+        raise ValueError(f'Finding split molecules is only supported for xtc trajectories: {trajectory_file.path}')
+    selected_atom_indices = set(selection.atom_indices)
+    atom_bonds = mine_topology_bonds(topology_file)
+    if atom_bonds and any(bonds == MISSING_BONDS for bonds in atom_bonds):
+        atom_bonds = None
+    if atom_bonds:
+        if len(atom_bonds) != structure.atom_count:
+            raise InputError(f'Topology bonds have {len(atom_bonds)} atoms, but the structure has {structure.atom_count} atoms')
+        pairs = [ (atom_index, bonded) for atom_index, bonds in enumerate(atom_bonds) for bonded in bonds
+            if atom_index < bonded and atom_index in selected_atom_indices and bonded in selected_atom_indices ]
+    else:
+        pairs = [ (residue.atom_indices[0], atom_index) for residue in structure.residues for atom_index in residue.atom_indices[1:]
+            if residue.atom_indices[0] in selected_atom_indices and atom_index in selected_atom_indices ]
+    if not pairs: return False
+    pairs = np.array(pairs, dtype=int)
+    with mdt.formats.XTCTrajectoryFile(trajectory_file.path) as reader:
+        frames_count = len(reader)
+        for frame in np.unique(np.linspace(0, frames_count - 1, SPLIT_CHECK_FRAMES).astype(int)):
+            reader.seek(frame)
+            xyz, _, _, boxes = reader.read(n_frames=1)
+            if boxes is None or not boxes[0].any(): return False
+            positions, box_vectors = xyz[0].astype(np.float64), boxes[0].astype(np.float64)
+            fractional = (positions[pairs[:, 1]] - positions[pairs[:, 0]]) @ np.linalg.inv(box_vectors)
+            split_count = int(closest_images(fractional, box_vectors).any(axis=1).sum())
+            if split_count:
+                print(f' {split_count} bonds are split by the box boundaries in frame {frame}')
+                return True
+    return False
+
+
 def reset_structure(
     input_structure_filepath: str,
     input_trajectory_filepath: str,
@@ -428,12 +550,17 @@ def reset_structure(
         -dump 0', user_input=SYSTEM_SELECTION_NAME)
 
 
-def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') -> list[float]:
-    """Find a translation which places the box boundaries where no non-PBC object is split.
+def find_automatic_translation(trajectory_file: 'File', selection: 'Selection', ignore_periodic: bool = False) -> list[float]:
+    """Find a translation which places the box boundaries where no object of the selection is split.
 
     Only the first frame of the trajectory is used.
     Atoms in the selection which are close to each other, directly or across the box boundaries, are grouped in objects.
     Then every object is made whole and the boundary along every box vector is placed in the middle of the largest gap between objects.
+    Objects in contact with their own periodic image or filling the whole box can not be kept whole, so it fails.
+    If periodic objects are to be ignored (e.g. membranes of PBC lipids) then every box vector is handled on its own instead.
+    Objects are split by any boundary along the box vectors they are periodic along, so they are ignored along them only.
+    e.g. a flat membrane is ignored along the box vectors in its plane, but not along its normal.
+    If there is no gap along a box vector then its boundary is not moved.
     """
     if not selection: return [0, 0, 0]
     print(' Finding the automatic translation')
@@ -460,15 +587,20 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') 
         neighbours[fragment].append((other_fragment, np.array(shift)))
         neighbours[other_fragment].append((fragment, -np.array(shift)))
     # Join fragments in objects, giving every fragment the periodic shift which makes the object whole
+    # A fragment reached again with a different shift means the object is in contact with its own periodic image
+    # Then the object is periodic (e.g. a membrane) along the box vectors where both shifts differ
+    # Along the other box vectors shifts are always the same, so the object can still be made whole along them
     self_contact_error = InputError('Non-PBC atoms are in contact with their own periodic image in the first frame.\n'
         '  The automatic translation does not work in these cases.')
     fragment_shifts = [None] * fragment_count
     fragment_objects = np.empty(fragment_count, dtype=int)
+    periodic_objects = []
     object_count = 0
     for seed in range(fragment_count):
         if fragment_shifts[seed] is not None: continue
         fragment_shifts[seed] = np.zeros(3, dtype=int)
         fragment_objects[seed] = object_count
+        periodic_axes = np.zeros(3, dtype=bool)
         queue = deque([seed])
         while queue:
             fragment = queue.popleft()
@@ -478,21 +610,34 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') 
                     fragment_shifts[other_fragment] = expected_shift
                     fragment_objects[other_fragment] = object_count
                     queue.append(other_fragment)
-                elif not np.array_equal(fragment_shifts[other_fragment], expected_shift):
-                    raise self_contact_error
+                else:
+                    periodic_axes |= fragment_shifts[other_fragment] != expected_shift
+        periodic_objects.append(periodic_axes)
         object_count += 1
+    periodic_objects = np.array(periodic_objects)
+    if not ignore_periodic and periodic_objects.any(): raise self_contact_error
     # Get the fractional coordinates of every atom once its object is whole
+    # Coordinates along the box vectors where the object is periodic are not used
     fractional = positions @ inverse_box - np.array(fragment_shifts)[atom_fragments]
     atom_objects = fragment_objects[atom_fragments]
     translation = np.zeros(3)
     for axis in range(3):
+        # Objects which are periodic along this box vector are split by any boundary, so they are ignored
+        periodic = periodic_objects[:, axis]
+        if periodic.all():
+            print(f'  Objects are periodic along the box vector {axis + 1} (e.g. membranes), so there is no translation along it')
+            continue
+        if periodic.any():
+            print(f'  Some objects are periodic along the box vector {axis + 1} (e.g. membranes), so they are ignored along it')
         values = fractional[:, axis]
         lows = np.full(object_count, np.inf)
         highs = np.full(object_count, -np.inf)
         np.minimum.at(lows, atom_objects, values)
         np.maximum.at(highs, atom_objects, values)
-        if np.any(highs - lows >= 1): raise self_contact_error
+        lows, highs = lows[~periodic], highs[~periodic]
+        if not ignore_periodic and np.any(highs - lows >= 1): raise self_contact_error
         # Bring every object interval into [0, 1) and split the ones going beyond 1
+        # Objects which are longer than the box along this box vector fill it all
         offsets = np.floor(lows)
         lows, highs = lows - offsets, highs - offsets
         crossing = highs > 1
@@ -508,8 +653,12 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') 
         gaps.append((merged[-1][1], merged[0][0] + 1))
         gap_low, gap_high = max(gaps, key=lambda gap: gap[1] - gap[0])
         if gap_high <= gap_low:
-            raise InputError(f'Non-PBC atoms fill the whole box along the box vector {axis + 1} in the first frame.\n'
-                '  The automatic translation does not work in these cases.')
+            if not ignore_periodic:
+                raise InputError(f'Non-PBC atoms fill the whole box along the box vector {axis + 1} in the first frame.\n'
+                    '  The automatic translation does not work in these cases.')
+            warn(f'Atoms to find the automatic translation fill the whole box along the box vector {axis + 1} in the first frame.\n'
+                ' Some of them will be split by the box boundary anyway, so there is no translation along it.')
+            continue
         # Move the middle of the gap to the boundary, choosing the shortest way
         middle = ((gap_low + gap_high) / 2) % 1
         translation[axis] = -middle if middle < 0.5 else 1 - middle

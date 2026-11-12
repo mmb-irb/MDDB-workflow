@@ -1,0 +1,69 @@
+# Nanobody inputs template — fields follow mddb_workflow/core/inputs_schema.py (WorkflowInputs / MDConfig).
+# Rendered once per project by `mwf dataset inputs`; per-project file paths come from nanobodies_generator.py.
+
+# --- Project metadata ---
+name: {{ DIR|replace('_run', '') }} nanobody
+description: Sabdab database - structure simulations
+authors:
+  - Montader Ali
+groups:
+  - Centre for Misfolding Diseases, Yusuf Hamied Department of Chemistry, University of Cambridge, Cambridge, UK
+contact: ma986@cam.ac.uk
+program: GROMACS
+version: '2025.3'
+type: trajectory
+method: Classical MD
+license: 'This trajectory is licensed under a Creative Commons Attribution 4.0 International License, which permits use, sharing, adaptation, distribution and reproduction in any medium or format, as long as you give appropriate credit to the original author(s) and the source, provide a link to the Creative Commons licence, and indicate if changes were made. To view a copy of this licence, visit http://creativecommons.org/licenses/by/4.0/.'
+linkcense: https://creativecommons.org/licenses/by/4.0/
+citation: TBD (2026)
+thanks: null
+accession: null   # assigned by the database on upload; leave null in the template
+
+# --- References ---
+links:
+  - name: Sabdab database - structure simulations
+    url: https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab
+pdb_ids:
+  - {{ DIR.split('_')[0]|upper }}
+forced_references: null
+ligands: null
+
+# --- Simulation metadata ---
+framestep: 0.01
+timestep: 2
+temp: 300
+ensemble: NPT
+ff:
+  - Amber ff99SB-ILDN
+wat: TIP3P
+boxtype: Cubic
+
+# --- Analysis parameters ---
+interactions: []
+pbc_selection: auto
+cg_selection: none
+dummy_selection: null
+forced_class_selections: null
+
+# --- Representation / others ---
+chainnames: null
+customs: null
+orientation: null
+multimeric: null
+collections:
+  - nanobodies
+
+# --- Input files (discovered from the folder structure by nanobodies_generator.py) ---
+# input_topology_filepath is project-level (one per project); trajectories are set per-MD below.
+input_topology_filepath: {{ top }}
+input_structure_filepath: {{ struct }}
+input_trajectory_filepaths: null
+
+mds:
+{% for md in mds %}
+  - name: {{ md.mdir }}
+    mdir: {{ md.mdir }}
+    input_trajectory_filepaths: {{ md.traj }}
+{% endfor %}
+mdref: 0
+dataset_path: {{DATASET}}

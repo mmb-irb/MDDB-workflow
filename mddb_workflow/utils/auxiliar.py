@@ -7,6 +7,7 @@ from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from mddb_workflow.utils.constants import GLOBALS
 from mddb_workflow.utils.constants import DATABASE_DOCUMENT_SIZE_LIMIT
 from mddb_workflow.utils.constants import DATABASE_DOCUMENT_PATTERNS, DATABASE_DOCUMENT_LIST_PATTERNS
+from mddb_workflow.utils.constants import AUTOMATIC_FLAG
 from mddb_workflow.utils.type_hints import *
 
 import os
@@ -52,6 +53,14 @@ class InputError (QuietException):
 
 class TestFailure (QuietException):
     """Quite exception for when MD data has not passed a quality check test."""
+    pass
+
+
+class InputsUpdated (QuietException):
+    """Quiet exception for when the inputs file has been changed during the run to fix a failed test.
+    e.g. fragments added to the PBC selection or the image set to true.
+    Tasks which were already run with the previous inputs must be run again, so the workflow is relaunched.
+    """
     pass
 
 
@@ -130,6 +139,22 @@ JSON_SERIALIZABLE_MISSING_BONDS = 'MB'
 
 # Keep all exceptions in a set
 STANDARD_EXCEPTIONS = {MISSING_TOPOLOGY, MISSING_CHARGES, MISSING_BONDS}
+
+
+def parse_automatic_selection(selection_string: Optional[str]) -> tuple[bool, Optional[str]]:
+    """Check if a selection string is the automatic flag, which may be followed by an additional selection.
+    e.g. auto + resname LIG
+    Return whether the selection is automatic and the additional selection string, if any.
+    """
+    if not isinstance(selection_string, str): return False, None
+    flag, plus, additional = selection_string.partition('+')
+    if flag.strip() != AUTOMATIC_FLAG: return False, None
+    if not plus: return True, None
+    additional = additional.strip()
+    if not additional:
+        raise InputError(f'Selection "{selection_string}" is missing a selection after the "+"')
+    return True, additional
+
 
 def all_cases(names: list[str] | set[str]) -> set[str]:
     """Given a list or set of names.
@@ -679,15 +704,19 @@ def _get_error_retry_after(error: Exception) -> Optional[float]:
     return None
 
 
-def retry_request(func=None, *, retry_not_found: bool = False):
+def retry_request(func=None, *, retry_not_found: bool = False,
+    max_retries: int = MAX_RETRIES, retry_delay: float = RETRY_DELAY):
     """Decorator to retry HTTP requests with exponential backoff.
 
     Network errors, server errors (5xx) and too many requests errors (429) are retried.
     Other HTTP errors (e.g. 404) are raised directly since retrying would give the same result.
     Not found errors (404) are also retried with 'retry_not_found', for things which should exist,
     since a server may answer 404 for a while (e.g. when it is restarting).
+    Network and server errors are tried 'max_retries' times in total, waiting 'retry_delay' seconds
+    after the first failure and twice as long after every next one.
     """
-    if func is None: return lambda func: retry_request(func, retry_not_found=retry_not_found)
+    if func is None: return lambda func: retry_request(func, retry_not_found=retry_not_found,
+        max_retries=max_retries, retry_delay=retry_delay)
     @wraps(func)
     def wrapper(*args, **kwargs):
         attempt = 0
@@ -705,7 +734,7 @@ def retry_request(func=None, *, retry_not_found: bool = False):
                 if status is not None and status < 500 and not retried_status:
                     raise
                 rate_limited = isinstance(error, RateLimitError) or status == 429
-                max_attempts = RATE_LIMIT_RETRIES if rate_limited else MAX_RETRIES
+                max_attempts = RATE_LIMIT_RETRIES if rate_limited else max_retries
                 attempt += 1
                 if attempt >= max_attempts:
                     print(f"Request failed after {attempt} attempts: {error}")
@@ -713,7 +742,7 @@ def retry_request(func=None, *, retry_not_found: bool = False):
                 if rate_limited:
                     delay = _get_error_retry_after(error) or RATE_LIMIT_DELAY * RETRY_BACKOFF ** (attempt - 1)
                 else:
-                    delay = RETRY_DELAY * RETRY_BACKOFF ** (attempt - 1)
+                    delay = retry_delay * RETRY_BACKOFF ** (attempt - 1)
                 print(f"Request failed (attempt {attempt}/{max_attempts}): {error}. Retrying in {delay:.1f}s...")
                 time.sleep(delay)
     return wrapper
@@ -893,9 +922,16 @@ def write_ndict(nested_dict: dict, nested_key: str, value):
 
 def get_git_version() -> str:
     """Get the current git version."""
-    git_command = f"git -C {__path__[0]} describe --tags"
-    process = run(git_command, shell=True, stdout=PIPE)
-    return process.stdout.decode().replace('\n', '') or __version__
+    git_command = f"git -C {__path__[0]}"
+    # The workflow was not installed from a git clone
+    if run(f"{git_command} rev-parse", shell=True, stdout=PIPE, stderr=PIPE).returncode != 0:
+        return __version__
+    process = run(f"{git_command} describe --tags", shell=True, stdout=PIPE, stderr=PIPE)
+    if process.returncode == 0:
+        return process.stdout.decode().strip()
+    # No tag is reachable from the current commit (e.g. a clone without tags)
+    commit = run(f"{git_command} rev-parse --short HEAD", shell=True, stdout=PIPE, stderr=PIPE).stdout.decode().strip()
+    return f'{__version__} untagged {commit}'
 
 
 def natural_sort_key(s):

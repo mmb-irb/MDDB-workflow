@@ -1,10 +1,10 @@
 from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, warn
 from mddb_workflow.utils.constants import CONVERTED_STRUCTURE, CONVERTED_TRAJECTORY, SKIPPED_TRAJECTORY
 from mddb_workflow.utils.constants import FILTERED, FILTERED_STRUCTURE, FILTERED_TRAJECTORY
-from mddb_workflow.utils.constants import IMAGED, IMAGED_STRUCTURE, IMAGED_TRAJECTORY
+from mddb_workflow.utils.constants import IMAGED, IMAGED_STRUCTURE, IMAGED_TRAJECTORY, AUTO_IMAGE_FLAG
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, CORRECTED_TRAJECTORY
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, CG_ATOM_ELEMENT, SNAPSHOTS_FLAG
-from mddb_workflow.utils.constants import FAITH_BYPASS, BROKEN_PBC_FLAG, AUTOMATIC_FLAG
+from mddb_workflow.utils.constants import FAITH_BYPASS, BROKEN_PBC_FLAG, AUTOMATIC_FLAG, CHAINS_CHANGED_FLAG, STABLE_BONDS_FLAG
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.selections import Selection
@@ -16,10 +16,11 @@ from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION, FIXED_STRUCTURE_EXCEPTION
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
-from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajectory
+from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajectory, find_split_molecules
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.fix_gromacs_masses import add_fake_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
+from mddb_workflow.tools.get_bonds import find_safe_bonds
 
 
 def _prepare_incomplete_output(output_directory: str, output_filename: str) -> File:
@@ -53,7 +54,7 @@ def process_input_files(
     output_trajectory_file: 'File',
     # Processing parameters
     filter_selection: str,
-    image: bool,
+    image: bool | str,
     fit: bool | str,
     translation: list[float] | str,
     input_chainer: Optional[dict],
@@ -315,6 +316,15 @@ def process_input_files(
         fit = bool(center_selection) and not already_fitted
         print(f' Automatic fit: {fit}')
 
+    # Image only if molecules are split by the box boundaries, when the image is automatic
+    # Without a usable box there is nothing to image
+    # Save the value so the workflow may be run again with the image if the trajectory integrity test fails
+    if image == AUTOMATIC_FLAG:
+        image = bool(center_selection) and not ignore_box and not broken_pbc and find_split_molecules(
+            filtered_trajectory_file, filtered_topology_file, provisional_structure, center_selection)
+        print(f' Automatic image: {image}')
+        self.cache.update(AUTO_IMAGE_FLAG, image)
+
     # --- IMAGING AND FITTING ------------------------------------------------------------
 
     # There is no logical way to know if the trajectory is already imaged or it must be imaged
@@ -354,7 +364,19 @@ def process_input_files(
             fit=fit,
             translation=translation,
             structure=provisional_structure,
-            pbc_selection=provisional_pbc_selection
+            pbc_selection=provisional_pbc_selection,
+            # Bonds are found as the safe bonds further, but here with the provisional structure
+            find_bonds=lambda trajectory_file, frames_count: find_safe_bonds(
+                filtered_topology_file,
+                trajectory_file,
+                STABLE_BONDS_FLAG not in self.project.trust,
+                frames_count,
+                provisional_structure,
+                self.register,
+                provisional_cg_selection,
+                self.project.guess_bonds,
+                self.project.ignore_bonds,
+            ),
         )
         _commit_incomplete_output(incompleted_imaged_trajectory_file, imaged_trajectory_file)
         # Update the cache
@@ -417,7 +439,7 @@ def process_input_files(
     # Correct the structure
     # This function reads and or modifies the following MD variables:
     #   snapshots, reference_bonds, register, cache, mercy, trust
-    structure_corrector(
+    chains_changed = structure_corrector(
         structure=provisional_structure,
         input_trajectory_file=imaged_trajectory_file,
         input_topology_file=filtered_topology_file,
@@ -438,6 +460,8 @@ def process_input_files(
         ignore_bonds=self.project.ignore_bonds,
         chainer=input_chainer,
     )
+    # Save if chains were changed, since selections by chain may not select the same atoms after the correction
+    self.cache.update(CHAINS_CHANGED_FLAG, chains_changed)
 
     # If the corrected output exists then use it
     # Otherwise use the previous step files

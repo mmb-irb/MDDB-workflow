@@ -142,6 +142,8 @@ FILTERED_STRUCTURE = 'filtered.cif'
 FILTERED_TRAJECTORY = 'filtered.xtc'
 
 IMAGED = 'imaged'
+# Value of the automatic image, saved in the cache
+AUTO_IMAGE_FLAG = 'auto_image'
 IMAGED_STRUCTURE = 'imaged.cif'
 IMAGED_TRAJECTORY = 'imaged.xtc'
 
@@ -151,6 +153,9 @@ CORRECTED_TRAJECTORY = 'corrected.xtc'
 
 # Output core files
 STANDARD_TOPOLOGY_FILENAME = 'topology.json'
+# Processed topology when the input topology is a standard topology (e.g. downloaded from a remote project)
+# It must not be named as the standard topology, which is loaded in the database (see generate_topology)
+PROCESSED_STANDARD_TOPOLOGY_FILENAME = 'processed_topology.json'
 STRUCTURE_FILENAME = 'structure.cif'
 # Output structure filename in older versions of the workflow
 LEGACY_STRUCTURE_FILENAME = 'structure.pdb'
@@ -277,6 +282,8 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 # Set register cache flags
 SNAPSHOTS_FLAG = 'snapshots'
 BROKEN_PBC_FLAG = 'broken_pbc'
+# Set when the structure corrector changed the chain of any atom
+CHAINS_CHANGED_FLAG = 'chains_changed'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
 
 # Set the different test and warning flags
@@ -707,7 +714,7 @@ PDB_REFERENCE_VERSION = '0.0.6'
 PROJECT_METADATA_VERSION = '0.0.8'
 
 # Topology version
-TOPOLOGY_VERSION = '0.2.0'
+TOPOLOGY_VERSION = '0.2.1'
 
 # Analysis versions
 APL_ANALYSIS_VERSION = '0.0.1'
