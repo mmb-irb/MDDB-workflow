@@ -153,7 +153,7 @@ def generate_topology (
     residue_species_indices = [ None ] * residue_count
     residue_numbers = [ None ] * residue_count
     # Icodes are saved as a dictionary since usually only a few residues have icodes (or none)
-    # Resiude ids are used as keys and, when loaded to mongo, they will become strings
+    # Residue indices are used as keys, written as strings since JSON and BSON keys must be strings
     # Saving icodes as an array would be unefficient since it will result in an array filled with nulls
     residue_icodes = {}
     residue_chain_indices = [ None ] * residue_count
@@ -164,7 +164,7 @@ def generate_topology (
         residue_species_indices[index] = residue_species_map[residue.name]
         residue_numbers[index] = residue.number
         if residue.icode:
-            residue_icodes[index] = residue.icode
+            residue_icodes[str(index)] = residue.icode
         residue_chain_indices[index] = residue.chain.index
 
     # In case there are not icodes at all set the icodes as None (i.e. null for mongo)
