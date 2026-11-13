@@ -1023,8 +1023,8 @@ class MD:
             return residues
         return getter
 
-    @staticmethod
     def _parse_input_selection(
+        self,
         name: str,
         label: str,
         selection_string: Optional[str],
@@ -1040,7 +1040,7 @@ class MD:
         If must select is set then a VMD selection which selects no atoms is an error.
         If a fake mass is passed then selected atoms get it in the gromacs masses file, since they are not real atoms.
         """
-        if verbose: print(f'Setting {name} atoms selection')
+        if verbose: print(f'Setting {name} atoms selection in {self}')
         is_automatic, additional_selection_string = parse_automatic_selection(selection_string)
         if is_automatic:
             if not guess:
