@@ -145,6 +145,12 @@ def helical_parameters (
         print(' There are no nucleic acids')
         return
 
+    # Curves+ and the cpptraj hydrogen bonds need atomistic bases, so coarse grain nucleic acids are left out
+    selection -= structure.select_cg()
+    if not selection:
+        print(' There are no atomistic nucleic acids. Coarse grain nucleic acids are not supported')
+        return
+
     # Check curves is installed
     if not exists(curves_path):
         raise EnvironmentError(' Cannot find curves path. Is Curves+ installed?')
