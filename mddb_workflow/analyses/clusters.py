@@ -80,7 +80,10 @@ def clusters_analysis(
     output_analysis_filepath = f'{output_directory}/{OUTPUT_CLUSTERS_FILENAME}'
     output_screenshot_filepath = f'{output_directory}/{OUTPUT_CLUSTER_SCREENSHOT_FILENAMES}'
 
-    traj = mdt.load(trajectory_file.path, top=structure_file.path)
+    # Load only the atoms used by some run, since the whole system may not fit in memory
+    loaded_atom_indices = np.array(sorted(set().union(*[run['selection'].atom_indices for run in runs])))
+    traj = mdt.load(trajectory_file.path, top=structure_file.path, atom_indices=loaded_atom_indices)
+    full_topology = mdt.load_topology(structure_file.path)
 
     auxiliar_structure = structure.copy()
     output_summary = []
@@ -98,11 +101,14 @@ def clusters_analysis(
         n_atoms = len(atom_indices)
         print(f'Extracting features for {name} -> {analysis_name} ({n_atoms} atoms, {traj.n_frames} frames)')
 
+        # Positions of the selected atoms in the loaded trajectory
+        loaded_positions = np.searchsorted(loaded_atom_indices, atom_indices)
+
         # Superpose all frames to frame 0 on the selected atoms to remove rigid-body motion
-        traj.superpose(traj, 0, atom_indices=atom_indices)
+        traj.superpose(traj, 0, atom_indices=loaded_positions)
 
         # Build feature matrix: (n_frames, n_atoms * 3) Cartesian coordinates
-        features = traj.xyz[:, atom_indices, :].reshape(traj.n_frames, -1)
+        features = traj.xyz[:, loaded_positions, :].reshape(traj.n_frames, -1)
 
         # Reduce dimensionality with PCA
         # Coordinates are not rescaled: they are all displacements in the same units, so atoms that
@@ -237,6 +243,17 @@ def clusters_analysis(
         least_representative_frames = []
         screenshot_parameters = None
         print(' Generating cluster screenshots')
+        # Screenshots need all atoms, so their frames are read one by one from the trajectory file
+        # and superposed to the first frame on the selected atoms, as done with the features
+        trajectory_reader = mdt.open(trajectory_file.path)
+        def load_full_frame(frame: int) -> 'mdt.Trajectory':
+            trajectory_reader.seek(frame)
+            return trajectory_reader.read_as_traj(full_topology, n_frames=1)
+        reference_frame = load_full_frame(0)
+        def load_superposed_coordinates(frame: int) -> np.ndarray:
+            full_frame = load_full_frame(frame)
+            full_frame.superpose(reference_frame, 0, atom_indices=atom_indices)
+            return full_frame.xyz[0] * 10
         for c, cluster in enumerate(clusters):
             cluster_arr = np.array(cluster)
             centroid = clustering_features[cluster_arr].mean(axis=0)
@@ -248,18 +265,19 @@ def clusters_analysis(
 
             # Build one structure per frame so the screenshot can overlay both
             most_structure = auxiliar_structure.copy()
-            most_structure.set_new_coordinates(traj[most_representative_frame].xyz[0] * 10)
+            most_structure.set_new_coordinates(load_superposed_coordinates(most_representative_frame))
             # Skip the overlay entirely for singleton clusters, where both frames are the same
             least_structure = None
             if least_representative_frame != most_representative_frame:
                 least_structure = auxiliar_structure.copy()
-                least_structure.set_new_coordinates(traj[least_representative_frame].xyz[0] * 10)
+                least_structure.set_new_coordinates(load_superposed_coordinates(least_representative_frame))
 
             screenshot_filepath = output_screenshot_filepath.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
             screenshot_file = File(screenshot_filepath)
             reprint(f' Generating cluster screenshot {c+1}/{n_clusters}')
             screenshot_parameters = get_screenshot(most_structure, screenshot_file, cg_selection,
                 parameters=screenshot_parameters, reference_structure=least_structure)
+        trajectory_reader.close()
 
         output_clusters = []
         for cluster_frames, most_representative_frame, least_representative_frame in zip(
