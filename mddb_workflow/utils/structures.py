@@ -2139,11 +2139,13 @@ class Structure:
         """
         if syntax == 'vmd':
             vmd_format = self.get_vmd_format()
-            # Chain names may be changed in the PDB so selections by chain could select the wrong atoms
-            if vmd_format == 'pdb' and 'chain' in selection_string.lower():
+            # Chain names longer than 1 character are changed in the PDB so selections by chain could select the wrong atoms
+            # If all chain names have 1 character then they are kept as they are and the selection is fine
+            if vmd_format == 'pdb' and 'chain' in selection_string.lower() \
+                and any(len(chain.name) > 1 for chain in self.chains):
                 raise ToolError(f'Selection "{selection_string}" can not use chains with this structure.\n'
                     '  VMD can not read mmCIF files with non-standard elements (e.g. coarse grain) so it is given a PDB,\n'
-                    '  where chain names may be changed. Please select atoms by other means (e.g. residue numbers).')
+                    '  where chain names with more than 1 character are changed. Please select atoms by other means (e.g. residue numbers).')
             # Generate a structure file for vmd to read it
             auxiliar_vmd_filepath = get_auxiliar_vmd_filepath(vmd_format)
             self.generate_file(auxiliar_vmd_filepath, show_warnings=False, accept_limitations=True)
