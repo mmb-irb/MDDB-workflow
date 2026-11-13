@@ -39,6 +39,14 @@ def request_interproscan(sequence: str) -> str:
     return parsed_response
 
 
+def check_interproscan_overload(error: HTTPError, message: str):
+    """Stop with a clear message when InterProScan is overloaded.
+    InterProScan answers 400 when its own job system gets too many requests from all users.
+    """
+    if error.code == 400 and 'rate_limit_exceeded' in message:
+        raise RemoteServiceError('InterProScan is overloaded right now. Please try again in a while.')
+
+
 @retry_request
 def check_interproscan_status(jobid: str) -> str:
     """Check the status of the InterProScan job."""
@@ -49,7 +57,9 @@ def check_interproscan_status(jobid: str) -> str:
             return response.read().decode("utf-8")
     # Show what InterProScan says and let the error go up so server errors are retried
     except HTTPError as error:
-        print(error.read().decode())
+        message = error.read().decode()
+        print(message)
+        check_interproscan_overload(error, message)
         raise
 
 
@@ -63,7 +73,9 @@ def check_interproscan_result(jobid: str) -> dict:
             return json.loads(response.read().decode("utf-8"))
     # Show what InterProScan says and let the error go up so server errors are retried
     except HTTPError as error:
-        print(error.read().decode())
+        message = error.read().decode()
+        print(message)
+        check_interproscan_overload(error, message)
         raise
 
 
