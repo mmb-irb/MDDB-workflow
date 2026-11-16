@@ -1,5 +1,6 @@
 from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json, load_json
+from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.constants import OUTPUT_DENSITY_FILENAME, DENSITY_ANALYSIS_VERSION
 from mddb_workflow.tools.membrane_mapping import get_bilayers, get_bilayer_polar_atoms
 from mddb_workflow.utils.type_hints import *
@@ -49,7 +50,7 @@ def density(
         'selection': polar_atoms,
         'number': {}, 'mass': {}, 'charge': {}, 'electron': {}
     })
-    pytraj_masks.append('@' + ', '.join(map(str, polar_atoms)))
+    pytraj_masks.append(Selection(polar_atoms).to_pytraj())
 
     # Run pytraj
     for density_type in density_types:
