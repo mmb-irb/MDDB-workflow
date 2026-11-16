@@ -91,7 +91,9 @@ def test_pdb_chain_limit():
 
 @pytest.mark.unit_int
 def test_vmd_chain_selection_with_pdb():
-    """VMD gets a PDB when elements are not standard, so selections by chain are not allowed."""
+    """VMD gets a PDB when elements are not standard, where chain names longer than 1 character are changed.
+    Selections by chain are allowed only when all chain names have 1 character.
+    """
     structure = Structure.from_pdb(build_waters_pdb(3))
     assert structure.get_vmd_format() == 'cif'
     assert len(structure.select('chain A')) == 9
@@ -99,8 +101,11 @@ def test_vmd_chain_selection_with_pdb():
         atom.element = 'Cg'
     assert structure.get_vmd_format() == 'pdb'
     assert len(structure.select('resname HOH')) == 9
+    assert len(structure.select('resname HOH and chain A')) == 9
+    structure.chains[0].name = 'AA'
+    assert len(structure.select('resname HOH')) == 9
     with pytest.raises(ToolError):
-        structure.select('resname HOH and chain A')
+        structure.select('resname HOH and chain AA')
 
 
 @pytest.mark.unit_int

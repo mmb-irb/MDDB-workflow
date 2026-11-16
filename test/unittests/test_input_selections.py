@@ -24,9 +24,18 @@ def build_structure() -> Structure:
     return Structure.from_pdb('\n'.join(lines) + '\n')
 
 
+class FakeMD(MD):
+    """An MD with just the selection inputs."""
+    def __init__(self, **inputs):
+        self.inputs_values = inputs
+        self.name = 'replica 1'
+    input_cg_selection = property(lambda self: self.inputs_values.get('cg'))
+    input_dummy_selection = property(lambda self: self.inputs_values.get('dummy'))
+
+
 def parse(selection_string, must_select: bool = False) -> list[int]:
     """Parse a selection string where the automatic guess is the first water."""
-    selection = MD._parse_input_selection('test', 'TEST', selection_string, build_structure(),
+    selection = FakeMD()._parse_input_selection('test', 'TEST', selection_string, build_structure(),
         lambda: Selection([0, 1, 2]), must_select=must_select)
     return list(selection.atom_indices)
 
@@ -76,15 +85,6 @@ def test_coherent_md_values():
     project = FakeProject([ reference_md, SimpleNamespace(cg_residues=[1, 2]) ])
     with pytest.raises(InputError, match='Coarse grain residues must be the same in every MD'):
         project.cg_residues
-
-
-class FakeMD(MD):
-    """An MD with just the selection inputs."""
-    def __init__(self, **inputs):
-        self.inputs_values = inputs
-        self.name = 'replica 1'
-    input_cg_selection = property(lambda self: self.inputs_values.get('cg'))
-    input_dummy_selection = property(lambda self: self.inputs_values.get('dummy'))
 
 
 @pytest.mark.unit_int
