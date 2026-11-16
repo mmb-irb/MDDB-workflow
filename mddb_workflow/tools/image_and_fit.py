@@ -31,6 +31,9 @@ AUTO_TRANSLATION_CUTOFF = 0.5
 # Number of frames read at once in the no-jump step
 NO_JUMP_CHUNK_SIZE = 100
 
+# Precision (nm) of the coordinates in xtc files
+XTC_PRECISION = 0.001
+
 # Number of frames along the trajectory where split molecules are searched when the image is automatic
 SPLIT_CHECK_FRAMES = 10
 
@@ -312,6 +315,14 @@ def closest_images(fractional: np.ndarray, box_vectors: np.ndarray) -> np.ndarra
     return images
 
 
+def keep_on_xtc_grid(input_positions: np.ndarray, output_positions: np.ndarray) -> np.ndarray:
+    """Round the shift of every atom to the xtc precision, so atoms read from a xtc file stay on its grid when written.
+    Shifts by whole box vectors are rarely whole precision steps, and when one is half a step (e.g. a box length of 5.9095 nm)
+    atoms of the same molecule would be rounded in opposite directions when written, changing their bonds by one step.
+    """
+    return input_positions + np.round((output_positions - input_positions) / XTC_PRECISION) * XTC_PRECISION
+
+
 def no_jump(
     input_trajectory_file: 'File',
     output_trajectory_file: 'File',
@@ -343,9 +354,11 @@ def no_jump(
             output_xyz = np.empty_like(xyz)
             for i, (positions, box_vectors) in enumerate(zip(xyz, boxes)):
                 pbar.update(1)
-                positions = positions.astype(np.float64) + translation
+                input_positions = positions.astype(np.float64)
+                positions = input_positions + translation
                 if previous_positions is None:
                     if prepare_first_frame: positions = prepare_first_frame(positions, box_vectors.astype(np.float64))
+                    positions = keep_on_xtc_grid(input_positions, positions)
                     previous_positions = positions
                     output_xyz[i] = positions
                     continue
@@ -361,7 +374,7 @@ def no_jump(
                 group_displacements = system_displacement + group_displacements - closest_images(group_displacements, box_vectors)
                 # Remove the whole boxes which separate every atom from where its group says it should be
                 jumps = closest_images(displacements - group_displacements[atom_groups], box_vectors)
-                positions = positions - jumps @ box_vectors
+                positions = keep_on_xtc_grid(input_positions, positions - jumps @ box_vectors)
                 previous_positions = positions
                 output_xyz[i] = positions
             writer.write(output_xyz, time=time, step=step, box=boxes)
@@ -457,7 +470,8 @@ def put_fragments_in_box(
                 pbar.update(1)
                 if not box_vectors.any():
                     raise InputError(f'Frame {step[i]} has no box, so fragments can not be put in the box')
-                positions, box_vectors = positions.astype(np.float64), box_vectors.astype(np.float64)
+                input_positions, box_vectors = positions.astype(np.float64), box_vectors.astype(np.float64)
+                positions = input_positions.copy()
                 inverse_box = np.linalg.inv(box_vectors)
                 for atom_indices in steps:
                     fractional = (positions[atom_indices] - positions[parents[atom_indices]]) @ inverse_box
@@ -469,7 +483,7 @@ def put_fragments_in_box(
                     centers = np.stack([ np.bincount(boxed_atom_fragments, weights=fractional[:, axis]) / boxed_fragment_sizes
                         for axis in range(3) ], axis=1)
                     positions[boxed_atom_indices] -= np.floor(centers)[boxed_atom_fragments] @ box_vectors
-                output_xyz[i] = positions
+                output_xyz[i] = keep_on_xtc_grid(input_positions, positions)
             writer.write(output_xyz, time=time, step=step, box=boxes)
 
 

@@ -1,8 +1,9 @@
-"""Automatic translation of the imaging on synthetic systems, in nm."""
+"""Automatic translation and fragments in the box of the imaging on synthetic systems, in nm."""
+from types import SimpleNamespace
 import mdtraj as mdt
 import numpy as np
 import pytest
-from mddb_workflow.tools.image_and_fit import find_automatic_translation
+from mddb_workflow.tools.image_and_fit import find_automatic_translation, put_fragments_in_box, XTC_PRECISION
 from mddb_workflow.utils.auxiliar import InputError
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
@@ -137,3 +138,24 @@ def test_object_longer_than_box(tmp_path, capsys):
     assert translation[0] == 0
     assert 'fill the whole box along the box vector 1' in capsys.readouterr().out
     assert np.all(fractional_spans(rod + translation, box)[1:] < 0.5)
+
+
+def test_fragments_in_box_keep_bonds(tmp_path):
+    """Molecules far from the box (e.g. water after the no-jump) are put back in the box with the same bonds.
+    The box length is half a step of the xtc grid, so atoms of a molecule could be rounded in opposite directions.
+    """
+    box = np.diag([5.9095, 5.9095, 9])
+    water = np.array([[0, 0, 0], [0.096, 0, 0], [-0.024, 0.093, 0]])
+    centers = np.random.default_rng(0).uniform(0, 5.5, (1000, 3)) + [301, 0, 0]
+    positions = np.round(np.concatenate([center + water for center in centers]), 3)
+    input_file, output_file = File(str(tmp_path / 'input.xtc')), File(str(tmp_path / 'output.xtc'))
+    with mdt.formats.XTCTrajectoryFile(input_file.path, 'w') as writer:
+        writer.write(positions[np.newaxis].astype(np.float32), box=box[np.newaxis].astype(np.float32))
+    atom_bonds = [ [atom + 1, atom + 2] if atom % 3 == 0 else [atom - atom % 3] for atom in range(len(positions)) ]
+    put_fragments_in_box(input_file, output_file, atom_bonds, SimpleNamespace(atom_count=len(positions)), Selection([]))
+    oxygens = np.arange(0, len(positions), 3)
+    def bond_steps(trajectory_file: File) -> np.ndarray:
+        with mdt.formats.XTCTrajectoryFile(trajectory_file.path) as reader:
+            steps = np.rint(reader.read()[0][0].astype(np.float64) / XTC_PRECISION).astype(int)
+        return np.concatenate([steps[oxygens + 1] - steps[oxygens], steps[oxygens + 2] - steps[oxygens]])
+    assert np.array_equal(bond_steps(output_file), bond_steps(input_file))
