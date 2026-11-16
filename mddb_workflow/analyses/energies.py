@@ -13,7 +13,7 @@
 
 # Imports libraries
 from os import mkdir, remove
-from os.path import exists
+from os.path import exists, abspath
 from shutil import copyfile
 from glob import glob
 from subprocess import run, PIPE, CompletedProcess
@@ -76,12 +76,77 @@ CMIP_ATOM_LIMIT = 80000
 GRID_POINTS_LIMIT = 65000000
 # Set the default grid 'cells' size (Å) for all three dimensions
 GRID_UNIT_SIZE = 0.5
-# Atom energies (vdw + es, kcal/mol) above this value are set to 0
-# This step is performed to filter 'infinity' values
+# Set the margin (Å) added on every side of the automatic CMIP grids of both agents to make the grid of the interaction
+# This value was measured on 2026-11-12 (benchmark T2, CMIP variant 'fixed') and it was not tuned
+GRID_MARGIN = 5.0
+# Atom energies (vdw + es, kcal/mol) above this value are set to 0, counted and reported
+# This step is performed to filter 'infinity' values, which come from overlapping atoms (clashes)
+# Large negative values are kept since they happen in real interactions
+# e.g. the Zn2+ of carbonic anhydrase coordinated by sulfonamide ligands, -100 to -110 kcal/mol (PL-REX)
 MAX_ATOM_ENERGY = 100
 # Set an exception to handle internal issues
 OUTPUT_MINING_EXCEPTION = Exception('CMIP output mining failed')
 EXPECTED_CMIP_PDB_LINE_LENGTH = 65
+# CMIP runs in the output directory, with its inputs copied there under these names
+# Paths are short this way: CMIP cuts file paths longer than 150 characters
+CMIP_VDW_FILENAME = 'vdwprm'
+CMIP_INPUTS_CHECKONLY_FILENAME = 'cmip_check.in'
+# Van der Waals parameters for elements missing from the CMIP table (resources/vdwprm): R*/2 (Å), epsilon (kcal/mol),
+# mass and atomic number
+# CMIP matches atom types to the table as prefixes, in the order of the table, so a missing element whose first letter
+# is in the table silently gets that type (e.g. Ca would be carbon) and other missing elements make CMIP fail
+# The table is the Amber parm99 nonbonded set, so missing elements get parameters from the same parm99 file when it
+# has them (Aqvist ions), and otherwise from the Li/Merz 12-6 ion set for TIP3P water in AmberTools
+# (frcmod.ions234lm_126_tip3p), with the 2+ ion when there is one and else the ion of lowest charge
+CMIP_EXTRA_VDW_PARAMETERS = {
+    'Li': (1.137, 0.0183, 6.94, 3),  # parm99 Li+
+    'Be': (0.956, 3.95e-06, 9.01, 4),  # Li/Merz 12-6 Be2+
+    'Al': (1.297, 0.00471279, 26.98, 13),  # Li/Merz 12-6 Al3+
+    'Ca': (1.7131, 0.459789, 40.08, 20),  # parm99 Ca2+
+    'V': (1.364, 0.01067299, 50.94, 23),  # Li/Merz 12-6 V2+
+    'Cr': (1.346, 0.00868178, 52.0, 24),  # Li/Merz 12-6 Cr2+
+    'Mn': (1.407, 0.0168671, 54.94, 25),  # Li/Merz 12-6 Mn2+
+    'Fe': (1.353, 0.00941798, 55.84, 26),  # Li/Merz 12-6 Fe2+
+    'Co': (1.299, 0.00483892, 58.93, 27),  # Li/Merz 12-6 Co2+
+    'Ni': (1.255, 0.0026232, 58.69, 28),  # Li/Merz 12-6 Ni2+
+    'Cu': (1.218, 0.00148497, 63.55, 29),  # Li/Merz 12-6 Cu2+
+    'Rb': (2.956, 0.00017, 85.47, 37),  # parm99 Rb+
+    'Sr': (1.81, 0.22132374, 87.62, 38),  # Li/Merz 12-6 Sr2+
+    'Y': (1.602, 0.08034231, 88.91, 39),  # Li/Merz 12-6 Y3+
+    'Zr': (1.519, 0.04525501, 91.22, 40),  # Li/Merz 12-6 Zr4+
+    'Pd': (1.303, 0.00509941, 106.42, 46),  # Li/Merz 12-6 Pd2+
+    'Ag': (1.336, 0.00770969, 107.87, 47),  # Li/Merz 12-6 Ag2+
+    'Cd': (1.412, 0.01773416, 112.41, 48),  # Li/Merz 12-6 Cd2+
+    'In': (1.461, 0.02808726, 114.82, 49),  # Li/Merz 12-6 In3+
+    'Sn': (1.666, 0.11617738, 118.71, 50),  # Li/Merz 12-6 Sn2+
+    'Cs': (3.395, 8.06e-05, 132.91, 55),  # parm99 Cs+
+    'Ba': (2.019, 0.40664608, 137.33, 56),  # Li/Merz 12-6 Ba2+
+    'La': (1.718, 0.15060822, 138.91, 57),  # Li/Merz 12-6 La3+
+    'Ce': (1.741, 0.16721338, 140.12, 58),  # Li/Merz 12-6 Ce3+
+    'Pr': (1.733, 0.16134811, 140.91, 59),  # Li/Merz 12-6 Pr3+
+    'Nd': (1.681, 0.12564307, 144.24, 60),  # Li/Merz 12-6 Nd3+
+    'Sm': (1.819, 0.22878796, 150.36, 62),  # Li/Merz 12-6 Sm2+
+    'Eu': (1.802, 0.21475916, 151.96, 63),  # Li/Merz 12-6 Eu2+
+    'Gd': (1.623, 0.09126804, 157.25, 64),  # Li/Merz 12-6 Gd3+
+    'Tb': (1.63, 0.09509276, 158.93, 65),  # Li/Merz 12-6 Tb3+
+    'Dy': (1.609, 0.0838924, 162.5, 66),  # Li/Merz 12-6 Dy3+
+    'Er': (1.602, 0.08034231, 167.26, 68),  # Li/Merz 12-6 Er3+
+    'Tm': (1.602, 0.08034231, 168.93, 69),  # Li/Merz 12-6 Tm3+
+    'Yb': (1.642, 0.10185975, 173.04, 70),  # Li/Merz 12-6 Yb2+
+    'Lu': (1.588, 0.07351892, 174.97, 71),  # Li/Merz 12-6 Lu3+
+    'Hf': (1.499, 0.03868661, 178.49, 72),  # Li/Merz 12-6 Hf4+
+    'Pt': (1.266, 0.00307642, 195.08, 78),  # Li/Merz 12-6 Pt2+
+    'Hg': (1.407, 0.0168671, 200.59, 80),  # Li/Merz 12-6 Hg2+
+    'Tl': (1.513, 0.04321029, 204.38, 81),  # Li/Merz 12-6 Tl3+
+    'Pb': (1.745, 0.17018074, 207.2, 82),  # Li/Merz 12-6 Pb2+
+    'Ra': (2.019, 0.40664608, 226.0, 88),  # Li/Merz 12-6 Ra2+
+    'Th': (1.708, 0.1436416, 232.04, 90),  # Li/Merz 12-6 Th4+
+    'U': (1.684, 0.12758274, 238.03, 92),  # Li/Merz 12-6 U4+
+    'Pu': (1.662, 0.11371963, 244.0, 94),  # Li/Merz 12-6 Pu4+
+}
+# Elements missing from the CMIP table which take the CMIP type of a chemically similar element
+# Selenium (selenomethionine, selenocysteine) takes the type of sulfur, as CMIP gave it by prefix up to version 1.1.0
+CMIP_ELEMENT_ALIASES = {'Se': 'S'}
 
 
 class Agent(NamedTuple):
@@ -169,6 +234,8 @@ def energies(
 
     # Check the number of atoms on each interacting agent
     # If there is any agent with too many atoms CMIP will fail so we must skip this specific energies analysis by now
+    # Note that the input interactions are not modified
+    non_exceeding_interactions = []
     for interaction in supported_interactions:
         exceeds = False
         for agent in ['1', '2']:
@@ -181,7 +248,8 @@ def energies(
             warn(
                 f'{interaction["name"]} is exceeding the CMIP atom count limit of {CMIP_ATOM_LIMIT} and it will be skipped for this analysis'
             )
-            interaction['exceeds'] = True
+            continue
+        non_exceeding_interactions.append(interaction)
 
     # This analysis produces many residual output files
     # Create a new folder to store all output files so they do not overcrowd the main directory
@@ -197,23 +265,57 @@ def energies(
     # Set each atom element in CMIP format
     set_cmip_elements(energies_structure)
 
+    # Check every element has CMIP van der Waals parameters
+    # Elements missing from the CMIP table get parameters from AmberTools, and interactions with other elements are skipped
+    cmip_vdw_types = read_cmip_vdw_types(CMIP_VDW_SOURCE)
+    dummy_atom_indices = set(dummy_selection.atom_indices)
+    extra_vdw_elements = set()
+    computed_interactions = []
+    for interaction in non_exceeding_interactions:
+        elements = {
+            energies_structure.atoms[index].element
+            for index in interaction['atom_indices_1'] + interaction['atom_indices_2']
+            if index not in dummy_atom_indices
+        }
+        missing_elements = elements - cmip_vdw_types
+        unsupported_elements = missing_elements - set(CMIP_EXTRA_VDW_PARAMETERS)
+        if unsupported_elements:
+            warn(
+                f'{interaction["name"]} has atoms of elements with no van der Waals parameters for CMIP '
+                f'({", ".join(sorted(unsupported_elements))}) and it will be skipped for this analysis'
+            )
+            continue
+        extra_vdw_elements |= missing_elements
+        computed_interactions.append(interaction)
+    if len(computed_interactions) == 0:
+        print('No interactions can be calculated')
+        return
+    if extra_vdw_elements:
+        warn(
+            f'Elements {", ".join(sorted(extra_vdw_elements))} are not in the CMIP van der Waals table. '
+            'They get the parameters of their ions in AmberTools (Aqvist ions in parm99, or Li/Merz 12-6 ions)'
+        )
+
     # Set the method to calculate the energies of each frame
     engine = CmipEngine(
-        output_directory, charges, energies_structure, dummy_selection, debug
+        output_directory,
+        charges,
+        energies_structure,
+        dummy_selection,
+        debug,
+        extra_vdw_elements,
     )
 
     # Extract the energies for each frame in a reduced trajectory
     frames, frame_step, frame_count = get_pdb_frames(
         energies_structure, trajectory_file.path, snapshots, frames_limit
     )
-    non_exceeding_interactions = [
-        interaction
-        for interaction in supported_interactions
-        if not interaction.get('exceeds', False)
-    ]
     interactions_data = get_interactions_data(
-        frames, non_exceeding_interactions, engine, energies_backup, verbose
+        frames, computed_interactions, engine, energies_backup, verbose
     )
+
+    # Report the atoms set to 0 since their energies are too high
+    warn_zeroed_atoms(computed_interactions, interactions_data)
 
     # Cleanup here some residual files since the engine is not to be run again
     engine.cleanup()
@@ -221,7 +323,7 @@ def energies(
     # Now calculated atom average values through all frames for each pair of interaction agents
     save_outputs(
         interactions_data,
-        non_exceeding_interactions,
+        computed_interactions,
         frame_step,
         output_analysis_filepath,
     )
@@ -280,7 +382,7 @@ def get_interaction_frame_energies(
     # Get covalent bonds between both agents, if any
     # They will be not taken in count during the calculation
     # Otherwise we would have a huge energy peak in this atom since they are very close
-    strong_bonds = interaction.get('strong_bonds', None)
+    strong_bonds = interaction.get('strong_bonds', None) or []
 
     # Get interaction and agent names, just for the logs
     interaction_name = interaction['name']
@@ -308,7 +410,12 @@ def get_interaction_frame_energies(
         agent1_atom_energies = [(0, 0, 0) for index in agent1.atom_indices]
         agent2_atom_energies = [(0, 0, 0) for index in agent2.atom_indices]
         print(ERASE_2_PREVIOUS_LINES)
-        return {'agent1': agent1_atom_energies, 'agent2': agent2_atom_energies}
+        return {
+            'agent1': agent1_atom_energies,
+            'agent2': agent2_atom_energies,
+            'agent1_zeroed': 0,
+            'agent2_zeroed': 0,
+        }
 
     agent1_atom_energies, agent2_atom_energies = engine(
         frame_structure, agent1, agent2, strong_bonds
@@ -326,6 +433,10 @@ def get_interaction_frame_energies(
                 f'Mismatch in the number values and atoms in agent {agent_number}'
             )
 
+    # Set the energies of clashing atoms to 0, and count them
+    agent1_atom_energies, agent1_zeroed = zero_clashes(agent1_atom_energies)
+    agent2_atom_energies, agent2_zeroed = zero_clashes(agent2_atom_energies)
+
     # Print total energies at the end for every agent if the verbose flag has been passed
     if verbose:
         for agent_name, agent_energies in zip(
@@ -333,6 +444,8 @@ def get_interaction_frame_energies(
         ):
             total_vdw = total_es = total_both = 0
             for atom_energies in agent_energies:
+                if atom_energies is None:
+                    continue
                 total_vdw += atom_energies[0]
                 total_es += atom_energies[1]
                 total_both += atom_energies[2]
@@ -343,7 +456,12 @@ def get_interaction_frame_energies(
     # Erase the 3 previous log lines
     print(ERASE_3_PREVIOUS_LINES)
 
-    return {'agent1': agent1_atom_energies, 'agent2': agent2_atom_energies}
+    return {
+        'agent1': agent1_atom_energies,
+        'agent2': agent2_atom_energies,
+        'agent1_zeroed': agent1_zeroed,
+        'agent2_zeroed': agent2_zeroed,
+    }
 
 
 def are_far_apart(
@@ -392,6 +510,9 @@ def save_outputs(
         # Format data
         agent1_output = format_data([frame['agent1'] for frame in data], frame_step)
         agent2_output = format_data([frame['agent2'] for frame in data], frame_step)
+        # Add the number of atoms set to 0 in each frame (clashes)
+        agent1_output['zeroed'] = [frame.get('agent1_zeroed', 0) for frame in data]
+        agent2_output['zeroed'] = [frame.get('agent2_zeroed', 0) for frame in data]
         # Format the results data and append it to the output data
         output = {
             'name': name,
@@ -410,7 +531,7 @@ class CmipEngine:
     """Interaction energies with CMIP: electrostatics with the Poisson-Boltzmann equation on a grid and van der Waals.
 
     Each agent is calculated as a guest in the potential of the other agent (the host).
-    CMIP input and output files are written in the output directory.
+    CMIP runs in the output directory, where its input and output files are written.
     """
 
     def __init__(
@@ -420,6 +541,7 @@ class CmipEngine:
         cmip_structure: 'Structure',
         dummy_selection: 'Selection',
         debug: bool = False,
+        extra_vdw_elements: set = set(),
     ):
         self.output_directory = output_directory
         self.charges = charges
@@ -430,6 +552,15 @@ class CmipEngine:
         self.debug = debug
         # Set the auxiliar files further required as CMIP inputs
         self.cmip_inputs_source = File(CMIP_INPUTS_SOURCE)
+        # Copy the CMIP inputs which do not change along the analysis in the output directory
+        # Add the parameters of the elements missing from the van der Waals table
+        write_cmip_vdw_table(
+            f'{output_directory}/{CMIP_VDW_FILENAME}', extra_vdw_elements
+        )
+        copyfile(
+            CMIP_INPUTS_CHECKONLY_SOURCE,
+            f'{output_directory}/{CMIP_INPUTS_CHECKONLY_FILENAME}',
+        )
         # Define an additional file generated by CMIP which must be handled (written in the energies folder and deleted)
         self.restart_file = File(output_directory + '/restart')
 
@@ -554,7 +685,7 @@ class CmipEngine:
             self.restart_file.remove()
         # Remove fortran unit files generated when running CMIP
         # Note that we can not define where these files are written but they appear where CMIP is run
-        fortran_unit_files = glob('fort.*')
+        fortran_unit_files = glob(f'{self.output_directory}/fort.*')
         for filepath in fortran_unit_files:
             remove(filepath)
 
@@ -582,7 +713,9 @@ def pdb2cmip(
     *Dummy atoms are not considered in the calculation but they stand for a region with low dielectric.
     If removed, the void left by these atoms would be considered to be filled with solvent, which has a high dielectric.
     These dielectric differences have a strong impact on the calculation.
+    For this reason dummy atoms keep their element, which sets their volume, so the cavity has the shape of both agents.
     By default we set as dummy host atoms involved in a covalent bond with guest atoms.
+    Atoms which are dummy in general (e.g. virtual sites) have no volume, so they are written as hydrogens.
     """
     # Get atom indices for host atoms involved in a covalent bond with guest atoms
     # If this is the host, they will be further marked as dummy for CMIP to ignore them in the calculations
@@ -593,21 +726,22 @@ def pdb2cmip(
             strong_bond_atom_indices += bond
     # Set atoms to be flagged as dummy
     # Start including atoms which are actually "dummy", not in the sense of CMIP, but in general
-    dummy_atom_indices = set(dummy_selection.atom_indices)
+    general_dummy_atom_indices = set(dummy_selection.atom_indices)
+    dummy_atom_indices = set(general_dummy_atom_indices)
     # If this is to be the host file then set guest atoms and strong bond atoms dummy
     if host_file:
         dummy_atom_indices |= set(strong_bond_atom_indices)
         dummy_atom_indices |= set(guest_selection.atom_indices)
     # Set which atoms must be kept in the output file
     # If this is the host file then keep both host and guest atoms
-    # If this is the guest file then keep only guest atoms
-    # Always remove strong bond atoms in the guest
+    # Host files keep the strong bond atoms of both agents as dummies, so the cavity is the same in both directions
+    # If this is the guest file then keep only guest atoms, but remove its strong bond atoms
     selection = host_selection + guest_selection if host_file else guest_selection
-    strong_bond_selection = frame_structure.select_atom_indices(
-        strong_bond_atom_indices
-    )
-    guest_strong_bonds = guest_selection & strong_bond_selection
-    selection -= guest_strong_bonds
+    if not host_file:
+        strong_bond_selection = frame_structure.select_atom_indices(
+            strong_bond_atom_indices
+        )
+        selection -= guest_selection & strong_bond_selection
     # Filter the selected atoms in the structure
     selected_structure = frame_structure.filter(selection)
     # Set atom charges (non standard attribute), which are used further to write the adapted cmip pdb
@@ -645,14 +779,16 @@ def pdb2cmip(
                 '{:.3f}'.format(coord).rjust(8) for coord in coords
             ]
             charge = '{:.4f}'.format(atom.charge).rjust(7)
-            # In case this atom is making an strong bond between both interacting agents we add an 'X' before the element
-            # This way CMIP will ignore the atom. Otherwise it would return high non-sense Van der Waals values
+            # Dummy atoms (the other agent in host files, and atoms making a strong bond between both interacting agents)
+            # get an 'X' before the element, so CMIP ignores their charge and their Van der Waals energy
+            # Otherwise atoms in a strong bond would return high non-sense Van der Waals values
             real_index = selection.atom_indices[a]
             # Set if atom is to be ignored
             is_dummy = real_index in dummy_atom_indices
             cmip_dummy_flag = 'X' if is_dummy else ''
-            # Set dummy atoms as hydrogen, so their VDW is minimal
-            element = 'H' if is_dummy else atom.element
+            # Keep the element of dummy atoms, which sets their volume in the low dielectric cavity
+            # Atoms which are dummy in general have no volume, so they are set as hydrogens
+            element = 'H' if real_index in general_dummy_atom_indices else atom.element
             # Set the tail
             tail = cmip_dummy_flag + element
             atom_line = (
@@ -684,36 +820,50 @@ def run_cmip(
     host: File,
     output_file: File,
     restart_file: File,
+    directory: str,
 ) -> CompletedProcess:
-    """Run CMIP with the given inputs, probe (guest) and host, and the CMIP van der Waals parameters."""
-    vdw_source = File(CMIP_VDW_SOURCE)
+    """Run CMIP with the given inputs, probe (guest) and host, and the CMIP van der Waals parameters.
+
+    CMIP runs in the given directory, where all files must be, so the Fortran unit files it leaves (fort.*) stay there.
+    """
+    files = [cmip_inputs, probe, host, output_file, restart_file]
+    for file in files:
+        if abspath(file.basepath) != abspath(directory):
+            raise ValueError(
+                f'CMIP file {file.path} is not in the CMIP directory {directory}'
+            )
+    cmip_inputs, probe, host, output_file, restart_file = [
+        file.filename for file in files
+    ]
     return run(
         [
             'cmip',
             '-i',
-            cmip_inputs.path,
+            cmip_inputs,
             '-pr',
-            probe.path,
+            probe,
             '-vdw',
-            vdw_source.path,
+            CMIP_VDW_FILENAME,
             '-hs',
-            host.path,
+            host,
             '-byat',
-            output_file.path,
+            output_file,
             '-rst',
-            restart_file.path,
+            restart_file,
         ],
         stdout=PIPE,
         stderr=PIPE,
+        cwd=directory,
     )
 
 
 def get_cmip_grid(
-    probe: File, host: File, output_file: File, restart_file: File
+    probe: File, host: File, output_file: File, restart_file: File, directory: str
 ) -> tuple[tuple, tuple, tuple]:
     """Run CMIP in 'checkonly' mode (i.e. start and stop) and mine the center, density and units of its grid."""
+    cmip_inputs = File(f'{directory}/{CMIP_INPUTS_CHECKONLY_FILENAME}')
     cmip_process = run_cmip(
-        File(CMIP_INPUTS_CHECKONLY_SOURCE), probe, host, output_file, restart_file
+        cmip_inputs, probe, host, output_file, restart_file, directory
     )
     cmip_logs = cmip_process.stdout.decode()
     # Mine the grid dimensions from CMIP logs
@@ -746,10 +896,18 @@ def adapt_cmip_grid(
 
     # Run CMIP in 'checkonly' mode and save the grid dimensions output, for each agent
     agent1_center, agent1_density, agent1_units = get_cmip_grid(
-        agent1_cmip_pdb, agent2_cmip_pdb, cmip_checkonly_output, restart_file
+        agent1_cmip_pdb,
+        agent2_cmip_pdb,
+        cmip_checkonly_output,
+        restart_file,
+        output_directory,
     )
     agent2_center, agent2_density, agent2_units = get_cmip_grid(
-        agent2_cmip_pdb, agent1_cmip_pdb, cmip_checkonly_output, restart_file
+        agent2_cmip_pdb,
+        agent1_cmip_pdb,
+        cmip_checkonly_output,
+        restart_file,
+        output_directory,
     )
 
     # Calculate grid dimensions for a new grid which contains both previous grids
@@ -786,21 +944,34 @@ def adapt_cmip_grid(
 
 
 def cap_grid_points(density: list, grid_unit_size: float) -> tuple[list, float]:
-    """Reduce the grid density in case the number of grid points exceeds the GRID_POINTS_LIMIT.
+    """Coarsen the grid in case the number of grid points exceeds the GRID_POINTS_LIMIT, keeping its box.
 
-    Reduce all dimension densities in proportion and expand the grid units size to compensate.
-    Return the new density and grid unit size.
+    The grid unit size grows by the cube root of the excess, rounded up to 0.001 Å, and then by 0.001 Å until the grid
+    fits, so the grid is only as coarse as needed. Return the new density and grid unit size.
     """
+
+    def count_points(density: list) -> int:
+        return (density[0] + 1) * (density[1] + 1) * (density[2] + 1)
+
     # Calculate the amount of total points with current parameters
-    current_grid_points = (density[0] + 1) * (density[1] + 1) * (density[2] + 1)
+    current_grid_points = count_points(density)
     if current_grid_points <= GRID_POINTS_LIMIT:
         return density, grid_unit_size
     print(f'WARNING: Grid points limit is exceeded ({current_grid_points})')
-    proportion = GRID_POINTS_LIMIT / current_grid_points
-    density = [math.ceil(dimension * proportion) for dimension in density]
-    grid_unit_size = math.ceil(grid_unit_size / proportion * 1000) / 1000
-    print(f'WARNING: Grid resolution has been reduced -> unit size = {grid_unit_size}')
-    return density, grid_unit_size
+    box_size = [dimension * grid_unit_size for dimension in density]
+    # Work in thousandths of Å to avoid rounding errors
+    excess = current_grid_points / GRID_POINTS_LIMIT
+    unit_size_milli = math.ceil(grid_unit_size * 1000 * excess ** (1 / 3))
+    while True:
+        new_density = [math.ceil(size * 1000 / unit_size_milli) for size in box_size]
+        if count_points(new_density) <= GRID_POINTS_LIMIT:
+            break
+        unit_size_milli += 1
+    new_grid_unit_size = unit_size_milli / 1000
+    print(
+        f'WARNING: Grid resolution has been reduced -> unit size = {new_grid_unit_size}'
+    )
+    return new_density, new_grid_unit_size
 
 
 def write_cmip_grid(
@@ -838,17 +1009,16 @@ def write_cmip_debug_files(
     agent2_cmip_guest: File,
     agent1_cmip_host: File,
 ):
-    """Leave everything ready to run CMIP by hand in the output directory, with a README, and stop the workflow."""
-    vdw_source = File(CMIP_VDW_SOURCE)
+    """Leave everything ready to run CMIP by hand in the output directory, with a README, and stop the workflow.
+
+    The van der Waals parameters are already in the output directory, where CMIP runs.
+    """
     debug_script_source = File(ENERGIES_DEBUG_SCRIPT_SOURCE)
     # Copy in the energies folder a small python script used to sum output energies
     debug_script_filename = debug_script_source.filename
     debug_script = File(f'{output_directory}/{debug_script_filename}')
     copyfile(debug_script_source.path, debug_script.path)
-    # Copy in the energies folder the VDM parameters input file
-    debug_vdw_filename = vdw_source.filename
-    debug_vdw_parameters = File(f'{output_directory}/{debug_vdw_filename}')
-    copyfile(vdw_source.path, debug_vdw_parameters.path)
+    debug_vdw_filename = CMIP_VDW_FILENAME
     # Set auxiliar output filenames
     debug_output_1 = 'first_output.pdb'
     debug_output_2 = 'second_output.pdb'
@@ -879,8 +1049,13 @@ def get_cmip_energies(
     """Run the CMIP software to get the energies of every guest atom in the potential of the host."""
     # Set the cmip output filename, which is to be read rigth after it is generated
     cmip_output_file = File(output_directory + '/cmip_output.pdb')
+    # Remove the output of a previous run, so it is never read if CMIP fails
+    if cmip_output_file.exists:
+        cmip_output_file.remove()
     # Run cmip
-    cmip_process = run_cmip(cmip_inputs, guest, host, cmip_output_file, restart_file)
+    cmip_process = run_cmip(
+        cmip_inputs, guest, host, cmip_output_file, restart_file, output_directory
+    )
     cmip_logs = cmip_process.stdout.decode()
     # If the output does note exist at this poin then it means something went wrong with CMIP
     if not exists(cmip_output_file.path):
@@ -900,10 +1075,7 @@ def get_cmip_energies(
 
 
 def mine_cmip_atom_energies(line: str) -> tuple:
-    """Mine the Van der Waals (vdw), electrostatic (es) and total (both) energies of an atom from a CMIP output line.
-
-    Atoms with a total energy above MAX_ATOM_ENERGY get 0 for all three energies.
-    """
+    """Mine the Van der Waals (vdw), electrostatic (es) and total (both) energies of an atom from a CMIP output line."""
     # Numbers do not always fit in fixed columns, since numbers close to 0 are expressed in E notation
     # e.g. 0.1075E-04
     # For this reason we must mine these last values relying on whitespaces between them
@@ -911,10 +1083,64 @@ def mine_cmip_atom_energies(line: str) -> tuple:
     vdw = float(line_splits[-3])
     es = float(line_splits[-2])
     both = float(line_splits[-1])
-    # Values greater than the limit are represented as 0
-    if both > MAX_ATOM_ENERGY:
-        return (0, 0, 0)
     return (vdw, es, both)
+
+
+def zero_clashes(atom_energies: list) -> tuple[list, int]:
+    """Set to 0 the energies of atoms whose total energy is above MAX_ATOM_ENERGY, which come from clashes.
+
+    Return the new atom energies and the number of atoms set to 0. Atoms with no energies (None) are kept.
+    """
+    zeroed_count = 0
+    new_atom_energies = []
+    for atom_energies in atom_energies:
+        if atom_energies is not None and atom_energies[2] > MAX_ATOM_ENERGY:
+            atom_energies = (0, 0, 0)
+            zeroed_count += 1
+        new_atom_energies.append(atom_energies)
+    return new_atom_energies, zeroed_count
+
+
+def warn_zeroed_atoms(interactions: list[dict], interactions_data: list[list[dict]]):
+    """Warn about the atoms set to 0 in each interaction, which mean overlapping atoms in a frame."""
+    for interaction, data in zip(interactions, interactions_data):
+        counts = [
+            frame.get('agent1_zeroed', 0) + frame.get('agent2_zeroed', 0)
+            for frame in data
+        ]
+        if sum(counts) == 0:
+            continue
+        frame_count = sum(count > 0 for count in counts)
+        warn(
+            f'{interaction["name"]}: {sum(counts)} atom energies above {MAX_ATOM_ENERGY} kcal/mol were set to 0 in '
+            f'{frame_count} of {len(counts)} frames. This means overlapping atoms, which a relaxed MD frame should not have'
+        )
+
+
+def read_cmip_vdw_types(vdw_filepath: str) -> set[str]:
+    """Read the atom types of a CMIP van der Waals parameters table."""
+    with open(vdw_filepath, 'r') as file:
+        lines = file.read().splitlines()[1:]
+    return {line[:3].strip() for line in lines if line.strip()}
+
+
+def write_cmip_vdw_table(output_filepath: str, extra_elements: set):
+    """Write the CMIP van der Waals parameters table with the parameters of extra elements first.
+
+    CMIP matches atom types as prefixes in the order of the table, so extra elements must go before the one-letter types
+    (e.g. Ca before C). Parameters are written as in the table: epsilon and sigma = 2 R*/2 / 2^(1/6), with 2 decimals.
+    """
+    with open(CMIP_VDW_SOURCE, 'r') as file:
+        header, *lines = file.read().splitlines()
+    extra_lines = []
+    for element in sorted(extra_elements):
+        half_rmin, epsilon, mass, atomic_number = CMIP_EXTRA_VDW_PARAMETERS[element]
+        sigma = 2 * half_rmin / 2 ** (1 / 6)
+        extra_lines.append(
+            f'{element:<3}{epsilon:4.2f} {sigma:4.2f}{mass:6.2f}{atomic_number:4d}{0:7.3f}'
+        )
+    with open(output_filepath, 'w') as file:
+        file.write('\n'.join([header] + extra_lines + lines))
 
 
 def set_cmip_elements(structure: 'Structure'):
@@ -922,7 +1148,12 @@ def set_cmip_elements(structure: 'Structure'):
 
     Hydrogens bonded to carbons remain as 'H', hydrogens bonded to oxygen are renamed as 'HO' and hydrogens bonded to
     nitrogen or sulfur are renamed as 'HN'.
+    Hydrogens bonded to other elements (e.g. P, B, Si or metals) are not hydrogen bond donors, so they remain as 'H', as
+    hydrogens bonded to carbons do, with a warning.
+    Elements in CMIP_ELEMENT_ALIASES (Se) take the element of their alias (S), with a warning.
     """
+    other_bonded_elements = {}
+    aliased_elements = {}
     # Iterate over each atom to fix their element according to CMIP standards
     for a, atom in enumerate(structure.atoms):
         element = atom.element
@@ -936,20 +1167,32 @@ def set_cmip_elements(structure: 'Structure'):
                 raise ValueError('An hydrogen should always have one and only one bond')
             bonded_atom_index = atom_bonds[0]
             bonded_atom_element = structure.atoms[bonded_atom_index].element
-            # Hydrogens bonded to carbons remain as 'H'
-            if bonded_atom_element == 'C':
-                pass
+            bonded_atom_element = CMIP_ELEMENT_ALIASES.get(bonded_atom_element, bonded_atom_element)
             # Hydrogens bonded to oxygen are renamed as 'HO'
-            elif bonded_atom_element == 'O':
+            if bonded_atom_element == 'O':
                 element = 'HO'
             # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
             elif bonded_atom_element == 'N' or bonded_atom_element == 'S':
                 element = 'HN'
-            else:
-                raise RuntimeError(
-                    f'Hydrogen bonded to not supported heavy atom: {bonded_atom_element}'
+            # Hydrogens bonded to carbons or other elements remain as 'H'
+            elif bonded_atom_element != 'C':
+                other_bonded_elements[bonded_atom_element] = (
+                    other_bonded_elements.get(bonded_atom_element, 0) + 1
                 )
+        elif element in CMIP_ELEMENT_ALIASES:
+            aliased_elements[element] = aliased_elements.get(element, 0) + 1
+            element = CMIP_ELEMENT_ALIASES[element]
         atom.element = element
+    for element, count in sorted(aliased_elements.items()):
+        warn(f'{count} {element} atoms take the CMIP type of {CMIP_ELEMENT_ALIASES[element]}')
+    if other_bonded_elements:
+        counts = ', '.join(
+            f'{count} bonded to {element}'
+            for element, count in sorted(other_bonded_elements.items())
+        )
+        warn(
+            f'Hydrogens bonded to atoms other than C, N, O or S ({counts}) get the CMIP type of hydrogens bonded to carbon'
+        )
 
 
 # Set residue names with no endings
@@ -1022,24 +1265,28 @@ def compute_new_grid(
     agent2_center,
     agent2_density,
     agent2_units,
-    extra_density=1,
-):
-    """Compute the center and density of a new grid, which is expected to cover the grids of both agents."""
+    margin: float = GRID_MARGIN,
+    grid_unit_size: float = GRID_UNIT_SIZE,
+) -> tuple[list, list]:
+    """Compute the center and density of a new grid covering the automatic grids of both agents.
+
+    CMIP automatic grids span their center ± density × units / 2 (Å), where the density is the number of grid intervals.
+    The new grid spans the union of both grids plus a margin on every side, with the given grid unit size.
+    """
     new_center = []
     new_density = []
-
     for k in range(3):
-        min_prot = agent1_center[k] - agent1_density[k] * agent1_units[k]
-        min_lig = agent2_center[k] - agent2_density[k] * agent2_units[k]
-        min_new = min(min_prot, min_lig)
-        max_prot = agent1_center[k] + agent1_density[k] * agent1_units[k]
-        max_lig = agent2_center[k] + agent2_density[k] * agent2_units[k]
-        max_new = max(max_prot, max_lig)
-
-        dnew = int(abs(max_new - min_new) + extra_density)
-        cnew = min_new + (dnew / 2)
-        new_density.append(dnew)
-        new_center.append(cnew)
+        low = min(
+            agent1_center[k] - agent1_density[k] * agent1_units[k] / 2,
+            agent2_center[k] - agent2_density[k] * agent2_units[k] / 2,
+        )
+        high = max(
+            agent1_center[k] + agent1_density[k] * agent1_units[k] / 2,
+            agent2_center[k] + agent2_density[k] * agent2_units[k] / 2,
+        )
+        low, high = low - margin, high + margin
+        new_center.append((low + high) / 2)
+        new_density.append(math.ceil((high - low) / grid_unit_size))
     return new_center, new_density
 
 

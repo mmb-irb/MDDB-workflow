@@ -6,8 +6,8 @@ The system has 37 atoms and two interactions, with no downloads:
 - peptide: Ace-Ala (agent 1) and Nme (agent 2), covalently bonded. The two atoms of the bond between agents (a strong
   bond) get no energies (None).
 
-The golden output was made with the code as of the first commit of this file. Refactors must reproduce it (atol 1e-6,
-one OpenMP thread). Regenerate it only for an intended numerical change: `python test/unittests/test_energies.py`.
+Refactors must reproduce the golden output (atol 1e-6, one OpenMP thread). Regenerate it only in the commit of an
+intended numerical change: `python test/unittests/test_energies.py`.
 The tests marked xfail(strict=True) are known bugs. They pass, and so fail here, once the bug is fixed: remove the mark then.
 """
 import os
@@ -20,9 +20,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 import mdtraj
+
+# Run as a script, import the workflow of this repository, not another installed copy
+if __name__ == '__main__':
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mddb_workflow.analyses.energies import energies, mine_cmip_output, compute_new_grid, format_data
 from mddb_workflow.analyses.energies import set_cmip_elements, name_terminal_residues, OUTPUT_MINING_EXCEPTION
 from mddb_workflow.analyses.energies import cap_grid_points, mine_cmip_atom_energies, GRID_POINTS_LIMIT
+from mddb_workflow.analyses.energies import get_cmip_energies, write_cmip_vdw_table, zero_clashes
+from mddb_workflow.analyses import energies as energies_module
+from mddb_workflow.utils.constants import CMIP_VDW_SOURCE
 from mddb_workflow.utils.constants import GLOBALS, ENERGIES_ANALYSIS_VERSION
 from mddb_workflow.utils.structures import Structure, Atom, Residue, Chain
 from mddb_workflow.utils.selections import Selection
@@ -94,10 +101,11 @@ INTERACTIONS = [
 AGENT_KEYS = ['vdw', 'es', 'both', 'ivdw', 'ies', 'iboth', 'fvdw', 'fes', 'fboth']
 
 
-def build_structure() -> Structure:
-    """Build the structure of the tiny system, with its bonds."""
+def build_structure(elements: dict = {}) -> Structure:
+    """Build the structure of the tiny system, with its bonds, and optionally other elements for some atoms."""
     atoms, residues, chains = [], [], []
     for index, (chain_name, residue_name, residue_number, atom_name, element, _) in enumerate(ATOMS):
+        element = elements.get(index, element)
         atoms.append(Atom(name=atom_name, element=element, coords=tuple(FRAME[index])))
         if not residues or (chains[-1].name, residues[-1].number) != (chain_name, residue_number):
             if not chains or chains[-1].name != chain_name:
@@ -116,7 +124,8 @@ def build_structure() -> Structure:
     return structure
 
 
-def run_energies(work_directory: Path, frames: np.ndarray, interactions: list[dict]) -> tuple[Path, str]:
+def run_energies(work_directory: Path, frames: np.ndarray, interactions: list[dict], verbose: bool = False,
+                 elements: dict = {}) -> tuple[Path, str]:
     """Run the energies analysis with one OpenMP thread and return its output directory and its logs.
 
     CMIP leaves fort.* files in the current directory, so the analysis runs from the work directory.
@@ -136,12 +145,13 @@ def run_energies(work_directory: Path, frames: np.ndarray, interactions: list[di
             energies(
                 trajectory_file=File(trajectory_filepath),
                 output_directory=str(output_directory),
-                structure=build_structure(),
+                structure=build_structure(elements),
                 interactions=[dict(interaction) for interaction in interactions],
                 charges=[atom[5] for atom in ATOMS],
                 cg_selection=Selection([]),
                 dummy_selection=Selection([]),
                 snapshots=len(frames),
+                verbose=verbose,
             )
     finally:
         os.chdir(previous_directory)
@@ -209,8 +219,9 @@ def test_schema(run):
         assert output['name'] == interaction['name']
         assert output['version'] == ENERGIES_ANALYSIS_VERSION
         for agent, atom_indices in (('agent1', interaction['atom_indices_1']), ('agent2', interaction['atom_indices_2'])):
-            assert sorted(output[agent]) == sorted(AGENT_KEYS + ['step'])
+            assert sorted(output[agent]) == sorted(AGENT_KEYS + ['step', 'zeroed'])
             assert output[agent]['step'] == 1
+            assert output[agent]['zeroed'] == [0, 0, 0]
             for key in AGENT_KEYS:
                 assert len(output[agent][key]) == len(atom_indices)
 
@@ -246,13 +257,110 @@ def test_strong_bond_atoms_are_none(run):
 
 
 def test_clash_atoms_are_zeroed(clash_run):
-    """Atoms whose energy is above 100 kcal/mol are set to 0, which hides the clash."""
+    """Atoms whose energy is above 100 kcal/mol are set to 0, and counted in the output."""
     outputs, _ = clash_run
     salt_bridge = outputs['energies-00']
     hydrogen = MAM.index(5)
     oxygen = ACT.index(10)
     assert salt_bridge['agent1']['both'][hydrogen] == 0
     assert salt_bridge['agent2']['both'][oxygen] == 0
+    # The output has the number of atoms set to 0 in each frame
+    assert salt_bridge['agent1']['zeroed'][0] >= 1 and salt_bridge['agent2']['zeroed'][0] >= 1
+
+
+def test_cmip_runs_in_the_output_directory(tmp_path):
+    """CMIP runs in the output directory: a fort.* file of the caller survives, and CMIP leaves no fort.* files."""
+    (tmp_path / 'fort.99').write_text('not a CMIP file')
+    output_directory, _ = run_energies(tmp_path, CLASH_FRAMES, INTERACTIONS[:1])
+    assert (tmp_path / 'fort.99').read_text() == 'not a CMIP file'
+    assert not list(output_directory.glob('fort.*'))
+    assert (output_directory / 'vdwprm').exists()
+
+
+def test_interactions_over_the_atom_limit(tmp_path, monkeypatch):
+    """Interactions over the CMIP atom limit are skipped, even all of them, and the input interactions do not change."""
+    monkeypatch.setattr(energies_module, 'CMIP_ATOM_LIMIT', 7)
+    interactions = [dict(interaction) for interaction in INTERACTIONS]
+    output_directory, logs = run_energies(tmp_path, FRAMES[:1], interactions)
+    assert 'atom count limit' in logs
+    assert not (output_directory / 'mda.energies.json').exists()
+    assert interactions == INTERACTIONS
+
+
+def test_missing_strong_bonds(tmp_path):
+    """Interactions with no strong bonds key are calculated as having no strong bonds."""
+    interaction = {key: value for key, value in INTERACTIONS[0].items() if key != 'strong_bonds'}
+    output_directory, _ = run_energies(tmp_path, FRAMES, [interaction])
+    golden = json.load(open(GOLDEN_FILEPATH))['energies-00']
+    output = load_outputs(output_directory)['energies-00']
+    for agent in ('agent1', 'agent2'):
+        for key in AGENT_KEYS:
+            assert_same_values(output[agent][key], golden[agent][key], f'{agent} {key}')
+
+
+def test_verbose_with_strong_bonds(tmp_path):
+    """The verbose totals skip the atoms of strong bonds, which have no energies."""
+    _, logs = run_energies(tmp_path, FRAMES[:1], INTERACTIONS[1:], verbose=True)
+    assert 'Total energies for Ace-Ala' in logs
+
+
+def test_failed_cmip_does_not_reuse_previous_output(tmp_path):
+    """If CMIP fails to write its output, the output of a previous run is not read as if it was new."""
+    for filename in ('vdwprm', 'cmip.in', 'guest.pdb', 'host.pdb'):
+        (tmp_path / filename).write_text('not a CMIP input\n')
+    (tmp_path / 'cmip_output.pdb').write_text(
+        'ATOM      1  H   NME C   3      0.2719    -0.6282E-01     -3.398         -3.461    \n')
+    with pytest.raises(RuntimeError):
+        get_cmip_energies(File(str(tmp_path / 'cmip.in')), File(str(tmp_path / 'guest.pdb')),
+                          File(str(tmp_path / 'host.pdb')), str(tmp_path), File(str(tmp_path / 'restart')))
+
+
+def test_elements_missing_from_the_cmip_table(tmp_path):
+    """Elements missing from the CMIP table get their AmberTools parameters, placed before the one-letter types.
+
+    Without them CMIP would silently use the carbon parameters for calcium.
+    """
+    energies_by_element = {}
+    for element in ('Ca', 'C'):
+        (tmp_path / element).mkdir()
+        output_directory, logs = run_energies(tmp_path / element, FRAMES[:1], INTERACTIONS[:1], elements={10: element})
+        energies_by_element[element] = load_outputs(output_directory)['energies-00']['agent2']['vdw'][ACT.index(10)]
+        table = (output_directory / 'vdwprm').read_text().splitlines()
+        if element == 'Ca':
+            assert table[1] == 'Ca 0.46 3.05 40.08  20  0.000'
+            assert re.search(r'WARNING.*Elements Ca are not in the CMIP van der Waals table', logs)
+        else:
+            assert table[1].startswith('Cl ')
+    assert energies_by_element['Ca'] != energies_by_element['C']
+
+
+def test_elements_with_no_parameters(tmp_path):
+    """Interactions with elements which have no van der Waals parameters for CMIP are skipped with a warning."""
+    output_directory, logs = run_energies(tmp_path, FRAMES[:1], INTERACTIONS[:1], elements={10: 'Si'})
+    assert re.search(r'WARNING: .*salt bridge has atoms of elements with no van der Waals parameters for CMIP \(Si\)', logs)
+    assert not (output_directory / 'mda.energies.json').exists()
+
+
+def test_selenium_takes_the_sulfur_type(tmp_path):
+    """Selenium takes the CMIP type of sulfur, with a warning, as CMIP gave it by prefix up to version 1.1.0."""
+    outputs = {}
+    for element in ('Se', 'S'):
+        (tmp_path / element).mkdir()
+        output_directory, logs = run_energies(tmp_path / element, FRAMES[:1], INTERACTIONS[:1], elements={10: element})
+        outputs[element] = load_outputs(output_directory)
+        if element == 'Se':
+            assert re.search(r'WARNING: .*1 Se atoms take the CMIP type of S', logs)
+    assert outputs['Se'] == outputs['S']
+
+
+def test_write_cmip_vdw_table(tmp_path):
+    """Without extra elements the table is the CMIP one; extra elements go first, with sigma = 2 R*/2 / 2^(1/6)."""
+    write_cmip_vdw_table(str(tmp_path / 'vdwprm'), set())
+    assert (tmp_path / 'vdwprm').read_text() == open(CMIP_VDW_SOURCE).read()
+    write_cmip_vdw_table(str(tmp_path / 'vdwprm'), {'Ca', 'Fe'})
+    lines = (tmp_path / 'vdwprm').read_text().splitlines()
+    assert lines[1:3] == ['Ca 0.46 3.05 40.08  20  0.000', 'Fe 0.01 2.41 55.84  26  0.000']
+    assert lines[3:] == open(CMIP_VDW_SOURCE).read().splitlines()[1:]
 
 
 # ----- Helpers -----
@@ -285,11 +393,17 @@ def test_mine_cmip_output_fails():
 @pytest.mark.parametrize('line, expected', [
     ('ATOM      1  H   NME C   3      0.2719    -0.6282E-01     -3.398         -3.461    \n', (-0.06282, -3.398, -3.461)),
     ('ATOM      2  C   NME C   3     -0.1490    -0.2134         0.8978         0.6844    \n', (-0.2134, 0.8978, 0.6844)),
-    ('ATOM      6  HN1 MAM A   1      0.3300     0.4512E+05     -12.34          0.4511E+05\n', (0, 0, 0)),
+    ('ATOM      6  HN1 MAM A   1      0.3300     0.4512E+05     -12.34          0.4511E+05\n', (45120, -12.34, 45110)),
 ], ids=['E notation', 'decimal', 'above 100 kcal/mol'])
 def test_mine_cmip_atom_energies(line, expected):
-    """The vdw, es and both energies are the last three numbers of a CMIP output line; clashes get 0."""
+    """The vdw, es and both energies are the last three numbers of a CMIP output line."""
     assert mine_cmip_atom_energies(line) == expected
+
+
+def test_zero_clashes():
+    """Atoms above 100 kcal/mol are set to 0 and counted; large negative energies and None are kept."""
+    energies = [(1.0, 2.0, 3.0), None, (200.0, -10.0, 190.0), (-10.0, -100.0, -110.0)]
+    assert zero_clashes(energies) == ([(1.0, 2.0, 3.0), None, (0, 0, 0), (-10.0, -100.0, -110.0)], 1)
 
 
 def test_cap_grid_points_below_limit():
@@ -314,15 +428,21 @@ def test_set_cmip_elements_oxygen_and_sulfur():
     assert [atom.element for atom in structure.atoms] == ['O', 'HO', 'S', 'HN']
 
 
-@pytest.mark.parametrize('bonds, error', [([[1], [0, 2], [1]], ValueError), ([[1], [0]], RuntimeError)],
-                         ids=['two bonds', 'bonded to phosphorus'])
-def test_set_cmip_elements_errors(bonds, error):
-    """A hydrogen must have exactly one bond, to C, N, O or S."""
-    atoms = [Atom('P', 'P'), Atom('H1', 'H'), Atom('C', 'C')][:len(bonds)]
-    structure = Structure(atoms=atoms)
-    structure.bonds = bonds
-    with pytest.raises(error):
+def test_set_cmip_elements_two_bonds():
+    """A hydrogen must have exactly one bond."""
+    structure = Structure(atoms=[Atom('P', 'P'), Atom('H1', 'H'), Atom('C', 'C')])
+    structure.bonds = [[1], [0, 2], [1]]
+    with pytest.raises(ValueError):
         set_cmip_elements(structure)
+
+
+def test_set_cmip_elements_other_elements(capsys):
+    """Hydrogens bonded to atoms other than C, N, O or S are typed as hydrogens bonded to carbon, with a warning."""
+    structure = Structure(atoms=[Atom('P', 'P'), Atom('H1', 'H'), Atom('B', 'B'), Atom('H2', 'H')])
+    structure.bonds = [[1], [0], [3], [2]]
+    set_cmip_elements(structure)
+    assert [atom.element for atom in structure.atoms] == ['P', 'H', 'B', 'H']
+    assert re.search(r'WARNING.*1 bonded to B, 1 bonded to P', capsys.readouterr().out)
 
 
 def make_chain_structure(residue_names: list[str]) -> Structure:
@@ -390,7 +510,6 @@ def read_cmip_pdb(filepath: Path) -> list[tuple[tuple, str]]:
     return [((line[17:20], int(line[22:26]), line[12:16].strip()), line[64:].strip()) for line in open(filepath)]
 
 
-@pytest.mark.xfail(strict=True, reason='B1: dummy atoms are written as hydrogens')
 def test_dummies_keep_their_element(run):
     """The partner's atoms are dummies in the host file, but they keep their element so the cavity keeps its shape."""
     output_directory, _ = run
@@ -401,21 +520,25 @@ def test_dummies_keep_their_element(run):
                 assert tail == 'X' + elements[key], (agent, key, tail)
 
 
-@pytest.mark.xfail(strict=True, reason='B1: the cavity differs between both directions')
-def test_both_directions_agree(run):
+@pytest.mark.parametrize('analysis, key', [
+    ('energies-00', 'ies'),
+    ('energies-00', 'fes'),
+    ('energies-01', 'es'),
+], ids=['salt bridge frame 1', 'salt bridge frame 3', 'peptide'])
+def test_both_directions_agree(run, analysis, key):
     """The electrostatic interaction energy is the same with either agent as the guest, to 1%.
 
-    Measured with the fixed setup (dummies with their element, grid covering both agents): 0.00-0.02%.
-    As of ENERGIES_ANALYSIS_VERSION 1.1.0: 11.7% and 22.9% for the salt bridge, 21.6% for the peptide.
+    It needs the same low-dielectric cavity in both directions: all atoms of both agents, with their volume.
+    As of ENERGIES_ANALYSIS_VERSION 1.1.0: 11.7% and 22.9% for the salt bridge, 21.6% for the peptide (B1).
+    With dummies keeping their element: 0.02% and 0.10%, and 6.3% for the peptide, whose host files lacked the other
+    agent's strong bond atom (B8).
     """
     _, outputs = run
-    for analysis, key in (('energies-00', 'ies'), ('energies-00', 'fes'), ('energies-01', 'es')):
-        agent1 = sum(value for value in outputs[analysis]['agent1'][key] if value is not None)
-        agent2 = sum(value for value in outputs[analysis]['agent2'][key] if value is not None)
-        assert abs(agent1 - agent2) <= 0.01 * abs(agent1 + agent2) / 2, (analysis, key, agent1, agent2)
+    agent1 = sum(value for value in outputs[analysis]['agent1'][key] if value is not None)
+    agent2 = sum(value for value in outputs[analysis]['agent2'][key] if value is not None)
+    assert abs(agent1 - agent2) <= 0.01 * abs(agent1 + agent2) / 2, (agent1, agent2)
 
 
-@pytest.mark.xfail(strict=True, reason='B2: compute_new_grid mixes Å and grid points')
 def test_new_grid_contains_both_grids():
     """The grid for both agents contains the automatic grid of each agent (center ± density × units / 2).
 
@@ -432,12 +555,12 @@ def test_new_grid_contains_both_grids():
         assert np.all(high >= np.array(grid_center) + half_size)
 
 
-@pytest.mark.xfail(strict=True, reason='B3: the cap scales each dimension by the ratio of points, cutting them by its cube')
 def test_cap_grid_points_keeps_resolution():
     """A grid above the limit of points keeps its box and is only coarsened as much as needed.
 
     The capped grid has at most GRID_POINTS_LIMIT points and at least half of them.
-    As of ENERGIES_ANALYSIS_VERSION 1.1.0, 501³ points (126 M) are cut to 260³ (18 M), a 0.968 Å grid instead of 0.62 Å.
+    As of ENERGIES_ANALYSIS_VERSION 1.1.0, 501³ points (126 M) were cut to 260³ (18 M), a 0.968 Å grid. Now 402³ (65.0 M),
+    a 0.624 Å grid.
     """
     density, unit_size = cap_grid_points([500, 500, 500], 0.5)
     points = np.prod(np.array(density) + 1)
@@ -445,7 +568,6 @@ def test_cap_grid_points_keeps_resolution():
     assert GRID_POINTS_LIMIT / 2 <= points <= GRID_POINTS_LIMIT
 
 
-@pytest.mark.xfail(strict=True, reason='B4: atoms above 100 kcal/mol are zeroed silently')
 def test_clash_warns(clash_run):
     """Zeroing the energies of clashing atoms is reported with a warning naming the interaction."""
     _, logs = clash_run
