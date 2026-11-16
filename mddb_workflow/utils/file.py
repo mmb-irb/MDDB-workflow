@@ -5,11 +5,10 @@ from shutil import copyfile
 from typing import Optional
 from time import time
 
-import xxhash
-
 from mddb_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
 from mddb_workflow.utils.constants import DATE_STYLE, GLOBALS
 from mddb_workflow.utils.auxiliar import InputError
+from mddb_workflow.utils.quickhash import quickhash, QUICKHASH_SAMPLE_SIZE
 
 LOCAL_PATH = '.'
 
@@ -111,28 +110,25 @@ class File:
         return getsize(self.path)
     size = property(get_size, None, None, "File size in bytes (read only)")
 
-    CKSUM_UNSAFE_SIZE_LIMIT = 1024 * 1024 * 100  # 100 MB
     def get_cksum(self, unsafe: bool = False, verbose: bool = False) -> str:
-        """Get a cksum code used to compare identical file content.
-        Use the unsafe argument to make it way faster for large files by reading them partially.
+        """Get a cksum code used to compare identical file content: the file size and its quickhash.
+        Files smaller than 3 samples (96 MiB) get the xxhash of their whole content.
+        Use the unsafe argument to make it way faster for large files by reading them partially:
+        the xxhash of their size and 3 samples of 32 MiB (head, middle and tail).
+        The quickhash is the same as in the biobb provenance RO-Crates.
         """
         # If we already have a value then return it
         if self._cksum != None: return self._cksum
         # If the file does not exist then there is no cksum
         if not self.exists: return None
         # Set if the cksum will be unsafe
-        # Note that files lighter than the size limit will always have safe cksums
-        is_unsafe = unsafe and self.size > self.CKSUM_UNSAFE_SIZE_LIMIT
-        # Calculate the xxhash of the whole file content
-        # This should be the faster method available whcih still reads all content
+        # Note that files lighter than 3 samples will always have safe cksums
+        is_unsafe = unsafe and self.size >= 3 * QUICKHASH_SAMPLE_SIZE
         if verbose: start_time = time()
-        hasher = xxhash.xxh64()
-        with open(self.path, 'rb') as file:
-            if is_unsafe: hasher.update(file.read(self.CKSUM_UNSAFE_SIZE_LIMIT))
-            # DANI: This is not memory safe, a big file could consume all memory
-            # DANI: We should iterate chunks but I was on a hurry
-            else: hasher.update(file.read())
-        final_xxhash = hasher.hexdigest()
+        # Note that the unsafe cksum misses the changes outside the samples which keep the file size
+        # Samples as large as the file make the quickhash read the whole file
+        sample_size = QUICKHASH_SAMPLE_SIZE if unsafe else max(self.size, 1)
+        final_xxhash = quickhash(self.path, sample_size)
         if verbose:
             end_time = time()
             total_time = end_time - start_time
