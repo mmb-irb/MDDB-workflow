@@ -31,7 +31,7 @@ from mddb_workflow.utils.auxiliar import (
     numerate_filename,
     get_analysis_name,
 )
-from mddb_workflow.utils.auxiliar import ForcedStop
+from mddb_workflow.utils.auxiliar import ForcedStop, EnvironmentError
 from mddb_workflow.utils.constants import (
     OUTPUT_ENERGIES_FILENAME,
     ENERGIES_ANALYSIS_VERSION,
@@ -51,20 +51,9 @@ from mddb_workflow.utils.type_hints import *
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
-ERASE_2_PREVIOUS_LINES = (
-    CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
-)
-ERASE_3_PREVIOUS_LINES = (
-    CURSOR_UP_ONE
-    + ERASE_LINE
-    + CURSOR_UP_ONE
-    + ERASE_LINE
-    + CURSOR_UP_ONE
-    + ERASE_LINE
-    + CURSOR_UP_ONE
-)
 # Set the minimum distance (Å) between agents beyond which CMIP is not run and energies are assumed to be 0
 # Otherwise the CMIP grid, which must include both agents, becomes huge and the calculation becomes too slow and memory demanding
+# The grid-free engine has no grid and no cutoff for electrostatics, so it calculates every frame (see skips_far_agents)
 FAR_AGENTS_CUTOFF = 30
 # CMIP fails with agents of this number of atoms or more, so these interactions are skipped
 # This limit can be changed in CMIP, but CMIP must be recompiled then, which is not trivial in a conda environment
@@ -176,6 +165,11 @@ class Agent(NamedTuple):
 class EnergiesEngine(Protocol):
     """A method to calculate the interaction energies of both agents of an interaction in one frame."""
 
+    # How many log lines the engine prints for each interaction and frame, erased once the frame is done
+    log_lines: int
+    # Whether frames whose agents are further apart than FAR_AGENTS_CUTOFF get energies 0 instead of being calculated
+    skips_far_agents: bool
+
     def __call__(
         self,
         frame_structure: 'Structure',
@@ -254,6 +248,7 @@ def energies(
 
     # Check the number of atoms on each interacting agent
     # If there is any agent with too many atoms CMIP will fail so we must skip this specific energies analysis by now
+    # The grid-free engine has no such limit: its cost grows with the number of atom pairs
     # Note that the input interactions are not modified
     non_exceeding_interactions = []
     for interaction in supported_interactions:
@@ -261,7 +256,7 @@ def energies(
         for agent in ['1', '2']:
             atoms = interaction[f'atom_indices_{agent}']
             atom_count = len(atoms)
-            if atom_count >= CMIP_ATOM_LIMIT:
+            if energies_engine == 'cmip' and atom_count >= CMIP_ATOM_LIMIT:
                 exceeds = True
                 break
         if exceeds:
@@ -536,13 +531,14 @@ def get_interaction_frame_energies(
     agent1, agent2 = agents
 
     # If both agents are far from each other then skip the engine and assume all energies are 0
-    if are_far_apart(frame_structure, agent1.atom_indices, agent2.atom_indices):
+    # Only for engines which need it (CMIP); the grid-free engine calculates every frame, so its energies are continuous
+    if engine.skips_far_agents and are_far_apart(frame_structure, agent1.atom_indices, agent2.atom_indices):
         print(
             f'  Agents are further than {FAR_AGENTS_CUTOFF} Å -> Energies are set to 0'
         )
         agent1_atom_energies = [(0, 0, 0) for index in agent1.atom_indices]
         agent2_atom_energies = [(0, 0, 0) for index in agent2.atom_indices]
-        print(ERASE_2_PREVIOUS_LINES)
+        print(erase_previous_lines(2))
         return {
             'agent1': agent1_atom_energies,
             'agent2': agent2_atom_energies,
@@ -586,8 +582,9 @@ def get_interaction_frame_energies(
                 f' Total energies for {agent_name}: vdw {total_vdw}, es {total_es}, both {total_both}'
             )
 
-    # Erase the 3 previous log lines
-    print(ERASE_3_PREVIOUS_LINES)
+    # Erase the log lines of this interaction (its name and the engine's lines), unless the verbose flag keeps them
+    if not verbose:
+        print(erase_previous_lines(1 + engine.log_lines))
 
     return {
         'agent1': agent1_atom_energies,
@@ -595,6 +592,14 @@ def get_interaction_frame_energies(
         'agent1_zeroed': agent1_zeroed,
         'agent2_zeroed': agent2_zeroed,
     }
+
+
+def erase_previous_lines(count: int) -> str:
+    """Get the terminal codes which erase the last log lines, so that the next print starts where the first of them was.
+
+    They go up one line more than they erase, since print() adds a new line after them.
+    """
+    return (CURSOR_UP_ONE + ERASE_LINE) * count + CURSOR_UP_ONE
 
 
 def are_far_apart(
@@ -666,6 +671,11 @@ class CmipEngine:
     Each agent is calculated as a guest in the potential of the other agent (the host).
     CMIP runs in the output directory, where its input and output files are written.
     """
+
+    # One line for each direction of the interaction
+    log_lines = 2
+    # The CMIP grid must hold both agents, so agents far apart would make it huge
+    skips_far_agents = True
 
     def __init__(
         self,
@@ -823,6 +833,21 @@ class CmipEngine:
             remove(filepath)
 
 
+def check_gridfree_requirements():
+    """Stop with a clear message if numba, which the grid-free kernel needs, cannot be imported.
+
+    Environments created before the grid-free engine have no numba, and an old numba may not import with a newer numpy.
+    """
+    try:
+        import numba  # noqa: F401
+    except ImportError as error:
+        raise EnvironmentError(
+            'The grid-free energies engine needs numba, which environments created before this engine lack '
+            f'({error}). Update the environment with "conda env update --file envs/environment.yml" or install '
+            'numba with "conda install -c conda-forge numba"'
+        ) from None
+
+
 class GridFreeEngine:
     """Interaction energies with no grid: Coulomb with a sigmoidal dielectric and the van der Waals of CMIP.
 
@@ -831,7 +856,13 @@ class GridFreeEngine:
     The van der Waals is CMIP's model: 4 eps [(s/r)^12 - (s/r)^6] with the parameters of the CMIP table, s scaled by 0.8
     and an 8 Å cutoff. As in CMIP, every atom gets the whole energy of its pairs with the other agent, atoms which are
     dummy in general contribute nothing and get 0, and atoms in strong bonds contribute nothing and get None.
+    Unlike CMIP, frames whose agents are far apart are calculated too: the electrostatics have no cutoff in any frame,
+    and setting them to 0 beyond FAR_AGENTS_CUTOFF made a jump (measured on 2026-11-13: -76 kcal/mol at 30 Å for a
+    protein-DNA complex).
     """
+
+    log_lines = 0
+    skips_far_agents = False
 
     def __init__(
         self,
@@ -840,6 +871,8 @@ class GridFreeEngine:
         dummy_selection: 'Selection',
         extra_vdw_elements: set = set(),
     ):
+        # Fail before any frame if the kernel cannot run
+        check_gridfree_requirements()
         self.charges = np.array(charges, dtype=float)
         parameters = read_cmip_vdw_parameters(extra_vdw_elements)
         # Atoms with no parameters are never in an interaction, since interactions are checked first

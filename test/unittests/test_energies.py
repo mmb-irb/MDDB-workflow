@@ -289,6 +289,29 @@ def test_interactions_over_the_atom_limit(tmp_path, monkeypatch):
     assert interactions == INTERACTIONS
 
 
+def test_gridfree_has_no_atom_limit(tmp_path, monkeypatch):
+    """The CMIP atom limit does not apply to the grid-free engine."""
+    monkeypatch.setattr(energies_module, 'CMIP_ATOM_LIMIT', 7)
+    output_directory, logs = run_energies(tmp_path, FRAMES[:1], INTERACTIONS, engine='gridfree')
+    assert 'atom count limit' not in logs
+    assert len(load_outputs(output_directory)) == len(INTERACTIONS)
+
+
+@pytest.mark.parametrize('omp_threads, slurm_cpus, expected', [('3', None, 3), (None, '2', 2), (None, None, None)])
+def test_kernel_threads(monkeypatch, omp_threads, slurm_cpus, expected):
+    """The kernel uses OMP_NUM_THREADS if set, else the CPUs available, which a SLURM job limits."""
+    from mddb_workflow.analyses import energies_kernel
+    for name, value in [('OMP_NUM_THREADS', omp_threads), ('SLURM_CPUS_PER_TASK', slurm_cpus),
+                        ('SLURM_CPUS_ON_NODE', None)]:
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    maximum = energies_kernel.numba.config.NUMBA_NUM_THREADS
+    expected = maximum if expected is None else min(expected, maximum)
+    assert energies_kernel.get_thread_count() == expected
+
+
 def test_missing_strong_bonds(tmp_path):
     """Interactions with no strong bonds key are calculated as having no strong bonds."""
     interaction = {key: value for key, value in INTERACTIONS[0].items() if key != 'strong_bonds'}
@@ -378,10 +401,24 @@ def test_gridfree_golden(gridfree_run):
     """The grid-free per-atom output is the stored golden output."""
     _, outputs = gridfree_run
     golden = json.load(open(GRIDFREE_GOLDEN_FILEPATH))
+    assert sorted(outputs) == sorted(golden)
     for analysis, output in outputs.items():
         for agent in ('agent1', 'agent2'):
             for key in AGENT_KEYS:
                 assert_same_values(output[agent][key], golden[analysis][agent][key], f'{analysis} {agent} {key}')
+
+
+@pytest.mark.parametrize('engine', ['cmip', 'gridfree'])
+def test_log_lines_are_erased(tmp_path, engine):
+    """Each interaction erases the log lines it printed, and no earlier ones."""
+    _, logs = run_energies(tmp_path, FRAMES, INTERACTIONS, engine=engine)
+    erase = energies_module.CURSOR_UP_ONE + energies_module.ERASE_LINE
+    interaction_logs = logs.split(' Processing ')[1:]
+    assert len(interaction_logs) == len(FRAMES) * len(INTERACTIONS)
+    for interaction_log in interaction_logs:
+        match = re.match(rf'([^\x1b]*)((?:{re.escape(erase)})+){re.escape(energies_module.CURSOR_UP_ONE)}\n',
+                         interaction_log)
+        assert match.group(2).count(erase) == match.group(1).count('\n')
 
 
 def direct_pair_energies(frame: np.ndarray, guest: list[int], host: list[int], excluded: set = set()) -> list:
@@ -436,13 +473,30 @@ def test_gridfree_directions_agree(gridfree_run):
 
 
 def test_gridfree_far_frame_and_salt_bridge(gridfree_run):
-    """The far frame adds 0 and the salt bridge attracts, as with CMIP."""
+    """The far frame (40 Å) is calculated, not set to 0 as with CMIP, and the salt bridge attracts."""
     _, outputs = gridfree_run
     salt_bridge = outputs['energies-00']
-    for agent in ('agent1', 'agent2'):
+    for agent, guest, host in (('agent1', MAM, ACT), ('agent2', ACT, MAM)):
         first, last = np.array(salt_bridge[agent]['ies']), np.array(salt_bridge[agent]['fes'])
-        assert np.allclose(salt_bridge[agent]['es'], (first + last) / 3, rtol=0, atol=1e-12)
+        # Three frames: the average over all of them, the first one and the last one give the far frame
+        far_frame = 3 * np.array(salt_bridge[agent]['es']) - first - last
+        expected = np.array([es for _, es in direct_pair_energies(FRAMES[1], guest, host)])
+        assert np.allclose(far_frame, expected, rtol=0, atol=1e-9)
+        assert np.abs(expected).max() > 1e-3
         assert sum(salt_bridge[agent]['ies']) < -3
+
+
+def test_gridfree_without_numba(tmp_path, monkeypatch):
+    """Without numba (an environment created before the grid-free engine) it stops before any frame, saying what to do.
+
+    The error is the workflow's EnvironmentError, which is printed without a traceback.
+    """
+    from mddb_workflow.utils.auxiliar import EnvironmentError as WorkflowEnvironmentError, QuietException
+    # A None entry makes 'import numba' fail as if it was not installed
+    monkeypatch.setitem(sys.modules, 'numba', None)
+    with pytest.raises(WorkflowEnvironmentError, match='needs numba.*conda env update --file envs/environment.yml'):
+        run_energies(tmp_path, FRAMES[:1], INTERACTIONS[:1], engine='gridfree')
+    assert issubclass(WorkflowEnvironmentError, QuietException)
 
 
 def test_unknown_engine(tmp_path):

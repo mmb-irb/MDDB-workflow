@@ -12,6 +12,8 @@ import math
 import numba
 import numpy as np
 
+from mddb_workflow.utils.auxiliar import get_available_cpus
+
 # OpenMP threads spin-wait between parallel regions and slow everything down when the machine is busy (measured
 # 2026-11-12: 0.45 s instead of 5 ms per call), so use numba's own thread pool, which does not spin, unless the user
 # chose a layer. This must be set before the first parallel call in the process.
@@ -23,7 +25,20 @@ if 'NUMBA_THREADING_LAYER' not in os.environ:
 ROW_CHUNKS = 64
 
 
-@numba.njit(parallel=True, cache=True)
+def compile_kernel(function):
+    """Compile a parallel kernel, cached on disk when numba finds a writable place for its cache.
+
+    numba caches next to this module, else in the user's cache directory, or in NUMBA_CACHE_DIR if set. When none is
+    writable (e.g. a read-only install with a read-only home), caching raises at compile setup and the analysis could not
+    run at all, so the kernel is compiled in every process instead (about 1.3 s, measured 2026-11-13).
+    """
+    try:
+        return numba.njit(parallel=True, cache=True)(function)
+    except RuntimeError:
+        return numba.njit(parallel=True)(function)
+
+
+@compile_kernel
 def _pair_energy_sums(
     coords_1: np.ndarray,
     coords_2: np.ndarray,
@@ -83,12 +98,16 @@ def _pair_energy_sums(
 
 
 def get_thread_count() -> int:
-    """Get the threads for the kernel: OMP_NUM_THREADS if set (the variable CMIP follows), else all numba threads."""
+    """Get the threads for the kernel: OMP_NUM_THREADS if set (the variable CMIP follows), else the CPUs available.
+
+    numba's own default follows the CPUs this process may run on, but a SLURM job is not always pinned to the CPUs it
+    requested, so the default is the workflow's count of available CPUs, which also reads the SLURM variables.
+    """
     maximum = numba.config.NUMBA_NUM_THREADS
     requested = os.environ.get('OMP_NUM_THREADS', '')
     if requested.isdigit() and int(requested) > 0:
         return min(int(requested), maximum)
-    return maximum
+    return max(1, min(get_available_cpus(), maximum))
 
 
 def pair_energy_sums(
