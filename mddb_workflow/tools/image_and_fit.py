@@ -6,7 +6,7 @@ from collections import deque
 import mdtraj as mdt
 import numpy as np
 from scipy.sparse import coo_matrix
-from scipy.sparse.csgraph import connected_components, breadth_first_order
+from scipy.sparse.csgraph import connected_components, depth_first_order
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
@@ -409,10 +409,12 @@ def place_first_frame(
     return positions
 
 
-def find_bond_tree(atom_bonds: list[list[int]], structure: 'Structure') -> tuple[np.ndarray, np.ndarray, list[np.ndarray]]:
+def find_bond_tree(atom_bonds: list[list[int]], structure: 'Structure') -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Find the bonded fragments and a path along bonds from the first atom of every fragment to the rest of atoms.
     Atoms with missing bonds (e.g. coarse grain) are joined to the first atom of their residue instead.
-    Return the fragment of every atom, the previous atom in the path of every atom and the atoms at every step of the paths.
+    Atoms are sorted so every atom is followed by all atoms whose path goes through it.
+    Return the fragment of every atom, the previous atom in the path of every atom (-1 for the first atom of every fragment),
+    the sorted atoms and, for every atom, the position in the sorted atoms where its following block ends.
     """
     atom_count = structure.atom_count
     if len(atom_bonds) != atom_count:
@@ -432,13 +434,20 @@ def find_bond_tree(atom_bonds: list[list[int]], structure: 'Structure') -> tuple
     sources = np.concatenate([pairs[:, 0], np.full(len(roots), extra_atom)])
     targets = np.concatenate([pairs[:, 1], roots])
     graph = coo_matrix((np.ones(len(sources), dtype=bool), (sources, targets)), shape=(atom_count + 1, atom_count + 1))
-    order, parents = breadth_first_order(graph, extra_atom, directed=False, return_predecessors=True)
-    depths = np.zeros(atom_count + 1, dtype=int)
-    for atom_index in order[1:]:
-        depths[atom_index] = depths[parents[atom_index]] + 1
-    # Roots are at depth 1, so their atoms are not moved
-    steps = [ order[depths[order] == depth] for depth in range(2, depths.max() + 1) ]
-    return atom_fragments, parents[:atom_count], steps
+    # A depth first search visits all atoms behind an atom right after it
+    order, parents = depth_first_order(graph, extra_atom, directed=False, return_predecessors=True)
+    order = order[1:]
+    parents = parents[:atom_count]
+    parents[parents == extra_atom] = -1
+    # Count the atoms behind every atom, starting from the end of the paths
+    block_sizes = np.ones(atom_count, dtype=int)
+    for atom_index in order[::-1]:
+        parent = parents[atom_index]
+        if parent != -1: block_sizes[parent] += block_sizes[atom_index]
+    sorted_positions = np.empty(atom_count, dtype=int)
+    sorted_positions[order] = np.arange(atom_count)
+    block_ends = sorted_positions + block_sizes
+    return atom_fragments, parents, order, block_ends
 
 
 def put_fragments_in_box(
@@ -455,7 +464,12 @@ def put_fragments_in_box(
     for trajectory_file in [input_trajectory_file, output_trajectory_file]:
         if trajectory_file.format != 'xtc':
             raise ValueError(f'Putting fragments in the box is only supported for xtc trajectories: {trajectory_file.path}')
-    atom_fragments, parents, steps = find_bond_tree(atom_bonds, structure)
+    atom_fragments, parents, order, block_ends = find_bond_tree(atom_bonds, structure)
+    # Atoms with a previous atom in their path, and where their blocks start and end in the sorted atoms
+    path_atoms = order[parents[order] != -1]
+    path_parents = parents[path_atoms]
+    block_starts = np.flatnonzero(parents[order] != -1)
+    path_block_ends = block_ends[path_atoms]
     center_atom_indices = center_selection.atom_indices
     centered_fragments = np.unique(atom_fragments[center_atom_indices])
     boxed_atom_indices = np.flatnonzero(~np.isin(atom_fragments, centered_fragments))
@@ -478,9 +492,17 @@ def put_fragments_in_box(
                 input_positions, box_vectors = positions.astype(np.float64), box_vectors.astype(np.float64)
                 positions = input_positions.copy()
                 inverse_box = np.linalg.inv(box_vectors)
-                for atom_indices in steps:
-                    fractional = (positions[atom_indices] - positions[parents[atom_indices]]) @ inverse_box
-                    positions[atom_indices] -= closest_images(fractional, box_vectors) @ box_vectors
+                # Find the whole boxes which separate every atom from the previous atom in its path
+                # Every atom must be moved by the sum of boxes along its path, so the boxes of every atom are added to its whole block
+                # The sum along the sorted atoms gives the boxes to move every atom
+                fractional = (positions[path_atoms] - positions[path_parents]) @ inverse_box
+                images = closest_images(fractional, box_vectors)
+                split = np.flatnonzero(images.any(axis=1))
+                if len(split) > 0:
+                    changes = np.zeros((len(order) + 1, 3))
+                    np.add.at(changes, block_starts[split], images[split])
+                    np.add.at(changes, path_block_ends[split], -images[split])
+                    positions[order] -= np.cumsum(changes[:-1], axis=0) @ box_vectors
                 if len(center_atom_indices) > 0:
                     positions += box_vectors.sum(axis=0) / 2 - positions[center_atom_indices].mean(axis=0)
                 if len(boxed_atom_indices) > 0:
