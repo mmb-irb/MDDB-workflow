@@ -282,30 +282,42 @@ the zips, copy them to RES and check them there ("Archiving on RES" below). Only
 copy deleted, in step 6.
 
 **6. Delete one class at a time.**
-1. Once, before the first class, back up the protected files outside the dataset folder, and check
-   the backup:
+1. First, while the main copy still has everything, copy back from each extra copy what only it has
+   (its logs and upload records; see "A whole extra copy" below), so the backup holds them too.
+2. Once, before the first class, archive the protected files (the bookkeeping) on RES. Zip them
+   outside the dataset folder, with the log outside too: a log written into the dataset while it is
+   zipped makes zip warn that a file changed.
    ```bash
    cd <root> && set -o pipefail && dataset_inventory.py . --classes utils/cleanup_classes.yaml \
-       --list protected --relative -0 | tar czf <backup>/<dataset>_bookkeeping_<date>.tar.gz --null -T - \
-     && tar tzf <backup>/<dataset>_bookkeeping_<date>.tar.gz | wc -l
+       --list protected --relative | zip -T -@ <outside>/<dataset>_bookkeeping_<date>.zip > <outside>/zip.log 2>&1 \
+     && grep -c 'zip warning' <outside>/zip.log; zipinfo -1 <outside>/<dataset>_bookkeeping_<date>.zip | wc -l
    ```
-   The command must succeed and the count must match the `protected` row of the class table. tar
-   writes an archive even when a file is missing (exit 2), so an archive alone proves nothing.
-2. List the class and check what the script prints (on stderr) against the class table: path count,
+   The zip must pass its test with no warnings, and the count must match the `protected` row of the
+   class table. Then copy it to RES and check it as in "Archiving on RES" below (the README's rsync
+   command, MD5 on both sides), into the folder the archive's README gives for uploaded data, with a
+   short note next to it: what the zip holds, where the data itself is (DOI, node), its MD5. The
+   bookkeeping compresses well (IDRome: 1.5 GB of JSON in 366 MB), so the zip is usually under RES's
+   1 GB rule: ask the user whether to store it uncompressed (`zip -0`) instead. Delete the local zip
+   once the RES copy is checked. The README's cleanup entry is written after the backup, so the note
+   next to the zip is what explains it.
+3. List the class and check what the script prints (on stderr) against the class table: path count,
    size, patterns that match nothing, and any broken-link warning. Look at a few paths.
    ```bash
    dataset_inventory.py <root> --classes utils/cleanup_classes.yaml --list caches -0 > caches.list
    ```
-3. Confirm with the user: the class, its count and size, and that it can't be undone. Then delete
+4. Confirm with the user: the class, its count and size, and that it can't be undone. Then delete
    exactly that list: `xargs -0 rm -- < caches.list`. Never `rm -r` project directories: they hold
    the upload records.
-4. Re-run the inventory: the class is empty, and `protected` has the same count as before.
+5. Re-run the inventory: the class is empty, and `protected` has the same count as before.
 
 **A whole extra copy** goes with one `rm -rf` of its root instead:
-- First copy back its logs and upload records, and check that it holds nothing the main copy lacks:
-  `rsync -rtp -O -n --itemize-changes <host>:<root>/ <root>/` should list only files you chose to
-  leave behind. Compare the dataset files by their rows (Python `sqlite3` `iterdump()` on read-only
-  copies); in IDRome the upload had changed only the remembered `loader_directory` setting.
+- First copy back its logs and upload records (item 1 above), and check that it holds nothing the main
+  copy lacks: `rsync -rtp -O -n --itemize-changes <host>:<root>/ <root>/` should list only files you
+  chose to leave behind. Without `-l`, rsync reports every symlink as a skipped "non-regular file". If
+  the classes are already deleted here, the dry run lists them too: sort its paths with the classes
+  file and look only at the rest (IDRome: 193 of 1.15 million). Compare the dataset files by their
+  rows (Python `sqlite3` `iterdump()` on read-only copies); in IDRome the upload had changed only the
+  remembered `loader_directory` setting.
 - Check that it is not the main copy: future loads run from the copy that keeps the records.
 - Confirm with the user the host, the absolute path and its size (`du -sh`), and that it can't be
   undone. Then delete it with the absolute path written out in full (`ssh <host> rm -rf <path>`),
@@ -316,8 +328,8 @@ class can be fetched again (the public URL or DOI, the node, the RES archive pat
 
 ### Archiving on RES (MareNostrum 5)
 
-Data that must be kept (a source shared directly with us, see "Public or shared source") goes to the
-group's RES archive on MareNostrum 5. Its path and the transfer node that reaches it are not written
+Data that must be kept (a source shared directly with us, see "Public or shared source") and the
+bookkeeping backup of step 6 go to the group's RES archive on MareNostrum 5. Its path and the transfer node that reaches it are not written
 in this skill: ask the user. Before writing anything there, read the `README` at the root of the
 archive. It says which folder each kind of data goes to, how to record what was archived, and the
 rules below, which may have changed since they were copied here (2026-11):

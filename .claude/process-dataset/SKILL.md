@@ -280,8 +280,9 @@ this order with `scripts/dataset_inventory.py`. Read "Clean up after the upload"
    complete and no more corrections are expected.
 5. **Archive on RES** (MareNostrum 5) what must be kept. Ask the user for the archive's path and its
    transfer node, and read the `README` at its root first.
-6. **Delete one class at a time,** from a reviewed `--list`, after backing up the bookkeeping and
-   with the user's confirmation. Never `rm -r` project directories.
+6. **Delete one class at a time,** from a reviewed `--list`, with the user's confirmation. Before the
+   first one, copy back what only the extra copies hold, then archive the bookkeeping on RES. Never
+   `rm -r` project directories.
 7. **Record it in the README:** what was deleted where, and where each class can be fetched again.
 
 ### Keep a README booking file

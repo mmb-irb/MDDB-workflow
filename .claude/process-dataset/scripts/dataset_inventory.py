@@ -22,10 +22,11 @@ dataset states: a class takes the files of every project, `done` or not.
     source_unused: ['IDRome.zip', 'emap.csv', '*.npy']
 
 Files matching PROTECTED or the `protected` patterns (the dataset's bookkeeping) are never in a class:
-a class that matches one is an error, and --list prints nothing until it is fixed. A file in several
-classes counts in the first one and is reported, and so is a pattern that matches nothing. --list also
-reports symlinks that would break: links outside the class that point to a listed file or to a folder
-holding one. `--list protected` gives the bookkeeping files, for the backup before deleting anything.
+a class that matches one is an error (exit 1), and --list prints nothing until it is fixed. A file in
+several classes counts in the first one and is reported, and so is a pattern that matches nothing.
+--list also reports symlinks that would break: links outside the class that point to a listed file or
+to a folder holding one. `--list protected` gives the bookkeeping files, for the backup on RES before
+deleting anything.
 
 --uploads finds the projects (folders with an inputs.yaml) and their upload records
 (.loader_register.json, or .project_id from older loaders), and reports projects without one,
@@ -294,12 +295,14 @@ def main():
             print(f'\nWARNING: {plural(len(rels), "file")} in {pair} (counted in the first), e.g. {rels[0]}')
         for c, pattern in unused:
             print(f'\nWARNING: pattern {pattern!r} of {c} matches nothing')
-        if by_name:
+        if by_name and args.top > 0:
             print('\nLargest unclassified names:')
-    if by_name:
+    if by_name and args.top > 0:
         rows = sorted(by_name.items(), key=lambda kv: -kv[1][1])[:args.top]
         print_table(rows, 'extension' if args.by == 'ext' else 'name (digits -> N)')
-    if args.uploads and not check_uploads(projects, registers, legacy):
+    uploads_ok = check_uploads(projects, registers, legacy) if args.uploads else True
+    # A class that matches a protected file is an error for scripts too, not only on screen
+    if conflicts or not uploads_ok:
         sys.exit(1)
 
 
