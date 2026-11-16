@@ -1629,7 +1629,7 @@ class Project:
                 Value passed through arguments overrides the one in inputs file.
             image (bool|str):
                 Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
-                Use 'auto' to image only if non-PBC molecules are split by the box boundaries in some frames.
+                Use 'auto' to image only if non-PBC molecules are split by the box boundaries or molecules drift away from the box in some frames.
                 If the image was not done and the trajectory integrity test fails then the workflow is run again with the image.
                 Value passed through console overrides the one in inputs file.
             fit (bool|str):

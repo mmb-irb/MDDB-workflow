@@ -16,7 +16,7 @@ from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION, FIXED_STRUCTURE_EXCEPTION
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
-from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajectory, find_split_molecules
+from mddb_workflow.tools.image_and_fit import image_and_fit, check_fitted_trajectory, is_imaging_needed
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.structure_corrector import structure_corrector
 from mddb_workflow.tools.get_bonds import find_safe_bonds, mine_topology_bonds
@@ -316,11 +316,11 @@ def process_input_files(
     # Mine bonds from the topology only once, since they are used in the imaging and in the structure correction
     topology_bonds = mine_topology_bonds(filtered_topology_file)
 
-    # Image only if molecules are split by the box boundaries, when the image is automatic
+    # Image only if non-PBC molecules are split by the box boundaries or the system is scattered, when the image is automatic
     # Without a usable box there is nothing to image
     # Save the value so the workflow may be run again with the image if the trajectory integrity test fails
     if image == AUTOMATIC_FLAG:
-        image = bool(center_selection) and not ignore_box and not broken_pbc and find_split_molecules(
+        image = not ignore_box and not broken_pbc and is_imaging_needed(
             filtered_trajectory_file, topology_bonds, provisional_structure, center_selection)
         print(f' Automatic image: {image}')
         self.cache.update(AUTO_IMAGE_FLAG, image)

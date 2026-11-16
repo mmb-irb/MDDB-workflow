@@ -34,8 +34,13 @@ NO_JUMP_CHUNK_SIZE = 100
 # Precision (nm) of the coordinates in xtc files
 XTC_PRECISION = 0.001
 
-# Number of frames along the trajectory where split molecules are searched when the image is automatic
+# Number of frames along the trajectory where split or scattered molecules are searched when the image is automatic
 SPLIT_CHECK_FRAMES = 10
+
+# Largest size of the system along any box vector, in box lengths, before the automatic image considers it scattered
+# Molecules which stay whole may stick out of the box, so the system may be somewhat larger than the box
+# Molecules which are never put back in the box drift away and soon spread the system over several boxes
+SCATTERED_SYSTEM_SIZE = 2
 
 
 def image_and_fit(
@@ -521,19 +526,22 @@ def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', sel
     return fitted, True
 
 
-def find_split_molecules(
+def is_imaging_needed(
     trajectory_file: 'File',
     atom_bonds: Optional[list[list[int]]],
     structure: 'Structure',
     selection: 'Selection',
 ) -> bool:
-    """Check if molecules in the selection are split by the box boundaries in some frames.
+    """Check if the trajectory must be imaged, looking at a few frames along the trajectory.
+    It must be imaged if molecules in the selection are split by the box boundaries in some frame.
     Two bonded atoms are split when they are closer through the box boundaries than directly.
     Bonds are those mined from the topology. If they are missing then every atom is paired with the first atom of its residue.
+    It must be imaged also if the whole system (all atoms) spreads over several boxes in some frame.
+    This happens when molecules are not put back in the box and drift away.
     Only a few frames along the trajectory are checked, so short problems may be missed.
     """
     if trajectory_file.format != 'xtc':
-        raise ValueError(f'Finding split molecules is only supported for xtc trajectories: {trajectory_file.path}')
+        raise ValueError(f'Checking if the imaging is needed is only supported for xtc trajectories: {trajectory_file.path}')
     selected_atom_indices = set(selection.atom_indices)
     if atom_bonds and any(bonds == MISSING_BONDS for bonds in atom_bonds):
         atom_bonds = None
@@ -545,8 +553,7 @@ def find_split_molecules(
     else:
         pairs = [ (residue.atom_indices[0], atom_index) for residue in structure.residues for atom_index in residue.atom_indices[1:]
             if residue.atom_indices[0] in selected_atom_indices and atom_index in selected_atom_indices ]
-    if not pairs: return False
-    pairs = np.array(pairs, dtype=int)
+    pairs = np.array(pairs, dtype=int).reshape(-1, 2)
     with mdt.formats.XTCTrajectoryFile(trajectory_file.path) as reader:
         frames_count = len(reader)
         for frame in np.unique(np.linspace(0, frames_count - 1, SPLIT_CHECK_FRAMES).astype(int)):
@@ -554,7 +561,15 @@ def find_split_molecules(
             xyz, _, _, boxes = reader.read(n_frames=1)
             if boxes is None or not boxes[0].any(): return False
             positions, box_vectors = xyz[0].astype(np.float64), boxes[0].astype(np.float64)
-            fractional = (positions[pairs[:, 1]] - positions[pairs[:, 0]]) @ np.linalg.inv(box_vectors)
+            inverse_box = np.linalg.inv(box_vectors)
+            # Size of the whole system along every box vector, in box lengths
+            fractional_positions = positions @ inverse_box
+            system_sizes = fractional_positions.max(axis=0) - fractional_positions.min(axis=0)
+            if system_sizes.max() > SCATTERED_SYSTEM_SIZE:
+                print(f' The system spreads over {system_sizes.max():.1f} boxes in frame {frame}')
+                return True
+            if len(pairs) == 0: continue
+            fractional = (positions[pairs[:, 1]] - positions[pairs[:, 0]]) @ inverse_box
             split_count = int(closest_images(fractional, box_vectors).any(axis=1).sum())
             if split_count:
                 print(f' {split_count} bonds are split by the box boundaries in frame {frame}')
