@@ -10,36 +10,7 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ============
 
-Added
------
-- Add the ``--energies_engine`` option of ``mwf run`` to choose the engine of the energies analysis: ``cmip``
-  (default) or ``gridfree``, Coulomb with a sigmoidal distance-dependent dielectric and CMIP's van der Waals
-  parameters, summed over atom pairs with no grid. On experimental binding data grid-free ranks better than CMIP on
-  PL-REX and SKEMPI-40, and as well within the uncertainty on FEP+ and protein-nucleic acid complexes, and it is
-  100-200 times faster per frame (see ``test/benchmarks/energies/README.md``). It reads frames straight from the
-  trajectory, uses a numba kernel with the CPUs given to a SLURM job, has no atom limit, and calculates frames whose
-  agents are more than 30 Å apart
-- Environments created before this version lack numba, which the grid-free engine needs: update them with
-  ``conda env update --file envs/environment.yml``. Otherwise a run that asks for the grid-free energies stops at its
-  start, saying so
-- Write the engine and its parameters in every energies output (``engine`` and ``parameters`` fields)
-
-Changed
--------
-- The energies backup is appended frame by frame instead of rewritten, so its cost no longer grows with the square of
-  the number of frames
-- Elements missing from CMIP's van der Waals table no longer take the type of their first letter (e.g. calcium was
-  carbon): Se takes the type of S, ions take their AmberTools parameters, and interactions with other missing elements
-  (e.g. Si) are skipped with a warning
-
-Fixed
------
-- Energies analysis 1.2.0 (CMIP): the partner's dummy atoms keep their element in the low-dielectric cavity,
-  strong-bond atoms are kept in host files, the grid holds every atom of both agents, the grid cap keeps its
-  resolution, and clashes are counted per frame. Every project's energies are recomputed, and ``mwf run`` redoes
-  them once in existing project directories
-
-[0.1.12] - 2026-10-30
+[0.1.12] - 2026-11-16
 =====================
 
 Added
@@ -67,6 +38,17 @@ Added
 - Get InChI keys from MDDB, run InChI key generation in parallel and version InChI key references
 - Export the heaviest topology fields to binary files when they do not fit in Mongo
 - Write structures in mmCIF and name chains with no limit (big reform)
+- Add the ``--energies_engine`` option of ``mwf run`` to choose the engine of the energies analysis: ``cmip``
+  (default) or ``gridfree``, Coulomb with a sigmoidal distance-dependent dielectric and CMIP's van der Waals
+  parameters, summed over atom pairs with no grid. On experimental binding data grid-free ranks better than CMIP on
+  PL-REX and SKEMPI-40, and as well within the uncertainty on FEP+ and protein-nucleic acid complexes, and it is
+  100-200 times faster per frame (see ``test/benchmarks/energies/README.md``). It reads frames straight from the
+  trajectory, uses a numba kernel with the CPUs given to a SLURM job, has no atom limit, and calculates frames whose
+  agents are more than 30 Å apart
+- Environments created before this version lack numba, which the grid-free engine needs: update them with
+  ``conda env update --file envs/environment.yml``. Otherwise a run that asks for the grid-free energies stops at its
+  start, saying so
+- Write the engine and its parameters in every energies output (``engine`` and ``parameters`` fields)
 
 Changed
 -------
@@ -86,6 +68,11 @@ Changed
 - Create the register only for ``mwf run`` calls
 - Show the workflow version also when the closest tag is not annotated
 - Require biobb_mem 5.3.1
+- The energies backup is appended frame by frame instead of rewritten, so its cost no longer grows with the square of
+  the number of frames
+- Elements missing from CMIP's van der Waals table no longer take the type of their first letter (e.g. calcium was
+  carbon): Se takes the type of S, ions take their AmberTools parameters, and interactions with other missing elements
+  (e.g. Si) are skipped with a warning
 
 Fixed
 -----
@@ -106,6 +93,10 @@ Fixed
 - Recover the registered UUID when a cache is lost
 - Leave workflow output files out of input glob patterns
 - Check if outputs will fit in Mongo
+- Energies analysis 1.2.0 (CMIP): the partner's dummy atoms keep their element in the low-dielectric cavity,
+  strong-bond atoms are kept in host files, the grid holds every atom of both agents, the grid cap keeps its
+  resolution, and clashes are counted per frame. Every project's energies are recomputed, and ``mwf run`` redoes
+  them once in existing project directories
 
 
 [0.1.11] - 2026-06-04
