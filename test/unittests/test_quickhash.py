@@ -46,8 +46,8 @@ def flipped(data: bytes, offset: int) -> bytes:
 
 
 def digest(data: bytes, hashed: bytes) -> str:
-    """XXH3-128 of the size prefix of data followed by the hashed bytes."""
-    return xxhash.xxh3_128_hexdigest(len(data).to_bytes(8, 'big') + hashed)
+    """XXH64 of the size prefix of data followed by the hashed bytes: the hash of the sampled files."""
+    return xxhash.xxh64_hexdigest(len(data).to_bytes(8, 'big') + hashed)
 
 
 @pytest.mark.parametrize('vector', GOLDEN['vectors'], ids=lambda v: f"size{v['size']}-n{v['sample_size']}")
@@ -63,16 +63,21 @@ def test_golden_scheme():
     assert (GOLDEN['algo'], GOLDEN['version'], GOLDEN['default_sample_size']) == (qh.QUICKHASH_ALGO, qh.QUICKHASH_VERSION, qh.QUICKHASH_SAMPLE_SIZE)
 
 
-def test_empty_file(tmp_path):
-    """Only the size prefix: 8 zero bytes."""
-    assert qh.quickhash(write(tmp_path / 'empty', b'')) == xxhash.xxh3_128_hexdigest(bytes(8))
+def test_small_files(tmp_path):
+    """Files smaller than 3 samples: the plain XXH64 of the file, without size prefix (the hash of the MDDB cksum)."""
+    for size in (0, 1, 2 * N, 3 * N - 1):
+        data = content(size)
+        assert qh.quickhash(write(tmp_path / 'small', data), N) == xxhash.xxh64_hexdigest(data)
+    # With the default sample size (32 MiB)
+    assert qh.quickhash(write(tmp_path / 'small', content(100))) == xxhash.xxh64_hexdigest(content(100))
+    assert qh.quickhash(write(tmp_path / 'empty', b'')) == 'ef46db3751d8e999'
 
 
 def test_boundary_sizes(tmp_path):
-    # 3n - 1: whole file
+    # 3n - 1: whole file, without size prefix
     data = content(3 * N - 1)
-    assert qh.quickhash(write(tmp_path / 'small', data), N) == digest(data, data)
-    # 3n: the samples are exactly adjacent, they cover the whole file
+    assert qh.quickhash(write(tmp_path / 'small', data), N) == xxhash.xxh64_hexdigest(data)
+    # 3n: the samples are exactly adjacent, they cover the whole file (after the size prefix)
     data = content(3 * N)
     assert qh.quickhash(write(tmp_path / 'adjacent', data), N) == digest(data, data)
     # 3n + 1: middle sample at floor((2n + 1) / 2) = n, the byte at 2n is not sampled

@@ -1,8 +1,9 @@
 """Sampled xxHash quick-check of the files, the same as in the biobb provenance RO-Crates.
 
-The quickhash identifies a file without reading it whole: the XXH3-128 (seed 0) of the file size
-(uint64 big-endian) followed by three samples of 32 MiB at 0, floor((size - n) / 2) and size - n,
-or by the whole content of the files smaller than 3 samples (96 MiB).
+The quickhash identifies a file without reading it whole: the XXH64 (seed 0) of the file size
+(uint64 big-endian) followed by three samples of 32 MiB at 0, floor((size - n) / 2) and size - n.
+Files smaller than 3 samples (96 MiB) are hashed whole, as they are: their quickhash is the plain
+XXH64 of the file, the same as the hash of their cksum (see File.get_cksum).
 It is an identity check, not an integrity check: changes outside the samples go undetected.
 
 32 MiB samples hold complete frames of a 1 million atom trajectory in the usual formats (XTC ~3.8 MB
@@ -16,7 +17,7 @@ from os.path import getsize
 
 import xxhash
 
-QUICKHASH_ALGO = 'xxh3_128-sample'
+QUICKHASH_ALGO = 'xxh64-sample'
 QUICKHASH_VERSION = 1
 QUICKHASH_SAMPLE_SIZE = 1 << 25  # 32 MiB
 # Read size of the samples and of the files hashed whole
@@ -24,19 +25,20 @@ HASH_CHUNK_SIZE = 1 << 20
 
 
 def quickhash(path: str, sample_size: int = QUICKHASH_SAMPLE_SIZE) -> str:
-    """Get the quickhash of a file: the lowercase hex XXH3-128 (seed 0) of its size as uint64 big-endian,
-    followed by its samples of sample_size bytes at 0, floor((size - n) / 2) and size - n (in that order),
-    or by its whole content if it is smaller than 3 samples.
+    """Get the quickhash of a file: the lowercase hex XXH64 (seed 0) of its size as uint64 big-endian,
+    followed by its samples of sample_size bytes at 0, floor((size - n) / 2) and size - n (in that order).
+    Files smaller than 3 samples are hashed whole, without the size prefix: the plain XXH64 of the file.
     Raise an OSError if the file is shorter than its size when it is read (e.g. truncated during the read).
     """
     if sample_size < 1: raise ValueError(f'The sample size must be positive: {sample_size}')
     size = getsize(path)
-    hasher = xxhash.xxh3_128()
-    hasher.update(size.to_bytes(8, 'big'))
+    hasher = xxhash.xxh64()
     with open(path, 'rb') as file:
         if size < 3 * sample_size:
             _update(hasher, file, size)
         else:
+            # The size prefix tells apart files of different sizes with the same samples
+            hasher.update(size.to_bytes(8, 'big'))
             for offset in (0, (size - sample_size) // 2, size - sample_size):
                 file.seek(offset)
                 _update(hasher, file, sample_size)
