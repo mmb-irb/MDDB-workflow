@@ -38,6 +38,7 @@ from mddb_workflow.utils.file import File
 pytestmark = pytest.mark.CI
 
 GOLDEN_FILEPATH = Path(__file__).parent / 'test_energies_golden.json'
+GRIDFREE_GOLDEN_FILEPATH = Path(__file__).parent / 'test_energies_gridfree_golden.json'
 
 # Chain, residue name, residue number, atom name, element and charge of every atom
 ATOMS = [
@@ -125,7 +126,7 @@ def build_structure(elements: dict = {}) -> Structure:
 
 
 def run_energies(work_directory: Path, frames: np.ndarray, interactions: list[dict], verbose: bool = False,
-                 elements: dict = {}) -> tuple[Path, str]:
+                 elements: dict = {}, engine: str = 'cmip') -> tuple[Path, str]:
     """Run the energies analysis with one OpenMP thread and return its output directory and its logs.
 
     CMIP leaves fort.* files in the current directory, so the analysis runs from the work directory.
@@ -152,6 +153,7 @@ def run_energies(work_directory: Path, frames: np.ndarray, interactions: list[di
                 dummy_selection=Selection([]),
                 snapshots=len(frames),
                 verbose=verbose,
+                energies_engine=engine,
             )
     finally:
         os.chdir(previous_directory)
@@ -361,6 +363,92 @@ def test_write_cmip_vdw_table(tmp_path):
     lines = (tmp_path / 'vdwprm').read_text().splitlines()
     assert lines[1:3] == ['Ca 0.46 3.05 40.08  20  0.000', 'Fe 0.01 2.41 55.84  26  0.000']
     assert lines[3:] == open(CMIP_VDW_SOURCE).read().splitlines()[1:]
+
+
+# ----- Grid-free engine -----
+
+@pytest.fixture(scope='module')
+def gridfree_run(tmp_path_factory) -> tuple[Path, dict]:
+    """Run the analysis once on the three frames with the grid-free engine."""
+    output_directory, _ = run_energies(tmp_path_factory.mktemp('gridfree'), FRAMES, INTERACTIONS, engine='gridfree')
+    return output_directory, load_outputs(output_directory)
+
+
+def test_gridfree_golden(gridfree_run):
+    """The grid-free per-atom output is the stored golden output."""
+    _, outputs = gridfree_run
+    golden = json.load(open(GRIDFREE_GOLDEN_FILEPATH))
+    for analysis, output in outputs.items():
+        for agent in ('agent1', 'agent2'):
+            for key in AGENT_KEYS:
+                assert_same_values(output[agent][key], golden[analysis][agent][key], f'{analysis} {agent} {key}')
+
+
+def direct_pair_energies(frame: np.ndarray, guest: list[int], host: list[int], excluded: set = set()) -> list:
+    """Compute the grid-free energies of the guest atoms with a plain double loop, as an independent check."""
+    structure = build_structure()
+    set_cmip_elements(structure)
+    table = {line[:3].strip(): (float(line[3:7]), float(line[8:12])) for line in open(CMIP_VDW_SOURCE).read().splitlines()[1:]}
+    energies = []
+    for i in guest:
+        if i in excluded:
+            energies.append(None)
+            continue
+        vdw = es = 0.0
+        for j in host:
+            if j in excluded:
+                continue
+            r = float(np.linalg.norm(frame[i] - frame[j]))
+            b = 78.4 + 8.5525
+            dielectric = -8.5525 + b / (1 + 7.7839 * np.exp(-0.003627 * b * r))
+            es += 332.0637 * ATOMS[i][5] * ATOMS[j][5] / (dielectric * r)
+            (epsilon_i, sigma_i), (epsilon_j, sigma_j) = table[structure.atoms[i].element], table[structure.atoms[j].element]
+            sigma, epsilon = 0.8 * (sigma_i + sigma_j) / 2, (epsilon_i * epsilon_j) ** 0.5
+            if r <= 8:
+                vdw += 4 * epsilon * ((sigma / r) ** 12 - (sigma / r) ** 6)
+        energies.append((vdw, es))
+    return energies
+
+
+@pytest.mark.parametrize('analysis, guest, host, excluded', [
+    ('energies-00', MAM, ACT, set()),
+    ('energies-01', NME, ACE_ALA, set(STRONG_BOND)),
+], ids=['salt bridge', 'peptide'])
+def test_gridfree_matches_direct_sum(gridfree_run, analysis, guest, host, excluded):
+    """The grid-free energies of the first frame are the plain sums over the other agent's atoms."""
+    _, outputs = gridfree_run
+    agent = 'agent1' if guest[0] < host[0] else 'agent2'
+    for value, vdw, es in zip(direct_pair_energies(FRAMES[0], guest, host, excluded),
+                              outputs[analysis][agent]['ivdw'], outputs[analysis][agent]['ies']):
+        if value is None:
+            assert vdw is None and es is None
+        else:
+            assert np.allclose(value, (vdw, es), rtol=0, atol=1e-9)
+
+
+def test_gridfree_directions_agree(gridfree_run):
+    """Both agents get the full energy of each pair, so both directions give the same totals."""
+    _, outputs = gridfree_run
+    for analysis in outputs:
+        for key in ('ivdw', 'ies', 'fvdw', 'fes'):
+            totals = [sum(v for v in outputs[analysis][agent][key] if v is not None) for agent in ('agent1', 'agent2')]
+            assert abs(totals[0] - totals[1]) < 1e-9
+
+
+def test_gridfree_far_frame_and_salt_bridge(gridfree_run):
+    """The far frame adds 0 and the salt bridge attracts, as with CMIP."""
+    _, outputs = gridfree_run
+    salt_bridge = outputs['energies-00']
+    for agent in ('agent1', 'agent2'):
+        first, last = np.array(salt_bridge[agent]['ies']), np.array(salt_bridge[agent]['fes'])
+        assert np.allclose(salt_bridge[agent]['es'], (first + last) / 3, rtol=0, atol=1e-12)
+        assert sum(salt_bridge[agent]['ies']) < -3
+
+
+def test_unknown_engine(tmp_path):
+    """An unknown engine stops the analysis."""
+    with pytest.raises(ValueError):
+        run_energies(tmp_path, FRAMES[:1], INTERACTIONS[:1], engine='unknown')
 
 
 # ----- Helpers -----
@@ -575,14 +663,15 @@ def test_clash_warns(clash_run):
 
 
 def write_golden():
-    """Run the analysis on the tiny system and store its output as the golden output."""
+    """Run the analysis on the tiny system with each engine and store its output as the golden output."""
     import tempfile
-    with tempfile.TemporaryDirectory() as work_directory:
-        output_directory, _ = run_energies(Path(work_directory), FRAMES, INTERACTIONS)
-        outputs = load_outputs(output_directory)
-    with open(GOLDEN_FILEPATH, 'w') as file:
-        json.dump(outputs, file, indent=1)
-    print(f'Golden output written to {GOLDEN_FILEPATH}')
+    for engine, golden_filepath in (('cmip', GOLDEN_FILEPATH), ('gridfree', GRIDFREE_GOLDEN_FILEPATH)):
+        with tempfile.TemporaryDirectory() as work_directory:
+            output_directory, _ = run_energies(Path(work_directory), FRAMES, INTERACTIONS, engine=engine)
+            outputs = load_outputs(output_directory)
+        with open(golden_filepath, 'w') as file:
+            json.dump(outputs, file, indent=1)
+        print(f'Golden output written to {golden_filepath}')
 
 
 if __name__ == '__main__':

@@ -84,6 +84,13 @@ GRID_MARGIN = 5.0
 # Large negative values are kept since they happen in real interactions
 # e.g. the Zn2+ of carbonic anhydrase coordinated by sulfonamide ligands, -100 to -110 kcal/mol (PL-REX)
 MAX_ATOM_ENERGY = 100
+# Grid-free engine: Coulomb constant (kcal Å / mol e²), bulk dielectric of the Mehler-Solmajer sigmoidal dielectric,
+# the van der Waals radii scale (fvdw in the CMIP inputs) and cutoff (Å, CMIP's default cutvdw)
+COULOMB_CONSTANT = 332.0637
+SIGMOIDAL_BULK_DIELECTRIC = 78.4
+VDW_RADII_SCALE = 0.8
+VDW_CUTOFF = 8.0
+ENERGIES_ENGINES = ['cmip', 'gridfree']
 # Set an exception to handle internal issues
 OUTPUT_MINING_EXCEPTION = Exception('CMIP output mining failed')
 EXPECTED_CMIP_PDB_LINE_LENGTH = 65
@@ -191,8 +198,16 @@ def energies(
     frames_limit: int = 100,
     verbose: bool = False,
     debug: bool = False,
+    energies_engine: str = 'cmip',
 ):
-    """Perform the electrostatic and vdw energies analysis for each pair of interaction agents."""
+    """Perform the electrostatic and vdw energies analysis for each pair of interaction agents.
+
+    The energies engine is 'cmip' (Poisson-Boltzmann electrostatics, the default) or 'gridfree' (sigmoidal dielectric).
+    """
+    if energies_engine not in ENERGIES_ENGINES:
+        raise ValueError(
+            f'Unknown energies engine "{energies_engine}". Use one of: {", ".join(ENERGIES_ENGINES)}'
+        )
     # Make sure we have interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
@@ -297,14 +312,19 @@ def energies(
         )
 
     # Set the method to calculate the energies of each frame
-    engine = CmipEngine(
-        output_directory,
-        charges,
-        energies_structure,
-        dummy_selection,
-        debug,
-        extra_vdw_elements,
-    )
+    if energies_engine == 'gridfree':
+        engine = GridFreeEngine(
+            charges, energies_structure, dummy_selection, extra_vdw_elements
+        )
+    else:
+        engine = CmipEngine(
+            output_directory,
+            charges,
+            energies_structure,
+            dummy_selection,
+            debug,
+            extra_vdw_elements,
+        )
 
     # Extract the energies for each frame in a reduced trajectory
     frames, frame_step, frame_count = get_pdb_frames(
@@ -688,6 +708,137 @@ class CmipEngine:
         fortran_unit_files = glob(f'{self.output_directory}/fort.*')
         for filepath in fortran_unit_files:
             remove(filepath)
+
+
+class GridFreeEngine:
+    """Interaction energies with no grid: Coulomb with a sigmoidal dielectric and the van der Waals of CMIP.
+
+    The electrostatics use the Mehler-Solmajer distance-dependent dielectric (bulk 78.4) with no cutoff: they have no
+    low-dielectric cavity, so the shape of the agents only enters through distances.
+    The van der Waals is CMIP's model: 4 eps [(s/r)^12 - (s/r)^6] with the parameters of the CMIP table, s scaled by 0.8
+    and an 8 Å cutoff. As in CMIP, every atom gets the whole energy of its pairs with the other agent, atoms which are
+    dummy in general contribute nothing and get 0, and atoms in strong bonds contribute nothing and get None.
+    """
+
+    def __init__(
+        self,
+        charges: list,
+        cmip_structure: 'Structure',
+        dummy_selection: 'Selection',
+        extra_vdw_elements: set = set(),
+    ):
+        self.charges = np.array(charges, dtype=float)
+        parameters = read_cmip_vdw_parameters(extra_vdw_elements)
+        # Atoms with no parameters are never in an interaction, since interactions are checked first
+        atom_parameters = [
+            parameters.get(atom.element, (0.0, 0.0)) for atom in cmip_structure.atoms
+        ]
+        self.epsilons = np.array([epsilon for epsilon, _ in atom_parameters])
+        self.sigmas = np.array([sigma for _, sigma in atom_parameters])
+        self.dummy_atom_indices = set(dummy_selection.atom_indices)
+
+    def __call__(
+        self,
+        frame_structure: 'Structure',
+        agent1: Agent,
+        agent2: Agent,
+        strong_bonds: Optional[list],
+    ) -> tuple[list, list]:
+        """Get the energies of every atom of each agent with the other agent."""
+        strong_bond_atom_indices = set(sum(strong_bonds or [], []))
+        excluded_atom_indices = strong_bond_atom_indices | self.dummy_atom_indices
+        indices_1 = np.array(agent1.atom_indices)
+        indices_2 = np.array(agent2.atom_indices)
+        coords_1 = np.array([frame_structure.atoms[i].coords for i in indices_1])
+        coords_2 = np.array([frame_structure.atoms[i].coords for i in indices_2])
+        active_1 = np.array([i not in excluded_atom_indices for i in indices_1])
+        active_2 = np.array([i not in excluded_atom_indices for i in indices_2])
+        vdw_1, es_1, vdw_2, es_2 = get_pair_energy_sums(
+            coords_1[active_1],
+            coords_2[active_2],
+            self.charges[indices_1[active_1]],
+            self.charges[indices_2[active_2]],
+            self.epsilons[indices_1[active_1]],
+            self.epsilons[indices_2[active_2]],
+            self.sigmas[indices_1[active_1]],
+            self.sigmas[indices_2[active_2]],
+        )
+        agent_energies = []
+        for indices, active, vdw, es in [
+            (indices_1, active_1, vdw_1, es_1),
+            (indices_2, active_2, vdw_2, es_2),
+        ]:
+            energies = []
+            values = iter(zip(vdw.tolist(), es.tolist()))
+            for index, is_active in zip(indices, active):
+                if is_active:
+                    atom_vdw, atom_es = next(values)
+                    energies.append((atom_vdw, atom_es, atom_vdw + atom_es))
+                elif index in strong_bond_atom_indices:
+                    energies.append(None)
+                else:
+                    energies.append((0.0, 0.0, 0.0))
+            agent_energies.append(energies)
+        return agent_energies[0], agent_energies[1]
+
+    def cleanup(self):
+        """Do nothing, since this engine leaves no files."""
+        pass
+
+
+def mehler_solmajer_dielectric(
+    distances: np.ndarray, bulk_dielectric: float = SIGMOIDAL_BULK_DIELECTRIC
+) -> np.ndarray:
+    """Get the Mehler-Solmajer sigmoidal dielectric at the given distances (Å)."""
+    a = -8.5525
+    b = bulk_dielectric - a
+    return a + b / (1 + 7.7839 * np.exp(-0.003627 * b * distances))
+
+
+def get_pair_energy_sums(
+    coords_1: np.ndarray,
+    coords_2: np.ndarray,
+    charges_1: np.ndarray,
+    charges_2: np.ndarray,
+    epsilons_1: np.ndarray,
+    epsilons_2: np.ndarray,
+    sigmas_1: np.ndarray,
+    sigmas_2: np.ndarray,
+    block_size: int = 4000000,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Sum the van der Waals and electrostatic energies of the pairs of each atom with the atoms of the other group.
+
+    Return the vdw and es sums of the atoms of group 1 and then those of group 2.
+    Pairs are computed in blocks of group 1 atoms, so the memory stays bounded.
+    """
+    vdw_1, es_1 = np.zeros(len(coords_1)), np.zeros(len(coords_1))
+    vdw_2, es_2 = np.zeros(len(coords_2)), np.zeros(len(coords_2))
+    if len(coords_1) == 0 or len(coords_2) == 0:
+        return vdw_1, es_1, vdw_2, es_2
+    rows = max(1, block_size // len(coords_2))
+    for start in range(0, len(coords_1), rows):
+        block = slice(start, start + rows)
+        # Overlapping atoms get huge energies instead of infinite ones, so the clash rule sets them to 0
+        distances = np.maximum(
+            np.linalg.norm(coords_1[block, None] - coords_2[None], axis=-1), 0.01
+        )
+        es = (
+            COULOMB_CONSTANT
+            * charges_1[block, None]
+            * charges_2[None]
+            / (mehler_solmajer_dielectric(distances) * distances)
+        )
+        sigmas = VDW_RADII_SCALE * (sigmas_1[block, None] + sigmas_2[None]) / 2
+        epsilons = np.sqrt(epsilons_1[block, None] * epsilons_2[None])
+        ratios = (sigmas / distances) ** 6
+        vdw = np.where(
+            distances <= VDW_CUTOFF, 4 * epsilons * (ratios * ratios - ratios), 0.0
+        )
+        vdw_1[block] = vdw.sum(axis=1)
+        es_1[block] = es.sum(axis=1)
+        vdw_2 += vdw.sum(axis=0)
+        es_2 += es.sum(axis=0)
+    return vdw_1, es_1, vdw_2, es_2
 
 
 def pdb2cmip(
@@ -1130,6 +1281,12 @@ def write_cmip_vdw_table(output_filepath: str, extra_elements: set):
     CMIP matches atom types as prefixes in the order of the table, so extra elements must go before the one-letter types
     (e.g. Ca before C). Parameters are written as in the table: epsilon and sigma = 2 R*/2 / 2^(1/6), with 2 decimals.
     """
+    with open(output_filepath, 'w') as file:
+        file.write('\n'.join(get_cmip_vdw_table_lines(extra_elements)))
+
+
+def get_cmip_vdw_table_lines(extra_elements: set) -> list[str]:
+    """Get the lines of the CMIP van der Waals parameters table, with the extra elements after the header."""
     with open(CMIP_VDW_SOURCE, 'r') as file:
         header, *lines = file.read().splitlines()
     extra_lines = []
@@ -1139,8 +1296,18 @@ def write_cmip_vdw_table(output_filepath: str, extra_elements: set):
         extra_lines.append(
             f'{element:<3}{epsilon:4.2f} {sigma:4.2f}{mass:6.2f}{atomic_number:4d}{0:7.3f}'
         )
-    with open(output_filepath, 'w') as file:
-        file.write('\n'.join([header] + extra_lines + lines))
+    return [header] + extra_lines + lines
+
+
+def read_cmip_vdw_parameters(extra_elements: set) -> dict[str, tuple[float, float]]:
+    """Read the epsilon (kcal/mol) and sigma (Å) of each atom type in the CMIP table, as CMIP reads them."""
+    parameters = {}
+    for line in get_cmip_vdw_table_lines(extra_elements)[1:]:
+        if line.strip():
+            parameters.setdefault(
+                line[:3].strip(), (float(line[3:7]), float(line[8:12]))
+            )
+    return parameters
 
 
 def set_cmip_elements(structure: 'Structure'):
