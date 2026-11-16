@@ -682,6 +682,8 @@ NOT_FOUND_FLAG = 'notfound'
 
 # Reference id formats
 PDB_ID_FORMAT = r'^[1-9]{1}[a-zA-Z0-9]{3}$'
+# Extended PDB ids (e.g. pdb_00001abc), the 4 last characters are the classic id when it starts with pdb_0000
+EXTENDED_PDB_ID_FORMAT = r'^(?i:pdb_)[a-zA-Z0-9]{8}$'
 
 # Available analysis for NASSA
 NASSA_ANALYSES_LIST = ['bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff']

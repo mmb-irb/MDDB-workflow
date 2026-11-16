@@ -14,7 +14,7 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from mddb_workflow.utils.auxiliar import InputError, warn
-from mddb_workflow.utils.constants import PDB_ID_FORMAT, AVAILABLE_CHECKINGS, AVAILABLE_FAILURES, AUTOMATIC_FLAG
+from mddb_workflow.utils.constants import PDB_ID_FORMAT, EXTENDED_PDB_ID_FORMAT, AVAILABLE_CHECKINGS, AVAILABLE_FAILURES, AUTOMATIC_FLAG
 
 
 def check_translation_value(value):
@@ -273,10 +273,16 @@ class WorkflowInputs(InputsBaseModel):
         if value is None:
             return value
         pdb_ids = [value] if isinstance(value, str) else value
+        short_pdb_ids = []
         for pdb_id in pdb_ids:
-            if not re.match(PDB_ID_FORMAT, pdb_id):
+            # Extended ids with a classic 4 character equivalent are converted to it
+            # This way they match the ids already used in other projects
+            if re.match(EXTENDED_PDB_ID_FORMAT, pdb_id) and pdb_id[4:8] == '0000':
+                pdb_id = pdb_id[8:]
+            if not re.match(PDB_ID_FORMAT, pdb_id) and not re.match(EXTENDED_PDB_ID_FORMAT, pdb_id):
                 raise ValueError(f'"{pdb_id}" does not look like a PDB id.')
-        return value
+            short_pdb_ids.append(pdb_id)
+        return short_pdb_ids[0] if isinstance(value, str) else short_pdb_ids
 
 
 # The set of fields explicitly declared in the schema
@@ -328,4 +334,7 @@ def validate_inputs(inputs_data: dict, strict_unknown: bool = False) -> dict:
     # Write back the normalized ligands
     if validated.ligands is not None:
         inputs_data['ligands'] = [ligand.model_dump(exclude_none=True) for ligand in validated.ligands]
+    # Write back the PDB ids, since extended ids are converted to the classic ones
+    if validated.pdb_ids is not None:
+        inputs_data['pdb_ids'] = validated.pdb_ids
     return inputs_data

@@ -8,6 +8,7 @@ from mddb_workflow.utils.constants import GLOBALS
 from mddb_workflow.utils.constants import DATABASE_DOCUMENT_SIZE_LIMIT
 from mddb_workflow.utils.constants import DATABASE_DOCUMENT_PATTERNS, DATABASE_DOCUMENT_LIST_PATTERNS
 from mddb_workflow.utils.constants import AUTOMATIC_FLAG
+from mddb_workflow.utils.constants import EXTENDED_PDB_ID_FORMAT
 from mddb_workflow.utils.type_hints import *
 
 import os
@@ -756,10 +757,9 @@ def request_pdb_data(pdb_id: str, query: str) -> dict | None:
     The query parameter may be constructed using the following page:
     https://data.rcsb.org/graphql/index.html
     """
-    # Make sure the PDB id is valid as we set the correct key to mine the response data
-    if len(pdb_id) == 4: data_key = 'entry'
-    elif len(pdb_id) < 4 or len(pdb_id) > 4: data_key = 'chem_comp'
-    else: raise ValueError(f'Wrong PDB id "{pdb_id}". It must be 4 (entries) or less (ligands) characters long')
+    # Entries have 4 characters or the extended format (e.g. pdb_00001abc), anything else is a ligand
+    is_entry = len(pdb_id) == 4 or re.match(EXTENDED_PDB_ID_FORMAT, pdb_id)
+    data_key = 'entry' if is_entry else 'chem_comp'
     # Set the request URL
     request_url = 'https://data.rcsb.org/graphql'
     # Set the POST data
