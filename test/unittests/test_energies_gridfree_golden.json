@@ -188,7 +188,15 @@
     0
    ]
   },
-  "version": "1.2.0"
+  "version": "1.2.0",
+  "engine": "gridfree",
+  "parameters": {
+   "electrostatics": "Coulomb with the Mehler-Solmajer sigmoidal dielectric, no cutoff",
+   "bulk_dielectric": 78.4,
+   "vdw": "CMIP table",
+   "vdw_radii_scale": 0.8,
+   "vdw_cutoff": 8.0
+  }
  },
  "energies-01": {
   "name": "peptide",
@@ -442,6 +450,14 @@
     0
    ]
   },
-  "version": "1.2.0"
+  "version": "1.2.0",
+  "engine": "gridfree",
+  "parameters": {
+   "electrostatics": "Coulomb with the Mehler-Solmajer sigmoidal dielectric, no cutoff",
+   "bulk_dielectric": 78.4,
+   "vdw": "CMIP table",
+   "vdw_radii_scale": 0.8,
+   "vdw_cutoff": 8.0
+  }
  }
 }

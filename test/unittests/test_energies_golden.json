@@ -188,7 +188,16 @@
     0
    ]
   },
-  "version": "1.2.0"
+  "version": "1.2.0",
+  "engine": "cmip",
+  "parameters": {
+   "electrostatics": "Poisson-Boltzmann (CMIP), solute dielectric 2, solvent dielectric 79.8, no salt",
+   "grid_spacing": 0.5,
+   "grid_margin": 5.0,
+   "vdw": "CMIP table",
+   "vdw_radii_scale": 0.8,
+   "far_agents_cutoff": 30
+  }
  },
  "energies-01": {
   "name": "peptide",
@@ -442,6 +451,15 @@
     0
    ]
   },
-  "version": "1.2.0"
+  "version": "1.2.0",
+  "engine": "cmip",
+  "parameters": {
+   "electrostatics": "Poisson-Boltzmann (CMIP), solute dielectric 2, solvent dielectric 79.8, no salt",
+   "grid_spacing": 0.5,
+   "grid_margin": 5.0,
+   "vdw": "CMIP table",
+   "vdw_radii_scale": 0.8,
+   "far_agents_cutoff": 30
+  }
  }
 }

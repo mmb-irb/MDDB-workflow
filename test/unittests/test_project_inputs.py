@@ -645,3 +645,39 @@ def test_processed_topology_filename(tmp_path, input_topology, expected_topology
 
     assert File(project.get_topology_filepath()).filename == expected_topology
     assert project.mds[0].topology_filepath == project.get_topology_filepath()
+
+
+@pytest.mark.parametrize('arguments, expected', [([], 'cmip'), (['--energies_engine', 'cmip'], 'cmip'),
+                                                 (['-eng', 'gridfree'], 'gridfree')])
+def test_project_energies_engine(tmp_path, arguments, expected):
+    """The energies engine is a project option of 'mwf run', CMIP by default."""
+    from mddb_workflow.console import parser, expected_project_args
+    args = parser.parse_args(['run', *arguments])
+    assert 'energies_engine' in expected_project_args
+    assert args.energies_engine == expected
+    inputs_path = tmp_path / 'inputs.yaml'
+    inputs_path.write_text('mds:\n  - name: replica\n', encoding='utf-8')
+    project = Project(directory=str(tmp_path), inputs_filepath=str(inputs_path), energies_engine=args.energies_engine)
+    assert project.energies_engine == expected
+
+
+def test_project_energies_engine_unknown():
+    """An unknown energies engine is refused by the command line."""
+    from mddb_workflow.console import parser
+    with pytest.raises(SystemExit):
+        parser.parse_args(['run', '--energies_engine', 'apbs'])
+
+
+def test_gridfree_run_without_numba(tmp_path, monkeypatch, capsys):
+    """A run with the grid-free energies and no numba (an old environment) stops before any task, saying what to do."""
+    import sys
+    from mddb_workflow.mwf import workflow
+    from mddb_workflow.utils.auxiliar import EnvironmentError as WorkflowEnvironmentError
+    inputs_path = tmp_path / 'inputs.yaml'
+    inputs_path.write_text('mds:\n  - name: replica\n', encoding='utf-8')
+    # A None entry makes 'import numba' fail as if it was not installed
+    monkeypatch.setitem(sys.modules, 'numba', None)
+    parameters = dict(directory=str(tmp_path), inputs_filepath=str(inputs_path), energies_engine='gridfree')
+    with pytest.raises(WorkflowEnvironmentError, match='needs numba.*conda env update'):
+        workflow(project_parameters=parameters, include=['energies'])
+    assert 'Processing MD' not in capsys.readouterr().out

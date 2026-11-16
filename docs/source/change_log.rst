@@ -7,6 +7,38 @@ All notable changes to this project will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[Unreleased]
+============
+
+Added
+-----
+- Add the ``--energies_engine`` option of ``mwf run`` to choose the engine of the energies analysis: ``cmip``
+  (default) or ``gridfree``, Coulomb with a sigmoidal distance-dependent dielectric and CMIP's van der Waals
+  parameters, summed over atom pairs with no grid. On experimental binding data grid-free ranks better than CMIP on
+  PL-REX and SKEMPI-40, and as well within the uncertainty on FEP+ and protein-nucleic acid complexes, and it is
+  100-200 times faster per frame (see ``test/benchmarks/energies/README.md``). It reads frames straight from the
+  trajectory, uses a numba kernel with the CPUs given to a SLURM job, has no atom limit, and calculates frames whose
+  agents are more than 30 Å apart
+- Environments created before this version lack numba, which the grid-free engine needs: update them with
+  ``conda env update --file envs/environment.yml``. Otherwise a run that asks for the grid-free energies stops at its
+  start, saying so
+- Write the engine and its parameters in every energies output (``engine`` and ``parameters`` fields)
+
+Changed
+-------
+- The energies backup is appended frame by frame instead of rewritten, so its cost no longer grows with the square of
+  the number of frames
+- Elements missing from CMIP's van der Waals table no longer take the type of their first letter (e.g. calcium was
+  carbon): Se takes the type of S, ions take their AmberTools parameters, and interactions with other missing elements
+  (e.g. Si) are skipped with a warning
+
+Fixed
+-----
+- Energies analysis 1.2.0 (CMIP): the partner's dummy atoms keep their element in the low-dielectric cavity,
+  strong-bond atoms are kept in host files, the grid holds every atom of both agents, the grid cap keeps its
+  resolution, and clashes are counted per frame. Every project's energies are recomputed, and ``mwf run`` redoes
+  them once in existing project directories
+
 [0.1.12] - 2026-10-30
 =====================
 

@@ -1,12 +1,16 @@
 # Energies
 #
 # The energies analysis computes the electrostatic and van der Waals interaction energy of every atom of an agent with
-# the other agent of each interaction, frame by frame. It uses CMIP, a locally developed tool.
-# CMIP stands for Classical Molecular Interaction Potential and it is useful to predict electrostatic and Van der Waals
-# potentials. Electrostatics are solved with the Poisson-Boltzmann equation on a grid. Atom charges come from the topology.
+# the other agent of each interaction, frame by frame. Atom charges come from the topology.
 #
-# The frame loop, the backup and the output files are independent of the method: an engine computes the energies of
-# both agents in one frame (see EnergiesEngine). CmipEngine is the only engine for now.
+# Two engines compute the energies of both agents in one frame (see EnergiesEngine), chosen with the --energies_engine
+# option of 'mwf run':
+# - 'cmip' (the default): CMIP, a locally developed tool (Classical Molecular Interaction Potential), which solves the
+#   electrostatics with the Poisson-Boltzmann equation on a grid.
+# - 'gridfree': Coulomb with a sigmoidal distance-dependent dielectric and CMIP's van der Waals parameters, summed over
+#   atom pairs with no grid. It ranked experimental binding data better than CMIP on PL-REX and SKEMPI-40, and as well
+#   within the uncertainty on the other benchmarks, and is 100-200 times faster (test/benchmarks/energies/README.md).
+# The frame loop, the backup and the output files are independent of the engine.
 #
 # CMIP:
 # Gelpí, J.L., Kalko, S.G., Barril, X., Cirera, J., de la Cruz, X., Luque, F.J. and Orozco, M. (2001), Classical molecular interaction potentials: Improved setup procedure in molecular dynamics simulations of proteins. Proteins, 45: 428-437. doi:10.1002/prot.1159
@@ -80,6 +84,7 @@ SIGMOIDAL_BULK_DIELECTRIC = 78.4
 VDW_RADII_SCALE = 0.8
 VDW_CUTOFF = 8.0
 ENERGIES_ENGINES = ['cmip', 'gridfree']
+DEFAULT_ENERGIES_ENGINE = 'cmip'
 # The backup lets an interrupted analysis resume. Its first line describes the run (version, engine, interactions and
 # frames) and each further line holds the energies of one frame for every interaction, appended when the frame is done.
 # Up to version 1.1.0 the backup was one JSON rewritten after every frame, so its cost grew with the square of the
@@ -169,6 +174,9 @@ class EnergiesEngine(Protocol):
     log_lines: int
     # Whether frames whose agents are further apart than FAR_AGENTS_CUTOFF get energies 0 instead of being calculated
     skips_far_agents: bool
+    # The engine name (the --energies_engine option of 'mwf run') and its parameters, both written in every output file
+    name: str
+    parameters: dict
 
     def __call__(
         self,
@@ -198,7 +206,7 @@ def energies(
     frames_limit: int = 100,
     verbose: bool = False,
     debug: bool = False,
-    energies_engine: str = 'cmip',
+    energies_engine: str = DEFAULT_ENERGIES_ENGINE,
 ):
     """Perform the electrostatic and vdw energies analysis for each pair of interaction agents.
 
@@ -364,6 +372,7 @@ def energies(
         computed_interactions,
         frame_step,
         output_analysis_filepath,
+        engine,
     )
 
     # Remove the backup to avoid accidentally reusing it when the output file is deleted
@@ -626,8 +635,12 @@ def save_outputs(
     interactions: list[dict],
     frame_step: int,
     output_analysis_filepath: str,
+    engine: EnergiesEngine,
 ):
-    """Save the atom average energies of each interaction in its own file, and a summary listing them."""
+    """Save the atom average energies of each interaction in its own file, and a summary listing them.
+
+    Each file also says which engine computed the energies, and with which parameters.
+    """
     output_summary = []
     for i, interaction in enumerate(interactions):
         # Get the numerated output filepath for this specific interaction
@@ -657,6 +670,8 @@ def save_outputs(
             'agent1': agent1_output,
             'agent2': agent2_output,
             'version': ENERGIES_ANALYSIS_VERSION,
+            'engine': engine.name,
+            'parameters': engine.parameters,
         }
         # Export the current interaction analysis in json format
         save_json(output, numbered_output_analysis_filepath)
@@ -676,6 +691,15 @@ class CmipEngine:
     log_lines = 2
     # The CMIP grid must hold both agents, so agents far apart would make it huge
     skips_far_agents = True
+    name = 'cmip'
+    parameters = {
+        'electrostatics': 'Poisson-Boltzmann (CMIP), solute dielectric 2, solvent dielectric 79.8, no salt',
+        'grid_spacing': GRID_UNIT_SIZE,
+        'grid_margin': GRID_MARGIN,
+        'vdw': 'CMIP table',
+        'vdw_radii_scale': VDW_RADII_SCALE,
+        'far_agents_cutoff': FAR_AGENTS_CUTOFF,
+    }
 
     def __init__(
         self,
@@ -863,6 +887,14 @@ class GridFreeEngine:
 
     log_lines = 0
     skips_far_agents = False
+    name = 'gridfree'
+    parameters = {
+        'electrostatics': 'Coulomb with the Mehler-Solmajer sigmoidal dielectric, no cutoff',
+        'bulk_dielectric': SIGMOIDAL_BULK_DIELECTRIC,
+        'vdw': 'CMIP table',
+        'vdw_radii_scale': VDW_RADII_SCALE,
+        'vdw_cutoff': VDW_CUTOFF,
+    }
 
     def __init__(
         self,

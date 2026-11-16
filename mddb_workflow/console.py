@@ -22,6 +22,7 @@ from mddb_workflow.tools.update_references import update_references, AVAILABLE_R
 from mddb_workflow.tools.update_projects import update_projects, UPDATABLE_TASKS
 from mddb_workflow.tools.viewer import view_project
 from mddb_workflow.analyses.nassa import workflow_nassa
+from mddb_workflow.analyses.energies import ENERGIES_ENGINES, DEFAULT_ENERGIES_ENGINE
 from mddb_workflow.core.dataset import Dataset
 
 expected_project_args = set(Project.__init__.__code__.co_varnames)
@@ -801,6 +802,7 @@ run_parser_workflow_args = [
     (['-rcut', '--rmsd_cutoff'], {'type': float, 'default': DEFAULT_RMSD_CUTOFF, 'help': project_init_help['rmsd_cutoff']}),
     (['-icut', '--interaction_cutoff'], {'type': float, 'default': DEFAULT_INTERACTION_CUTOFF, 'help': project_init_help['interaction_cutoff']}),
     (['-iauto', '--interactions_auto'], {'type': str, 'nargs': '?', 'const': True, 'help': project_init_help['interactions_auto']}),
+    (['-eng', '--energies_engine'], {'default': DEFAULT_ENERGIES_ENGINE, 'choices': ENERGIES_ENGINES, 'help': project_init_help['energies_engine']}),
     (['-gb', '--guess_bonds'], {'action': 'store_true', 'help': project_init_help['guess_bonds']}),
     (['-ib', '--ignore_bonds'], {'action': 'store_true', 'help': project_init_help['ignore_bonds']}),
     (['-ibox', '--ignore_box'], {'action': 'store_true', 'help': project_init_help['ignore_box']}),

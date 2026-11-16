@@ -81,7 +81,7 @@ from mddb_workflow.analyses.clusters import clusters_analysis
 from mddb_workflow.analyses.distance_per_residue import distance_per_residue
 from mddb_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from mddb_workflow.analyses.sasa import sasa
-from mddb_workflow.analyses.energies import energies
+from mddb_workflow.analyses.energies import energies, DEFAULT_ENERGIES_ENGINE, check_gridfree_requirements
 from mddb_workflow.analyses.dihedral_energies import compute_dihedral_energies
 from mddb_workflow.analyses.pockets import pockets
 from mddb_workflow.analyses.allostery import allostery
@@ -1550,6 +1550,7 @@ class Project:
         rmsd_cutoff: float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff: float = DEFAULT_INTERACTION_CUTOFF,
         interactions_auto: Optional[str] = None,
+        energies_engine: str = DEFAULT_ENERGIES_ENGINE,
         guess_bonds: bool = False,
         ignore_bonds: bool = False,
         ignore_box: bool = False,
@@ -1667,6 +1668,8 @@ class Project:
                 This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).
             interactions_auto (Optional[str]):
                 Guess input interactions automatically. A VMD selection may be passed to limit guessed interactions to a specific subset of atoms.
+            energies_engine (str):
+                Engine of the energies analysis: 'cmip' (default), CMIP's Poisson-Boltzmann electrostatics on a grid, or 'gridfree', Coulomb with a sigmoidal distance-dependent dielectric and CMIP's van der Waals parameters summed over atom pairs (much faster).
             guess_bonds (bool):
                 Force the workflow to guess atom bonds based on distance and atom radii in different frames along the trajectory instead of mining topology bonds.
             ignore_bonds (bool):
@@ -1795,6 +1798,7 @@ class Project:
         self.sample_trajectory = sample_trajectory
         self.screenshot_frame = screenshot_frame
         self.interactions_auto = interactions_auto
+        self.energies_engine = energies_engine
         self.guess_bonds = guess_bonds
         self.ignore_bonds = ignore_bonds
         self.ignore_box = ignore_box
@@ -2895,6 +2899,9 @@ def run_workflow(
             download=download,
             setup=setup,
         )
+        # The grid-free energies engine needs numba, which older environments lack, so check it before any task runs
+        if project.energies_engine == 'gridfree' and 'energies' in tasker.tasks:
+            check_gridfree_requirements()
         # Set overwritables
         project.overwritables = tasker.get_project_overwritables()
         for md in project.mds:

@@ -92,6 +92,7 @@ RUNTIME_SERVICE_ARGUMENTS = {
 
 CONFIGURATION_ARGUMENTS = {
     'debug',
+    'energies_engine',
     'faith',
     'fit',
     'frames_limit',

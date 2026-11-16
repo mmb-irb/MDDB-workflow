@@ -217,9 +217,11 @@ def test_schema(run):
     assert summary == [{'name': 'salt bridge', 'analysis': 'energies-00'}, {'name': 'peptide', 'analysis': 'energies-01'}]
     for interaction, analysis in zip(INTERACTIONS, ('energies-00', 'energies-01')):
         output = outputs[analysis]
-        assert sorted(output) == ['agent1', 'agent2', 'name', 'version']
+        assert sorted(output) == ['agent1', 'agent2', 'engine', 'name', 'parameters', 'version']
         assert output['name'] == interaction['name']
         assert output['version'] == ENERGIES_ANALYSIS_VERSION
+        assert output['engine'] == 'cmip'
+        assert output['parameters']['grid_spacing'] == 0.5
         for agent, atom_indices in (('agent1', interaction['atom_indices_1']), ('agent2', interaction['atom_indices_2'])):
             assert sorted(output[agent]) == sorted(AGENT_KEYS + ['step', 'zeroed'])
             assert output[agent]['step'] == 1
@@ -484,6 +486,17 @@ def test_gridfree_far_frame_and_salt_bridge(gridfree_run):
         assert np.allclose(far_frame, expected, rtol=0, atol=1e-9)
         assert np.abs(expected).max() > 1e-3
         assert sum(salt_bridge[agent]['ies']) < -3
+
+
+def test_cmip_is_the_default_and_engines_are_written(gridfree_run):
+    """CMIP is the default engine, and each output names its engine and parameters."""
+    import inspect
+    assert inspect.signature(energies).parameters['energies_engine'].default == 'cmip'
+    _, outputs = gridfree_run
+    for output in outputs.values():
+        assert output['engine'] == 'gridfree'
+        assert output['parameters']['bulk_dielectric'] == 78.4
+        assert output['parameters']['vdw_cutoff'] == 8.0
 
 
 def test_gridfree_without_numba(tmp_path, monkeypatch):
