@@ -1,0 +1,73 @@
+{
+  "description": "Golden vectors of the xxh3_128-sample quickhash, version 1. File content: bytes(range(256)) repeated and cut to size. Shared by biobb_common (biobb_common/provenance/quickhash.py) and the MDDB workflow (mddb_workflow/utils/quickhash.py): keep both copies identical, default_sample_size included.",
+  "algo": "xxh3_128-sample",
+  "version": 1,
+  "default_sample_size": 33554432,
+  "vectors": [
+    {
+      "size": 0,
+      "sample_size": 1048576,
+      "quickhash": "2c0a8a99dc147d5445c3b49d035665b2"
+    },
+    {
+      "size": 100,
+      "sample_size": 1048576,
+      "quickhash": "25582a8f497e09fd8d2d9fac14a5c748"
+    },
+    {
+      "size": 3145727,
+      "sample_size": 1048576,
+      "quickhash": "e88504556993b298aa97a98a6e7e2900"
+    },
+    {
+      "size": 3145728,
+      "sample_size": 1048576,
+      "quickhash": "070d6b35b1fc408e190c343fc7101509"
+    },
+    {
+      "size": 3145729,
+      "sample_size": 1048576,
+      "quickhash": "a1e92af5761a7f7fe537d061b7f696e0"
+    },
+    {
+      "size": 10485767,
+      "sample_size": 1048576,
+      "quickhash": "3e00583986a99e0f4d21b2a026269b2e"
+    },
+    {
+      "size": 2999,
+      "sample_size": 1000,
+      "quickhash": "72d7210628d703554943d89541a674ea"
+    },
+    {
+      "size": 3000,
+      "sample_size": 1000,
+      "quickhash": "0a1f7d2d6d70e276da7d6fa5b74675b0"
+    },
+    {
+      "size": 3001,
+      "sample_size": 1000,
+      "quickhash": "6595deba533c87b31e0ac75c4570b113"
+    },
+    {
+      "size": 10007,
+      "sample_size": 1000,
+      "quickhash": "f09d30b16e36b0d5b194e588d49f7f40"
+    },
+    {
+      "size": 100663295,
+      "sample_size": 33554432,
+      "quickhash": "adc8e57d24f1806c8e181802bb4e19fe"
+    },
+    {
+      "size": 100663297,
+      "sample_size": 33554432,
+      "quickhash": "7838657ee98808601d38d7f2379d75e7"
+    },
+    {
+      "size": 134217735,
+      "sample_size": 33554432,
+      "quickhash": "5c1ab407fc8915551208283f95ecb5cb"
+    }
+  ]
+}
