@@ -12,7 +12,8 @@ dependencies:
   # From biopython we use the sequence alignment tools
   - biopython>1.79
   # CMIP is used for the energies analysis
-  - bioconda::cmip
+  # Its version is pinned since the energies golden test (test/unittests/test_energies.py) holds the values it prints
+  - bioconda::cmip=2.7.0
   # Fpocket is used for the pockets analysis
   - fpocket
   # Gromacs is used for several processing and analysis steps
