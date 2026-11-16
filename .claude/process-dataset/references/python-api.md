@@ -137,7 +137,7 @@ ds.load(
 )
 ```
 
-⚠️ Outward-facing: see `data-lifecycle.md` for the `.project_id` file and when to ask first. It raises
+⚠️ Outward-facing: see `data-lifecycle.md` for the upload record and when to ask first. It raises
 `RuntimeError` at the first project that fails.
 
 ## Worked example: re-run everything that hit a specific error
@@ -172,4 +172,5 @@ State.DONE     # 'done'     — completed successfully
   dataset entry.
 - Dataset file: conventionally `mwf_ds.sql` or any `*.db`. Paths in the DB are stored relative to the
   dataset file's directory, so the dataset and its projects can be relocated together.
-- Loader trace: `.project_id` in each uploaded project directory (see `data-lifecycle.md`).
+- Upload record: `.loader_register.json` in each uploaded project directory (`.project_id` from older
+  loaders; see `data-lifecycle.md`).

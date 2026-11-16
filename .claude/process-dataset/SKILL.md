@@ -6,11 +6,13 @@ description: >-
   directories into a dataset, generate per-project inputs.yaml files from a template, launch the
   workflow across a dataset (locally, in parallel, or on SLURM), check/monitor the state of
   projects (new/waiting/running/error/done), read their logs, or upload finished projects to an
-  MDDB node with `mwf ds load`. Trigger this for any request phrased as "run the workflow over my
-  dataset", "add these projects to the dataset", "generate inputs for all projects", "change this
-  field in every inputs file", "which projects failed", "re-run the errored ones", "upload the done
-  projects", "batch process these MDs", or anything involving the mwf_ds.sql / *.db dataset file,
-  even if the user doesn't name the Dataset class explicitly.
+  MDDB node with `mwf ds load`, or clean up a dataset after its upload (free disk by deleting copies
+  and files that can be fetched again). Trigger this for any request phrased as "run the workflow
+  over my dataset", "add these projects to the dataset", "generate inputs for all projects", "change
+  this field in every inputs file", "which projects failed", "re-run the errored ones", "upload the
+  done projects", "batch process these MDs", "clean up the dataset", "free some space now that it
+  is uploaded", "archive the raw data on RES", "zip the done projects", or anything involving the
+  mwf_ds.sql / *.db dataset file, even if the user doesn't name the Dataset class explicitly.
 ---
 
 # Processing a dataset with the MDDB workflow
@@ -43,7 +45,7 @@ dataset was processed with. Different machines (a laptop, the cluster) may have 
 
 ## The end-to-end flow
 
-Most dataset work is some subset of these six steps, in order. Figure out which step the user is on
+Most dataset work is some subset of these seven steps, in order. Figure out which step the user is on
 rather than always running the whole thing.
 
 1. **Register** projects and MDs into the dataset (`add` or `scan`).
@@ -53,6 +55,9 @@ rather than always running the whole thing.
 4. **Monitor** progress and inspect state (`show`, `ls`, `logs`, `watch`, `status`, `view`).
 5. **Re-run** the ones that failed, after fixing the cause.
 6. **Upload** the finished projects to an MDDB node (`load`).
+7. **Clean up** after the upload: measure every copy, sort its files into classes, archive on RES
+   what was shared directly with us, and delete the classes the user agrees to
+   (`scripts/dataset_inventory.py`).
 
 ### 1. Register projects and MDs
 
@@ -193,7 +198,7 @@ mwf dataset show mwf_ds.sql -m                    # count per state + the 10 mos
 mwf dataset show mwf_ds.sql                       # table of the last 50 entries
 mwf dataset show mwf_ds.sql -st done -n 0         # all done rows (0 = no row limit)
 mwf dataset ls mwf_ds.sql -st error -n 5          # one block per project: full message, name,
-                                                  #   whether it is loaded, MDs
+                                                  #   state, MDs
 mwf dataset logs mwf_ds.sql -e -st error -n 3     # print the latest error logs
 mwf dataset ls mwf_ds.sql -wn -n 0                # projects with any current warning
 mwf dataset watch mwf_ds.sql                       # live-updating view
@@ -232,8 +237,8 @@ mwf dataset run mwf_ds.sql -st error -c 'mwf run'        # re-launch only the fa
 imaging), pass `-ow` alone to `mwf run`: it re-runs every task and overwrites its outputs. Before
 that, check that the raw inputs named in each `inputs.yaml` still exist (scratch cleanups delete them;
 see `references/irb-cluster.md`), since `-ow` starts again from them. Projects already uploaded keep
-their database entry through the `.project_id` file in the project directory (see step 6). `-ow` only
-replaces workflow outputs, so that file survives; don't delete or recreate project directories to
+their database entry through the loader's upload record in the project directory (see step 6). `-ow`
+only replaces workflow outputs, so that file survives; don't delete or recreate project directories to
 start over.
 
 ### 6. Upload finished projects
@@ -246,11 +251,38 @@ mwf dataset load mwf_ds.sql -o -st done                         # overwrite data
 ```
 
 ⚠️ **Outward-facing**: it writes to a remote database, so confirm the selection and get the user's
-go-ahead first. `load` selects `done` projects by default. The loader writes a `.project_id` file into
-each project it uploads and reads it on the next load, so re-uploading updates the same database
-entry instead of creating a new one. **Keep those files**: if one is lost, the next load creates a
-duplicate project. `ls` shows which projects have one (`Loaded: yes`). Details, the nodes config and
-partial uploads are in `references/data-lifecycle.md`.
+go-ahead first. `load` selects `done` projects by default. The loader writes an upload record,
+`.loader_register.json`, into each project it uploads (older loaders wrote `.project_id`) and reads it
+on the next load, so re-uploading updates the same database entry instead of creating a new one.
+**Keep those files**: if one is lost, the next load creates a duplicate project. They are local to the
+copy that ran the load: after uploading from another host, copy them back before loading from the
+main copy again. `mwf ds ls` only looks for `.project_id` (`Loaded: yes`), so it says `no` for
+projects uploaded by the current loader; `scripts/dataset_inventory.py <root> --uploads` checks the
+records instead. Details, the nodes config and partial uploads are in `references/data-lifecycle.md`.
+
+### 7. Clean up after the upload
+
+Once a dataset is on the node, most of its disk is extra copies, files the source still has, and
+outputs the node already holds. Deleting them can't be undone, so it is a step of its own, done in
+this order with `scripts/dataset_inventory.py`. Read "Clean up after the upload" in
+`references/data-lifecycle.md` (class table, commands, checks) before deleting anything.
+
+1. **Check first:** `--uploads` finds no project without an upload record, no shared accession and
+   no record with only partial loads; the records are on the main copy; the projects are published,
+   if that was the plan; and you know where the data came from.
+2. **Measure every copy** (each host, scratch, backups): size per file name.
+3. **Sort the files into classes** in `utils/cleanup_classes.yaml` until nothing large is
+   unclassified. The script never lists the bookkeeping files.
+4. **Decide each class with the user.** Extra copies and caches go. The data we received (raw
+   inputs, source files the workflow never read) is deleted when its source is **public and lasting**
+   (a public URL, a DOI), since it can be downloaded again, and archived on RES first when it was
+   **shared directly with us** (a hard drive, an S3/MinIO bucket). Outputs go once every load was
+   complete and no more corrections are expected.
+5. **Archive on RES** (MareNostrum 5) what must be kept. Ask the user for the archive's path and its
+   transfer node, and read the `README` at its root first.
+6. **Delete one class at a time,** from a reviewed `--list`, after backing up the bookkeeping and
+   with the user's confirmation. Never `rm -r` project directories.
+7. **Record it in the README:** what was deleted where, and where each class can be fetched again.
 
 ### Keep a README booking file
 
@@ -317,8 +349,13 @@ worked example are in `references/python-api.md`.
   On a copy, run `PRAGMA integrity_check`. If a `sqlite_autoindex_*` index is missing rows (a symptom:
   `count(*)` disagrees with `GROUP BY state`, or a project stays `running` forever), `REINDEX` on the
   real file fixes it. Ask before running it.
-- **`load` is outward-facing.** Confirm the selection with `ls` and get a go-ahead. Keep the
-  `.project_id` files: losing one makes the next load create a duplicate project.
+- **`load` is outward-facing.** Confirm the selection with `ls` and get a go-ahead. Keep the upload
+  records (`.loader_register.json`, or `.project_id`): losing one makes the next load create a
+  duplicate project.
+- **Cleanup deletes for good.** Start only after the upload is verified and the upload records are
+  where future loads will run. Data shared directly with us (not public) is archived on RES and its
+  MD5 checked before the local copy goes. Delete one class at a time, each confirmed by the user with
+  its size, from a reviewed `--list`; never project directories or the bookkeeping files.
 - **Dry-run big or SLURM launches** with `--debug` and show the user the count and sample commands
   before the real run.
 - **Pre-flight the generator** over the whole dataset before generating inputs at scale, and surface
@@ -343,8 +380,9 @@ Read these when the task goes beyond the summary above:
 - `references/python-api.md` — the `Dataset` class API and a full programmatic walkthrough.
 - `references/data-lifecycle.md` — the steps around processing: downloading raw data (including
   S3/MinIO buckets with rclone: list once, select files, download on the cluster), uploading
-  finished projects with `mwf ds load` (the `.project_id` file, nodes config, partial uploads), and
-  archiving them (the last two driven by the `done` state).
+  finished projects with `mwf ds load` (the upload record, nodes config, partial uploads, uploading
+  from another host), and cleaning up after the upload (checks, inventory, classes, public or shared
+  source, archiving on RES at MareNostrum 5, deleting one class at a time).
 
 ## Bundled files
 
@@ -369,4 +407,10 @@ a GROMACS nanobody dataset):
   rclone, keeps files safe from the scratch cleanup, skips excluded projects and lists missing files.
 - `upload_projects.py` — legacy: publishes `done` projects via the loader. Use `mwf ds load` instead;
   keep the script only for its continuous `--watch` mode (⚠️ outward-facing).
-- `zip_projects.py` — archive `done` projects and reclaim disk (⚠️ deletes originals after zipping).
+- `dataset_inventory.py` — steps 6-7, read-only: `--uploads` checks every project's upload record;
+  otherwise size per file name, or per cleanup class from a classes file, and `--list <class>` for the
+  paths to delete (`--list protected` for the bookkeeping backup). It refuses to list bookkeeping
+  files and warns about patterns that match nothing and symlinks that would break.
+- `zip_projects.py` — step 7: one tested zip (`zip -T`) per `done` project, rejecting zips made while
+  a file changed. It keeps the projects by default; `DELETE_AFTER = True` ⚠️ deletes each whole
+  project folder after zipping. For RES, group projects under 1 GB into larger zips.

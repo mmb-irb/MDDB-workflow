@@ -141,9 +141,11 @@ mwf dataset ls [dataset_path] [-n N] [-l] [-s COL] [-r] [query filters]
 
 Prints each project in its own block with the **full** path and message (`show` truncates them), the
 `name` from its inputs file, its state, whether it is **loaded** (a `.project_id` file exists in the
-project, left there by the loader) and its MDs with their own states and messages. `-l` adds the
-paths of the latest logs. `-n` (default 50, `0` = all) keeps the last projects after sorting. Prefer
-`ls` over `show` to read error messages or to check which projects are already uploaded.
+project; the current loader writes `.loader_register.json` instead, so `ls` says `no` for projects it
+uploaded) and its MDs with their own states and messages. `-l` adds the paths of the latest logs.
+`-n` (default 50, `0` = all) keeps the last projects after sorting. Prefer `ls` over `show` to read
+error messages. To see which projects are already uploaded, use `scripts/dataset_inventory.py <root>
+--uploads` instead (see `data-lifecycle.md`).
 
 ## `logs` — print the latest logs
 
@@ -214,7 +216,7 @@ get the user's go-ahead before running it.
 
 The default state filter of `load` is `-st done`, unlike the other subcommands. The loader's option
 counters are updated once at the end instead of after every project. It stops at the first project
-that fails. Details (the `.project_id` file, the nodes config, overwriting) are in
+that fails. Details (the upload record `.loader_register.json`, the nodes config, overwriting) are in
 `data-lifecycle.md`.
 
 ## Query filters (shared by `inputs`, `show`, `ls`, `logs`, `watch`, `run`, `load`)

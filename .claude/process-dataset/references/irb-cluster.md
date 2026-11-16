@@ -26,8 +26,8 @@ the user's SLURM group/account. Ask the user, or check their existing job script
   few weeks after processing, while the newer workflow outputs survived. The directories stay, so the
   dataset looks intact until a re-run (`mwf run -ow`) fails. Before planning a re-processing, check
   that the files named in each `inputs.yaml` still exist. Anything that must outlive the scratch
-  cleanup (the dataset file, the `.project_id` upload traces, the dataset README, the helper
-  scripts) belongs outside scratch or needs a backup there.
+  cleanup (the dataset file, the upload records `.loader_register.json` or `.project_id`, the dataset
+  README, the helper scripts) belongs outside scratch or needs a backup there.
 - `module` is **not available** on the compute nodes (non-login shell), so `module load anaconda3`
   fails. Activate conda in every job script with:
   ```bash
