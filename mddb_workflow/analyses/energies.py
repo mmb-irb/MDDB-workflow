@@ -17,15 +17,15 @@ from os.path import exists, abspath
 from shutil import copyfile
 from glob import glob
 from subprocess import run, PIPE, CompletedProcess
-from typing import NamedTuple, Protocol
+from typing import BinaryIO, NamedTuple, Protocol
 import re
 import math
+import json
 import numpy as np
 from scipy.spatial import cKDTree
 
-from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
+from mddb_workflow.tools.get_pdb_frames import get_pdb_frames, get_coordinate_frames
 from mddb_workflow.utils.auxiliar import (
-    load_json,
     save_json,
     warn,
     numerate_filename,
@@ -91,6 +91,12 @@ SIGMOIDAL_BULK_DIELECTRIC = 78.4
 VDW_RADII_SCALE = 0.8
 VDW_CUTOFF = 8.0
 ENERGIES_ENGINES = ['cmip', 'gridfree']
+# The backup lets an interrupted analysis resume. Its first line describes the run (version, engine, interactions and
+# frames) and each further line holds the energies of one frame for every interaction, appended when the frame is done.
+# Up to version 1.1.0 the backup was one JSON rewritten after every frame, so its cost grew with the square of the
+# number of frames. A backup in that format is removed, not reused.
+ENERGIES_BACKUP_FILENAME = 'backup.jsonl'
+OLD_ENERGIES_BACKUP_FILENAME = 'backup.json'
 # Set an exception to handle internal issues
 OUTPUT_MINING_EXCEPTION = Exception('CMIP output mining failed')
 EXPECTED_CMIP_PDB_LINE_LENGTH = 65
@@ -243,9 +249,8 @@ def energies(
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_ENERGIES_FILENAME}'
 
-    # Set a backup file to store some results on the fly
-    # This is useful to restore these values in case the analysis is disrupt since it is a long analysis
-    energies_backup = File(output_directory + '/backup.json')
+    # Set a backup file to store the results of every frame on the fly, so an interrupted analysis can resume
+    energies_backup = File(f'{output_directory}/{ENERGIES_BACKUP_FILENAME}')
 
     # Check the number of atoms on each interacting agent
     # If there is any agent with too many atoms CMIP will fail so we must skip this specific energies analysis by now
@@ -327,11 +332,29 @@ def energies(
         )
 
     # Extract the energies for each frame in a reduced trajectory
-    frames, frame_step, frame_count = get_pdb_frames(
+    # CMIP's input files take the atom and residue names, residue numbers and chains of the frame structure, which
+    # writing and reading each frame as a PDB file fits to the PDB format. The grid-free engine only needs coordinates.
+    get_frame_structures = (
+        get_coordinate_frame_structures if energies_engine == 'gridfree' else get_pdb_frame_structures
+    )
+    frame_structures, frame_step, frame_count = get_frame_structures(
         energies_structure, trajectory_file.path, snapshots, frames_limit
     )
+    # A backup of an older version is not reused, so its frames are never mixed with the new ones
+    old_backup_filepath = f'{output_directory}/{OLD_ENERGIES_BACKUP_FILENAME}'
+    if exists(old_backup_filepath):
+        print(' Removing an energies backup of an older version')
+        remove(old_backup_filepath)
+    # The backup is reused only by a run with the same setup
+    backup_header = {
+        'version': ENERGIES_ANALYSIS_VERSION,
+        'engine': energies_engine,
+        'interactions': [interaction['name'] for interaction in computed_interactions],
+        'frame_step': int(frame_step),
+        'frame_count': int(frame_count),
+    }
     interactions_data = get_interactions_data(
-        frames, computed_interactions, engine, energies_backup, verbose
+        frame_structures, computed_interactions, engine, energies_backup, backup_header, verbose
     )
 
     # Report the atoms set to 0 since their energies are too high
@@ -352,44 +375,134 @@ def energies(
     energies_backup.remove()
 
 
+def get_pdb_frame_structures(
+    structure: 'Structure', trajectory_filepath: str, snapshots: int, frames_limit: int
+) -> tuple[Generator['Structure', None, None], int, int]:
+    """Get the structure of every frame by writing and reading it as a PDB file.
+
+    Return a generator of frame structures, the step between frames and the number of frames.
+    """
+    pdb_frames, frame_step, frame_count = get_pdb_frames(
+        structure, trajectory_filepath, snapshots, frames_limit
+    )
+    # Each PDB file is read before the next frame is requested, which deletes it
+    frame_structures = (Structure.from_pdb_file(pdb_frame) for pdb_frame in pdb_frames)
+    return frame_structures, frame_step, frame_count
+
+
+def get_coordinate_frame_structures(
+    structure: 'Structure', trajectory_filepath: str, snapshots: int, frames_limit: int
+) -> tuple[Generator['Structure', None, None], int, int]:
+    """Get the structure of every frame by setting the frame coordinates in one copy of the structure.
+
+    Return a generator of frame structures (the same copy, with the coordinates of each frame), the step between frames
+    and the number of frames. Coordinates are rounded to 3 decimals (Å) as in a PDB file, since the frames were PDB files
+    before and so the energies do not change.
+    """
+    coordinate_frames, frame_step, frame_count = get_coordinate_frames(
+        structure, trajectory_filepath, snapshots, frames_limit
+    )
+    frame_structure = structure.copy()
+
+    def frame_structures():
+        for coordinates in coordinate_frames:
+            frame_structure.set_new_coordinates(np.round(coordinates, 3).tolist())
+            yield frame_structure
+    return frame_structures(), frame_step, frame_count
+
+
 def get_interactions_data(
-    frames: Generator[str, None, None],
+    frame_structures: Generator['Structure', None, None],
     interactions: list[dict],
     engine: EnergiesEngine,
     energies_backup: File,
+    backup_header: dict,
     verbose: bool = False,
 ) -> list[list[dict]]:
     """Get the atom energies of every interaction in every frame.
 
     Return one list per interaction with one dict per frame, with the atom energies of each agent.
-    A backup is saved after every frame, and frames already in the backup are not calculated again.
+    Each frame is appended to the backup when it is done, and frames already in the backup are not calculated again.
     """
-    # Load backup data in case there is a backup file
-    if energies_backup.exists and energies_backup.size > 0:
-        print(' Recovering energies backup')
-        interactions_data = load_json(energies_backup.path)
-    else:
-        interactions_data = [[] for interaction in interactions]
-    for frame_number, current_frame_pdb in enumerate(frames):
-        # If we already have this frame in the backup then skip it
-        if frame_number < len(interactions_data[0]):
-            continue
-        # Run the main analysis over the current frame
-        # Append the result data for each interaction
-        # WARNING: At this point structure should be corrected
-        # WARNING: Repeated atoms will make the analysis fail
-        current_frame_structure = Structure.from_pdb_file(current_frame_pdb)
-        frame_energies_data = [
-            get_interaction_frame_energies(
-                engine, current_frame_structure, interaction, verbose
-            )
-            for interaction in interactions
-        ]
-        for i, data in enumerate(frame_energies_data):
-            interactions_data[i].append(data)
-        # Save a backup just in case the process is interrupted further
-        save_json(interactions_data, energies_backup.path)
+    interactions_data = [[] for interaction in interactions]
+    backup_size = 0
+    if energies_backup.exists:
+        interactions_data, backup_size = read_backup(energies_backup.path, backup_header, len(interactions))
+        recovered_frames = len(interactions_data[0])
+        if recovered_frames > 0:
+            print(f' Recovering {recovered_frames} frames from the energies backup')
+    # Drop anything after the last complete frame (e.g. a line cut by the interruption) before appending
+    with open(energies_backup.path, 'r+b' if energies_backup.exists else 'wb') as backup:
+        backup.truncate(backup_size)
+        backup.seek(backup_size)
+        if backup_size == 0:
+            append_backup_line(backup, backup_header)
+        for frame_number, current_frame_structure in enumerate(frame_structures):
+            # If we already have this frame in the backup then skip it
+            if frame_number < len(interactions_data[0]):
+                continue
+            # Run the main analysis over the current frame
+            # Append the result data for each interaction
+            # WARNING: At this point structure should be corrected
+            # WARNING: Repeated atoms will make the analysis fail
+            frame_energies_data = [
+                get_interaction_frame_energies(
+                    engine, current_frame_structure, interaction, verbose
+                )
+                for interaction in interactions
+            ]
+            for i, data in enumerate(frame_energies_data):
+                interactions_data[i].append(data)
+            # Save a backup just in case the process is interrupted further
+            append_backup_frame(backup, frame_number, frame_energies_data)
     return interactions_data
+
+
+def read_backup(
+    backup_filepath: str, backup_header: dict, interaction_count: int
+) -> tuple[list[list[dict]], int]:
+    """Read the frames of an energies backup, up to the first incomplete or unexpected line.
+
+    Return one list per interaction with one dict per frame, and the size in bytes of the lines read.
+    A backup of a run with another setup (its first line differs from the header) gives no frames and size 0.
+    """
+    interactions_data = [[] for _ in range(interaction_count)]
+    backup_size = 0
+    with open(backup_filepath, 'rb') as backup:
+        for line_number, line in enumerate(backup):
+            # A line with no end was cut when the analysis was interrupted
+            if not line.endswith(b'\n'):
+                break
+            try:
+                record = json.loads(line)
+            except ValueError:
+                break
+            if line_number == 0:
+                if record != backup_header:
+                    print(' The energies backup is from a run with another setup and it is not reused')
+                    break
+            elif (
+                not isinstance(record, dict)
+                or record.get('frame') != line_number - 1
+                or len(record.get('interactions', [])) != interaction_count
+            ):
+                break
+            else:
+                for i, data in enumerate(record['interactions']):
+                    interactions_data[i].append(data)
+            backup_size += len(line)
+    return interactions_data, backup_size
+
+
+def append_backup_frame(backup: BinaryIO, frame_number: int, frame_energies_data: list[dict]):
+    """Append the energies of one frame for every interaction to the backup."""
+    append_backup_line(backup, {'frame': frame_number, 'interactions': frame_energies_data})
+
+
+def append_backup_line(backup: BinaryIO, record: dict):
+    """Append one record to the backup as a line of JSON, and flush it so it survives an interruption."""
+    backup.write(json.dumps(record).encode() + b'\n')
+    backup.flush()
 
 
 def get_interaction_frame_energies(
@@ -786,15 +899,6 @@ class GridFreeEngine:
         pass
 
 
-def mehler_solmajer_dielectric(
-    distances: np.ndarray, bulk_dielectric: float = SIGMOIDAL_BULK_DIELECTRIC
-) -> np.ndarray:
-    """Get the Mehler-Solmajer sigmoidal dielectric at the given distances (Å)."""
-    a = -8.5525
-    b = bulk_dielectric - a
-    return a + b / (1 + 7.7839 * np.exp(-0.003627 * b * distances))
-
-
 def get_pair_energy_sums(
     coords_1: np.ndarray,
     coords_2: np.ndarray,
@@ -804,41 +908,23 @@ def get_pair_energy_sums(
     epsilons_2: np.ndarray,
     sigmas_1: np.ndarray,
     sigmas_2: np.ndarray,
-    block_size: int = 4000000,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sum the van der Waals and electrostatic energies of the pairs of each atom with the atoms of the other group.
 
     Return the vdw and es sums of the atoms of group 1 and then those of group 2.
-    Pairs are computed in blocks of group 1 atoms, so the memory stays bounded.
+    Electrostatics use the Mehler-Solmajer sigmoidal dielectric, eps(r) = a + (bulk - a) / (1 + 7.7839 exp(-0.003627
+    (bulk - a) r)) with a = -8.5525, for every pair. The sums run in a compiled numba kernel (energies_kernel), with
+    threads as set by OMP_NUM_THREADS; numba is imported here, so only grid-free runs load it.
     """
-    vdw_1, es_1 = np.zeros(len(coords_1)), np.zeros(len(coords_1))
-    vdw_2, es_2 = np.zeros(len(coords_2)), np.zeros(len(coords_2))
     if len(coords_1) == 0 or len(coords_2) == 0:
-        return vdw_1, es_1, vdw_2, es_2
-    rows = max(1, block_size // len(coords_2))
-    for start in range(0, len(coords_1), rows):
-        block = slice(start, start + rows)
+        return np.zeros(len(coords_1)), np.zeros(len(coords_1)), np.zeros(len(coords_2)), np.zeros(len(coords_2))
+    from mddb_workflow.analyses.energies_kernel import pair_energy_sums
+    return pair_energy_sums(
+        coords_1, coords_2, charges_1, charges_2, epsilons_1, epsilons_2, sigmas_1, sigmas_2,
+        COULOMB_CONSTANT, SIGMOIDAL_BULK_DIELECTRIC, VDW_RADII_SCALE, VDW_CUTOFF,
         # Overlapping atoms get huge energies instead of infinite ones, so the clash rule sets them to 0
-        distances = np.maximum(
-            np.linalg.norm(coords_1[block, None] - coords_2[None], axis=-1), 0.01
-        )
-        es = (
-            COULOMB_CONSTANT
-            * charges_1[block, None]
-            * charges_2[None]
-            / (mehler_solmajer_dielectric(distances) * distances)
-        )
-        sigmas = VDW_RADII_SCALE * (sigmas_1[block, None] + sigmas_2[None]) / 2
-        epsilons = np.sqrt(epsilons_1[block, None] * epsilons_2[None])
-        ratios = (sigmas / distances) ** 6
-        vdw = np.where(
-            distances <= VDW_CUTOFF, 4 * epsilons * (ratios * ratios - ratios), 0.0
-        )
-        vdw_1[block] = vdw.sum(axis=1)
-        es_1[block] = es.sum(axis=1)
-        vdw_2 += vdw.sum(axis=0)
-        es_2 += es.sum(axis=0)
-    return vdw_1, es_1, vdw_2, es_2
+        minimum_distance=0.01,
+    )
 
 
 def pdb2cmip(

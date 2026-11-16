@@ -451,6 +451,101 @@ def test_unknown_engine(tmp_path):
         run_energies(tmp_path, FRAMES[:1], INTERACTIONS[:1], engine='unknown')
 
 
+# ----- Backup -----
+
+class Interrupted(Exception):
+    """Stops the analysis in the middle of a run, as a kill would."""
+
+
+def watch_frame_energies(monkeypatch, stop_after: int | None = None) -> list:
+    """Count the interaction frames the analysis calculates, and optionally stop it after this number of them."""
+    calls = []
+    calculate = energies_module.get_interaction_frame_energies
+
+    def watched(*args, **kwargs):
+        if stop_after is not None and len(calls) == stop_after:
+            raise Interrupted()
+        calls.append(1)
+        return calculate(*args, **kwargs)
+    monkeypatch.setattr(energies_module, 'get_interaction_frame_energies', watched)
+    return calls
+
+
+def interrupt(tmp_path: Path, monkeypatch, frames_done: int) -> Path:
+    """Run the grid-free analysis and stop it after some frames; return its backup."""
+    with monkeypatch.context() as patch:
+        watch_frame_energies(patch, stop_after=frames_done * len(INTERACTIONS))
+        with pytest.raises(Interrupted):
+            run_energies(tmp_path, FRAMES, INTERACTIONS, engine='gridfree')
+    return tmp_path / 'energies' / energies_module.ENERGIES_BACKUP_FILENAME
+
+
+@pytest.mark.parametrize('frames_done', [1, 2])
+@pytest.mark.parametrize('cut_line', [False, True], ids=['complete lines', 'cut last line'])
+def test_backup_resumes(tmp_path, monkeypatch, gridfree_run, frames_done, cut_line):
+    """An interrupted analysis resumes from its backup and gives the output of an uninterrupted run."""
+    backup = interrupt(tmp_path, monkeypatch, frames_done)
+    lines = backup.read_bytes().splitlines(keepends=True)
+    # A header line and one line per frame done
+    assert len(lines) == 1 + frames_done
+    if cut_line:
+        # The next frame was being written when the analysis was killed
+        with open(backup, 'ab') as file:
+            file.write(lines[-1][:len(lines[-1]) // 2])
+    calls = watch_frame_energies(monkeypatch)
+    output_directory, logs = run_energies(tmp_path, FRAMES, INTERACTIONS, engine='gridfree')
+    assert f'Recovering {frames_done} frames' in logs
+    assert len(calls) == (len(FRAMES) - frames_done) * len(INTERACTIONS)
+    assert load_outputs(output_directory) == gridfree_run[1]
+    assert not backup.exists()
+
+
+def test_backup_of_another_setup_is_not_reused(tmp_path, monkeypatch, gridfree_run):
+    """A backup written with another engine is discarded and every frame is calculated again."""
+    backup = interrupt(tmp_path, monkeypatch, 2)
+    lines = backup.read_bytes().splitlines(keepends=True)
+    header = json.loads(lines[0])
+    header['engine'] = 'cmip'
+    backup.write_bytes(json.dumps(header).encode() + b'\n' + b''.join(lines[1:]))
+    calls = watch_frame_energies(monkeypatch)
+    output_directory, logs = run_energies(tmp_path, FRAMES, INTERACTIONS, engine='gridfree')
+    assert 'another setup' in logs
+    assert len(calls) == len(FRAMES) * len(INTERACTIONS)
+    assert load_outputs(output_directory) == gridfree_run[1]
+
+
+def test_coordinate_frames_match_pdb_frames(tmp_path, monkeypatch):
+    """The grid-free frames, read from the trajectory, have exactly the coordinates of the PDB frames CMIP uses."""
+    trajectory_filepath = str(tmp_path / 'trajectory.dcd')
+    # Coordinates with more than 3 decimals, so the PDB rounds them
+    frames = FRAMES + np.array([0.00041, -0.00062, 0.00051])
+    with mdtraj.formats.DCDTrajectoryFile(trajectory_filepath, 'w') as writer:
+        writer.write(frames.astype(np.float32))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(GLOBALS, 'working_directory', str(tmp_path))
+    structure = build_structure()
+    pdb_frames, *pdb_counts = energies_module.get_pdb_frame_structures(structure, trajectory_filepath, len(frames), 100)
+    pdb_coordinates = [[atom.coords for atom in frame.atoms] for frame in pdb_frames]
+    frame_structures, *counts = energies_module.get_coordinate_frame_structures(
+        structure, trajectory_filepath, len(frames), 100)
+    coordinates = [[atom.coords for atom in frame.atoms] for frame in frame_structures]
+    assert counts == pdb_counts
+    assert len(coordinates) == len(frames)
+    assert coordinates == pdb_coordinates
+    assert not np.allclose(np.array(coordinates), frames, rtol=0, atol=1e-5)
+
+
+def test_old_backup_is_removed(tmp_path, gridfree_run):
+    """A backup in the format of version 1.1.0 or older is removed, not reused."""
+    old_backup = tmp_path / 'energies' / energies_module.OLD_ENERGIES_BACKUP_FILENAME
+    old_backup.parent.mkdir()
+    old_backup.write_text(json.dumps([[], []]))
+    output_directory, logs = run_energies(tmp_path, FRAMES, INTERACTIONS, engine='gridfree')
+    assert 'older version' in logs
+    assert not old_backup.exists()
+    assert load_outputs(output_directory) == gridfree_run[1]
+
+
 # ----- Helpers -----
 
 CMIP_LOGS = """

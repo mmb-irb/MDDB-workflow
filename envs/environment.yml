@@ -28,6 +28,8 @@ dependencies:
   # Numpy and scipy are usually already included but they are required
   - numpy
   - scipy
+  # Numba compiles the pair-energy kernel of the grid-free energies engine (BSD-2-Clause, with llvmlite)
+  - numba
   # VMD is used for some processing steps
   - vmd=1.9.3=hbf76b22_2
   # Parser to read blast results

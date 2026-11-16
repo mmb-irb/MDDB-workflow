@@ -65,6 +65,40 @@ def get_pdb_frames (
 
     return frames_generator(), frames_step, frames_count
 
+
+def get_coordinate_frames(
+    structure: 'Structure',
+    trajectory_filepath: str,
+    snapshots: int,
+    frames_limit: Optional[int] = None,
+) -> tuple[Generator['np.ndarray', None, None], int, int]:
+    """Get the coordinates (Å, one row per atom) of the frames get_pdb_frames gives, without writing PDB files.
+
+    Return a generator of coordinate arrays, the step between frames and the number of frames.
+    """
+    if frames_limit is None:
+        frames_limit = snapshots
+    # Pytraj reads the trajectory with the structure as topology
+    reference_structure_sample = get_auxiliar_filepath('.reference.cif')
+    structure.generate_mmcif_file(reference_structure_sample)
+    reduced_trajectory, frames_step, frames_count = get_reduced_pytraj_trajectory(
+        reference_structure_sample,
+        trajectory_filepath,
+        snapshots,
+        frames_limit
+    )
+    os.remove(reference_structure_sample)
+
+    def frames_generator():
+        # Print an empty line for the reprint to not delete a previous log
+        print()
+        for frame_number, frame in enumerate(reduced_trajectory.iterframe()):
+            reprint(f'Frame {frame_number+1} ({frame_number} / {frames_count})')
+            # Copy the coordinates, since the frame may be reused for the next one
+            yield frame.xyz.copy()
+
+    return frames_generator(), frames_step, frames_count
+
 # Build a generator which returns frames at the start of the trajectory in pdb format
 # The frames limit is the maximum number of frames to be iterated
 # Note that the number of frames iterated may be less than the specified number
