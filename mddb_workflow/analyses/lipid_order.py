@@ -1,5 +1,5 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn, ranger
+from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn, ranger, MISSING_TOPOLOGY
 from mddb_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names
 from mddb_workflow.tools.cg_lipids import coarse_grain_tail_chains
@@ -47,7 +47,7 @@ def lipid_order(
     # Choose the method according to the type of lipids present
     if len(cg_residues) > 0 or len(ua_residues) > 0:
         # Check supported formats: https://vachalab.github.io/gorder-manual/other_structure.html
-        if topology_file.format not in ['tpr', 'gro']:
+        if topology_file == MISSING_TOPOLOGY or topology_file.format not in ['tpr', 'gro']:
             warn('Lipid order analysis requires a TPR o GRO topology file when using cg_selection or ua_selection.')
             return {}
         # One example residue of every lipid in the bilayers, used to extract the carbon chains
