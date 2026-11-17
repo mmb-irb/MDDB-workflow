@@ -313,6 +313,9 @@ def mine_topology_bonds(bonds_source_file: Union['File', Exception]) -> list[lis
         # Sort bonds
         atom_count = pt_topology.n_atoms
         atom_bonds = sort_bonds(raw_bonds, atom_count)
+        # Select hydrogens with a cpptraj element mask, which is much faster than iterating atoms
+        hydrogens = set(pt_topology.select('@/H').tolist())
+        discard_rigid_hydrogen_bonds(atom_bonds, hydrogens)
         # If there is any bonding data then return atom bonds
         if any(len(bonds) > 0 for bonds in atom_bonds): return atom_bonds
     # If we have a TPR then use our own tool
@@ -360,6 +363,17 @@ def sort_bonds(source_bonds: list[tuple[int, int]], atom_count: int) -> list[lis
         atom_bonds[a].append(int(b))
         atom_bonds[b].append(int(a))
     return atom_bonds
+
+
+def discard_rigid_hydrogen_bonds(atom_bonds: list[list[int]], hydrogens: set[int]):
+    """Remove the bonds between two hydrogens which are bonded to the same atom.
+    Rigid water models also bond both hydrogens of every water (e.g. TIP3 in CHARMM PSF files), but they are not covalently bonded.
+    Hydrogens with no bonded atom in common (e.g. a H2 molecule) keep their bond.
+    """
+    for hydrogen in hydrogens:
+        partners = set(atom_bonds[hydrogen])
+        atom_bonds[hydrogen] = [atom for atom in atom_bonds[hydrogen]
+            if not (atom in hydrogens and partners & set(atom_bonds[atom]))]
 
 
 def find_safe_bonds(
