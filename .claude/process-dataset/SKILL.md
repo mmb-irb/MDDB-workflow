@@ -43,6 +43,16 @@ The CLI changes often. Before relying on a flag, check it with `mwf ds <subcomma
 environment that will run it, and note which workflow version (`git log -1` in the workflow repo) a
 dataset was processed with. Different machines (a laptop, the cluster) may have different versions.
 
+## The datasets tracker
+
+`.claude/datasets.md` (at the workflow repo root, git-ignored) lists every dataset in progress,
+grouped by the MDDB node it goes to, with a short state per dataset and pending cleanups. Read it at
+the start of any dataset work to see where that dataset stands. Update it, and its "Last updated"
+date, whenever a dataset changes state (downloaded, processing, uploading, uploaded, cleaned up) or
+a new one arrives. Keep it to one or a few lines per dataset: the details belong in that dataset's
+README (see "Keep a README booking file"). Remove a dataset once it is uploaded and cleaned up. If
+the file is missing, create it rather than skipping.
+
 ## The end-to-end flow
 
 Most dataset work is some subset of these seven steps, in order. Figure out which step the user is on
