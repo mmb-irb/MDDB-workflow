@@ -11,7 +11,7 @@ the user's SLURM group/account. Ask the user, or check their existing job script
 - Log in through the user's ssh alias for the cluster (often `ssh irb`). Large outputs go to
   `/scratch/<group>/$USER` (often linked as `~/scratch`), a BeeGFS filesystem shared by everyone and
   often >90% full: check `df -h /scratch` before a large run.
-- **Scratch deletes old files.** A cleanup policy removes files on scratch by their timestamp. Copy
+- **Scratch deletes old files.** A cleanup policy removes files on scratch not modified for 60 days. Copy
   tools that keep the source modification time make fresh downloads look old, so they get deleted
   during the run. This applies to `rclone copy`, `cp -p`, `rsync -a` and `tar`/`unzip`. **Update
   the timestamps after every copy into scratch**, in the same job as the copy:
@@ -28,6 +28,13 @@ the user's SLURM group/account. Ask the user, or check their existing job script
   that the files named in each `inputs.yaml` still exist. Anything that must outlive the scratch
   cleanup (the dataset file, the upload records `.loader_register.json` or `.project_id`, the dataset
   README, the helper scripts) belongs outside scratch or needs a backup there.
+  **Refresh a dataset at risk.** When a dataset still needed on scratch (not uploaded, or waiting for
+  a re-run) has files older than 30 days, touch them from the dataset folder, as a job if it is large:
+  ```bash
+  find . -mtime +30 -print -exec touch {} +
+  ```
+  Check for it whenever you report a dataset's status (`find . -mtime +30 | head`), and say so if files
+  are at risk.
 - `module` is **not available** on the compute nodes (non-login shell), so `module load anaconda3`
   fails. Activate conda in every job script with:
   ```bash
