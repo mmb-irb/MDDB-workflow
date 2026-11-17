@@ -1,5 +1,14 @@
 import os
+import sys
 import subprocess
+
+# When the mwf command is launched, check the installed dependencies before importing any of them
+# This way an old or missing package is reported clearly instead of failing later in the middle of the workflow
+# The check can be skipped by setting the MWF_SKIPDEPS environment variable (e.g. MWF_SKIPDEPS=1)
+if os.path.basename(sys.argv[0]) == 'mwf' and not os.environ.get('MWF_SKIPDEPS'):
+    from mddb_workflow.utils.dependencies import check_dependencies
+    check_dependencies()
+
 from rdkit import RDLogger
 # Mute RDKit warnings
 lg = RDLogger.logger()
