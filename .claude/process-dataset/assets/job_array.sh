@@ -8,7 +8,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mail-type=END,FAIL
-#SBATCH --time=24:00:00
+#SBATCH --time=24:00:00        # set it a bit above the longest timed project (see irb-cluster.md)
 #SBATCH --mail-user=<your_email>
 
 # Submit from the dataset root (the folder holding nanobodies.db and vhh_run/):

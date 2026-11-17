@@ -199,7 +199,9 @@ Details, the database check and the remaining network limits (HTTP 429 from PubC
 **On the IRB cluster**, read `references/irb-cluster.md` before writing any `sbatch` script: conda
 activation without `module`, using the lab's own partitions (e.g. `mmb_cpu_zen3`/`mmb_cpu_sphr`),
 `spot_cpu` (preemptible, requeue, cannot be combined with lab partitions in one job), and the
-6000-task array limit.
+6000-task array limit. Before submitting an array, check where its tasks would start with
+`sbatch --test-only` on each lab partition, and ask for a realistic `--time`: free CPUs are not
+enough, and a long limit keeps tasks off nodes with free CPUs.
 
 ### 4. Monitor and inspect
 

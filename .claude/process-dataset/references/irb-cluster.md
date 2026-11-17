@@ -82,8 +82,24 @@ the user's SLURM group/account. Ask the user, or check their existing job script
   lab partitions do not allow it, so any `--partition` list mixing them is rejected with
   `allocation failure: Invalid qos specification`, whatever `--qos` is forced. To use both, submit
   separate jobs (for example a lab-partition array and a spot array working on separate lists).
-- **Check a partition/QoS combination before submitting** with `sbatch --test-only ...`: it reports
-  where and when the job would start, or the error.
+- **Check where tasks would start before submitting.** Free CPUs alone can mislead: memory,
+  reservations and other users' pending jobs also decide. On 2026-11-17 `mmb_cpu_sphr` had 264 of
+  448 CPUs free, yet a 4-CPU task asking for more than 4 h would start 10 h later, while one asking
+  for 4 h started at once. `sbatch --test-only` reports what the scheduler would do (where and when,
+  or the error), so compare each lab partition and both together, with the array's real limits:
+  ```bash
+  for p in mmb_cpu_zen3 mmb_cpu_sphr mmb_cpu_zen3,mmb_cpu_sphr; do
+      sbatch --test-only -p $p --time=04:00:00 --array=0 job_array.sh
+  done
+  ```
+  Submit with both lab partitions (as in `assets/job_array.sh`): each task starts on whichever one
+  allows the earliest start, so the array balances itself as the load changes.
+- **Ask for a realistic `--time`.** Idle CPUs ahead of a reservation or a larger pending job are only
+  filled with tasks that end before it (backfill), so a generous limit keeps tasks off free nodes.
+  Time a few projects first (see `launching.md`), or read the run times of an earlier array
+  (`grep -h "Workflow finished in" array_logs/*.out`), and set the limit a bit above the longest.
+  Put the few much longer projects in a separate list with a longer limit. In NMRlipids (935
+  projects) the median run took 14 min, 99% under 4.7 h, the longest 9.8 h.
 - **The partition cannot be changed after submission** (`scontrol update ... Partition=` is rejected).
   Cancel pending jobs and resubmit.
 - Inspect the current setup with:
