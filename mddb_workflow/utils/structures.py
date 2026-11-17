@@ -355,8 +355,8 @@ class Atom:
                 return 'K'
         # Otherwise we asume it is a polymeric atom
         else:
-            # If the name is CA then it is an alpha/delta carbon/carboxile, not a calcium/cadmium/cobalt
-            if element in ['Ca', 'Cd', 'Co']:
+            # If the name is CA/CS then it is an alpha/delta carbon/carboxile, not a calcium/cadmium/cobalt/caesium
+            if element in ['Ca', 'Cd', 'Co', 'Cs']:
                 return 'C'
             # If the name is NA/NI then it is an alpha nitrogen, not a sodium/nickel
             if element in ['Na', 'Ni']:

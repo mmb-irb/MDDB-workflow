@@ -21,3 +21,16 @@ def test_guess_element_after_new_coordinates():
     assert ca2.guess_element() == 'Ca'
     structure.set_new_coordinates([(0.0, 0.0, 0.0), (1.53, 0.0, 0.0), (3.06, 0.0, 0.0)])
     assert ca2.guess_element() == 'C'
+
+
+def test_guess_element_bonded_cs_is_carbon():
+    """A ligand methyl carbon named CS (e.g. MDBind 1ppl, 2qtg) must not be guessed as caesium.
+    A lone CS atom is still a caesium ion.
+    """
+    lines = []
+    for serial, (name, x) in enumerate([('C1', 0.0), ('CS', 1.53)], 1):
+        lines.append((f'HETATM{str(serial).rjust(5)}  {name.ljust(3)} MTH A   1    {x:8.3f}{0.0:8.3f}{0.0:8.3f}  1.00  0.00').ljust(80))
+    lines.append((f'HETATM    3  CS   CS A   2    {30.0:8.3f}{0.0:8.3f}{0.0:8.3f}  1.00  0.00').ljust(80))
+    structure = Structure.from_pdb('\n'.join(lines) + '\n')
+    assert structure.atoms[1].guess_element() == 'C'
+    assert structure.atoms[2].guess_element() == 'Cs'
