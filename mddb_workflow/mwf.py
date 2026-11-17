@@ -846,7 +846,7 @@ class MD:
         return self.pathify(TRAJECTORY_FILENAME)
 
     def processing_input_getter(name: str):
-        """Get processing inputs (image, fit, translation) which may be set per MD.
+        """Get processing inputs (filter_selection, image, fit, translation) which may be set per MD.
         Values passed through the command line apply to all MDs.
         Otherwise the MD input is used and, if missing, the project value.
         """
@@ -858,6 +858,7 @@ class MD:
             return getattr(self.project, name)
         return getter
 
+    filter_selection = property(processing_input_getter('filter_selection'), None, None, "Atoms to be filtered (read only)")
     image = property(processing_input_getter('image'), None, None, "Set if the trajectory is to be imaged (read only)")
     fit = property(processing_input_getter('fit'), None, None, "Set if the trajectory is to be fitted (read only)")
     translation = property(processing_input_getter('translation'), None, None, "Translation for the imaging process (read only)")
@@ -1849,7 +1850,7 @@ class Project:
         # This is just pased to the filtering function which knows how to handle the default
         self.filter_selection = filter_selection if filter_selection else self.inputs.get('filter_selection', filter_selection)
         # Keep track of values passed through console, since they also override MD values
-        self.console_processing_inputs = { 'image': image, 'fit': fit, 'translation': translation }
+        self.console_processing_inputs = { 'filter_selection': filter_selection, 'image': image, 'fit': fit, 'translation': translation }
         self.image = image if image else self.inputs.get('image', image)
         self.fit = fit if fit else self.inputs.get('fit', fit)
         self.translation = translation if translation else self.inputs.get('translation', AUTOMATIC_FLAG)

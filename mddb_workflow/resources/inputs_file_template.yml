@@ -619,6 +619,7 @@ dataset_path:
 # Use a VMD selection to filter specific atoms.
 # Set 'true' to filter water and counter ions.
 # Equivalent to the "-filt" command line argument.
+# It may also be set for a specific MD inside the 'mds' list (e.g. a replica which comes with water while others do not).
 #
 # Example:
 #

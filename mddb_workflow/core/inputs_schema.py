@@ -134,6 +134,7 @@ class MDConfig(InputsBaseModel):
     input_structure_filepath: Optional[str] = None
     input_trajectory_filepaths: Optional[Union[str, list[str]]] = None
     # Processing parameters which may be different for each MD
+    filter_selection: Optional[Union[bool, str]] = None
     image: Optional[Union[bool, Literal['auto']]] = None
     fit: Optional[Union[bool, Literal['auto']]] = None
     translation: Optional[Union[str, list[float]]] = None
