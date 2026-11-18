@@ -10,6 +10,18 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ============
 
+[0.1.14] - 2026-11-18
+=====================
+
+Changed
+-------
+- Count only RMSD jumps further from the average than the xtc precision in the trajectory integrity test
+
+Fixed
+-----
+- Skip the dependency check in packaged installs (e.g. bioconda) which do not include ``environment.yml``
+- Push the release tag with a personal token so it triggers the container image publication
+
 [0.1.13] - 2026-11-18
 =====================
 
