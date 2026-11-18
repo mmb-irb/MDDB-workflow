@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for mddb_workflow/tools/generate_map.py: 54%</title>
+    <title>Coverage for mddb_workflow/tools/generate_map.py: 51%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_54cfdca1.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>mddb_workflow<span class="sep">/</span>tools<span class="sep">/</span>generate_map.py</b>:
-            <span class="pc_cov">54%</span>
+            <span class="pc_cov">51%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">593 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">319<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">274<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">301<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">292<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_ed5f3d4d315201ee_generate_metadata_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-16 17:26 +0000
+            created at 2026-11-18 17:11 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -447,7 +447,7 @@
     <p class="run"><span class="n"><a id="t365" href="#t365">365</a></span><span class="t">    <span class="key">def</span> <span class="nam">_load_forced_references</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t366" href="#t366">366</a></span><span class="t">        <span class="str">&quot;&quot;&quot;Load the references forced through the inputs file. Return True if matching should be attempted.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t367" href="#t367">367</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">self</span><span class="op">.</span><span class="nam">input_protein_references</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t368" href="#t368">368</a></span><span class="t">            <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t368" href="#t368">368</a></span><span class="t">            <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t369" href="#t369">369</a></span><span class="t">        <span class="nam">forced_uniprot_ids</span> <span class="op">=</span> <span class="nam">list</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">input_protein_references</span><span class="op">.</span><span class="nam">values</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">strict_references</span> <span class="key">else</span> <span class="nam">self</span><span class="op">.</span><span class="nam">input_protein_references</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t370" href="#t370">370</a></span><span class="t">        <span class="key">for</span> <span class="nam">uniprot_id</span> <span class="key">in</span> <span class="nam">forced_uniprot_ids</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t371" href="#t371">371</a></span><span class="t">            <span class="com"># If instead of a uniprot id there is a &#x27;no referable&#x27; flag then we skip this process</span>&nbsp;</span><span class="r"></span></p>
@@ -473,8 +473,8 @@
     <p class="pln"><span class="n"><a id="t391" href="#t391">391</a></span><span class="t"><span class="str">        It was not done before since we want forced references to have priority.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t392" href="#t392">392</a></span><span class="t"><span class="str">        Return True if any new reference was added and matching should be attempted.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t393" href="#t393">393</a></span><span class="t"><span class="str">        &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t394" href="#t394">394</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">self</span><span class="op">.</span><span class="nam">imported_references</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t395" href="#t395">395</a></span><span class="t">            <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t394" href="#t394">394</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">self</span><span class="op">.</span><span class="nam">imported_references</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t395" href="#t395">395</a></span><span class="t">            <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t396" href="#t396">396</a></span><span class="t">        <span class="nam">need_rematch</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t397" href="#t397">397</a></span><span class="t">        <span class="key">for</span> <span class="nam">uniprot_id</span><span class="op">,</span> <span class="nam">reference</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">imported_references</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t398" href="#t398">398</a></span><span class="t">            <span class="com"># If the imported reference has been aligned already (i.e. it was a forced reference)</span>&nbsp;</span><span class="r"></span></p>
@@ -491,13 +491,13 @@
     <p class="pln"><span class="n"><a id="t409" href="#t409">409</a></span><span class="t">        <span class="str">&quot;&quot;&quot;Import remote references, in case we have a project id.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t410" href="#t410">410</a></span><span class="t"><span class="str">        Return True if any new reference was added and matching should be attempted.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t411" href="#t411">411</a></span><span class="t"><span class="str">        &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t412" href="#t412">412</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">self</span><span class="op">.</span><span class="nam">remote</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t412" href="#t412">412</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">self</span><span class="op">.</span><span class="nam">remote</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t413" href="#t413">413</a></span><span class="t">            <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t414" href="#t414">414</a></span><span class="t">        <span class="nam">need_rematch</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t414" href="#t414">414</a></span><span class="t">        <span class="nam">need_rematch</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t415" href="#t415">415</a></span><span class="t">        <span class="com"># Get remote references</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t416" href="#t416">416</a></span><span class="t">        <span class="nam">remote_references</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">remote</span><span class="op">.</span><span class="nam">project_data</span><span class="op">[</span><span class="str">&#x27;metadata&#x27;</span><span class="op">]</span><span class="op">[</span><span class="str">&#x27;REFERENCES&#x27;</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t416" href="#t416">416</a></span><span class="t">        <span class="nam">remote_references</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">remote</span><span class="op">.</span><span class="nam">project_data</span><span class="op">[</span><span class="str">&#x27;metadata&#x27;</span><span class="op">]</span><span class="op">[</span><span class="str">&#x27;REFERENCES&#x27;</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t417" href="#t417">417</a></span><span class="t">        <span class="com"># If there are no referables we will have to make a bit of extra work</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t418" href="#t418">418</a></span><span class="t">        <span class="key">if</span> <span class="nam">NO_REFERABLE_FLAG</span> <span class="key">in</span> <span class="nam">remote_references</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t418" href="#t418">418</a></span><span class="t">        <span class="key">if</span> <span class="nam">NO_REFERABLE_FLAG</span> <span class="key">in</span> <span class="nam">remote_references</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t419" href="#t419">419</a></span><span class="t">            <span class="com"># Get the remote standard topology</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t420" href="#t420">420</a></span><span class="t">            <span class="nam">topology</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">remote</span><span class="op">.</span><span class="nam">get_standard_topology</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t421" href="#t421">421</a></span><span class="t">            <span class="com"># Find which chain is the no referable</span>&nbsp;</span><span class="r"></span></p>
@@ -533,16 +533,16 @@
     <p class="mis show_mis"><span class="n"><a id="t451" href="#t451">451</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">reference_sequences</span><span class="op">[</span><span class="nam">no_referable_exception</span><span class="op">]</span> <span class="op">=</span> <span class="nam">chain_sequence</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t452" href="#t452">452</a></span><span class="t">            <span class="nam">need_rematch</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t453" href="#t453">453</a></span><span class="t">        <span class="com"># Iterate remote references</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t454" href="#t454">454</a></span><span class="t">        <span class="key">for</span> <span class="nam">uniprot_id</span> <span class="key">in</span> <span class="nam">remote_references</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t454" href="#t454">454</a></span><span class="t">        <span class="key">for</span> <span class="nam">uniprot_id</span> <span class="key">in</span> <span class="nam">remote_references</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t455" href="#t455">455</a></span><span class="t">            <span class="com"># If the imported reference has been aligned already (i.e. it was a forced reference)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t456" href="#t456">456</a></span><span class="t">            <span class="key">if</span> <span class="nam">uniprot_id</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">reference_sequences</span><span class="op">:</span> <span class="key">continue</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t456" href="#t456">456</a></span><span class="t">            <span class="key">if</span> <span class="nam">uniprot_id</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">reference_sequences</span><span class="op">:</span> <span class="key">continue</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t457" href="#t457">457</a></span><span class="t">            <span class="com"># Skip the no referable flag, which has been handled already</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t458" href="#t458">458</a></span><span class="t">            <span class="key">if</span> <span class="nam">uniprot_id</span> <span class="op">==</span> <span class="nam">NO_REFERABLE_FLAG</span><span class="op">:</span> <span class="key">continue</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t459" href="#t459">459</a></span><span class="t">            <span class="nam">need_rematch</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t460" href="#t460">460</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">add_reference</span><span class="op">(</span><span class="nam">uniprot_id</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t461" href="#t461">461</a></span><span class="t">        <span class="key">if</span> <span class="nam">need_rematch</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t462" href="#t462">462</a></span><span class="t">            <span class="nam">print</span><span class="op">(</span><span class="str">f&#x27; Using references from remote project {self.remote.accession}&#x27;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t463" href="#t463">463</a></span><span class="t">        <span class="key">return</span> <span class="nam">need_rematch</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t458" href="#t458">458</a></span><span class="t">            <span class="key">if</span> <span class="nam">uniprot_id</span> <span class="op">==</span> <span class="nam">NO_REFERABLE_FLAG</span><span class="op">:</span> <span class="key">continue</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t459" href="#t459">459</a></span><span class="t">            <span class="nam">need_rematch</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t460" href="#t460">460</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">add_reference</span><span class="op">(</span><span class="nam">uniprot_id</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t461" href="#t461">461</a></span><span class="t">        <span class="key">if</span> <span class="nam">need_rematch</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t462" href="#t462">462</a></span><span class="t">            <span class="nam">print</span><span class="op">(</span><span class="str">f&#x27; Using references from remote project {self.remote.accession}&#x27;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t463" href="#t463">463</a></span><span class="t">        <span class="key">return</span> <span class="nam">need_rematch</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t464" href="#t464">464</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t465" href="#t465">465</a></span><span class="t">    <span class="key">def</span> <span class="nam">_load_pdb_references</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t466" href="#t466">466</a></span><span class="t">        <span class="str">&quot;&quot;&quot;Retrieve all uniprot ids associated to the input pdb ids, if any.</span>&nbsp;</span><span class="r"></span></p>
@@ -783,9 +783,9 @@
     <p class="mis show_mis"><span class="n"><a id="t701" href="#t701">701</a></span><span class="t">            <span class="key">raise</span> <span class="nam">RuntimeError</span><span class="op">(</span><span class="str">f&#x27;Something was wrong at position {l} :S&#x27;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t702" href="#t702">702</a></span><span class="t">        <span class="com"># &#x27;X&#x27; residues cannot be mapped since reference sequences should never have any &#x27;X&#x27;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t703" href="#t703">703</a></span><span class="t">        <span class="key">if</span> <span class="nam">letter</span> <span class="op">==</span> <span class="str">&#x27;X&#x27;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t704" href="#t704">704</a></span><span class="t">            <span class="nam">aligned_mapping</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t705" href="#t705">705</a></span><span class="t">            <span class="nam">aligned_index</span> <span class="op">+=</span> <span class="num">1</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t706" href="#t706">706</a></span><span class="t">            <span class="key">continue</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t704" href="#t704">704</a></span><span class="t">            <span class="nam">aligned_mapping</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t705" href="#t705">705</a></span><span class="t">            <span class="nam">aligned_index</span> <span class="op">+=</span> <span class="num">1</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t706" href="#t706">706</a></span><span class="t">            <span class="key">continue</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t707" href="#t707">707</a></span><span class="t">        <span class="com"># Otherwise add the equivalent aligned index to the mapping</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t708" href="#t708">708</a></span><span class="t">        <span class="com"># WARNING: Add +1 since uniprot residue counts start at 1, not 0</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t709" href="#t709">709</a></span><span class="t">        <span class="nam">aligned_mapping</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">l</span> <span class="op">+</span> <span class="num">1</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -1234,7 +1234,7 @@
             <a class="nav" href="z_ed5f3d4d315201ee_generate_metadata_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-16 17:26 +0000
+            created at 2026-11-18 17:11 +0000
         </p>
     </div>
 </footer>

@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">186 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">146<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">40<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">145<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">41<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_ed5f3d4d315201ee_generate_topology_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-16 17:26 +0000
+            created at 2026-11-18 17:11 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -284,7 +284,7 @@
     <p class="pln"><span class="n"><a id="t202" href="#t202">202</a></span><span class="t">    <span class="com"># We can not calculate SAS over these chains anyway but we must identify them to further handle them</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t203" href="#t203">203</a></span><span class="t">    <span class="key">for</span> <span class="nam">chain</span> <span class="key">in</span> <span class="nam">structure</span><span class="op">.</span><span class="nam">chains</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t204" href="#t204">204</a></span><span class="t">        <span class="key">if</span> <span class="nam">chain</span><span class="op">.</span><span class="nam">classification</span> <span class="op">==</span> <span class="str">&#x27;protein&#x27;</span><span class="op">:</span> <span class="key">continue</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t205" href="#t205">205</a></span><span class="t">        <span class="key">if</span> <span class="nam">all</span><span class="op">(</span><span class="op">[</span><span class="nam">atom</span><span class="op">.</span><span class="nam">name</span> <span class="op">==</span> <span class="str">&#x27;CA&#x27;</span> <span class="key">for</span> <span class="nam">atom</span> <span class="key">in</span> <span class="nam">chain</span><span class="op">.</span><span class="nam">atoms</span><span class="op">]</span><span class="op">)</span> <span class="key">and</span> <span class="nam">all</span><span class="op">(</span><span class="op">[</span><span class="nam">residue</span><span class="op">.</span><span class="nam">name</span> <span class="key">in</span> <span class="nam">PROTEIN_RESIDUE_NAME_LETTERS</span> <span class="key">for</span> <span class="nam">residue</span> <span class="key">in</span> <span class="nam">chain</span><span class="op">.</span><span class="nam">residues</span><span class="op">]</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t205" href="#t205">205</a></span><span class="t">        <span class="key">if</span> <span class="nam">all</span><span class="op">(</span><span class="op">[</span><span class="nam">atom</span><span class="op">.</span><span class="nam">name</span> <span class="op">==</span> <span class="str">&#x27;CA&#x27;</span> <span class="key">for</span> <span class="nam">atom</span> <span class="key">in</span> <span class="nam">chain</span><span class="op">.</span><span class="nam">atoms</span><span class="op">]</span><span class="op">)</span> <span class="key">and</span> <span class="nam">all</span><span class="op">(</span><span class="op">[</span><span class="nam">residue</span><span class="op">.</span><span class="nam">name</span> <span class="key">in</span> <span class="nam">PROTEIN_RESIDUE_NAME_LETTERS</span> <span class="key">for</span> <span class="nam">residue</span> <span class="key">in</span> <span class="nam">chain</span><span class="op">.</span><span class="nam">residues</span><span class="op">]</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t206" href="#t206">206</a></span><span class="t">            <span class="nam">knowledge_data</span><span class="op">[</span><span class="nam">chain</span><span class="op">.</span><span class="nam">name</span><span class="op">]</span> <span class="op">=</span> <span class="nam">CA_ONLY</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t207" href="#t207">207</a></span><span class="t">    <span class="com"># Set the residual area filepath</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t208" href="#t208">208</a></span><span class="t">    <span class="nam">residual_area_filepath</span> <span class="op">=</span> <span class="nam">get_auxiliar_filepath</span><span class="op">(</span><span class="nam">RESIDUAL_AREA_FILENAME</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -412,7 +412,7 @@
             <a class="nav" href="z_ed5f3d4d315201ee_generate_topology_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-16 17:26 +0000
+            created at 2026-11-18 17:11 +0000
         </p>
     </div>
 </footer>
