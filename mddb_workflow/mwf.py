@@ -2370,6 +2370,12 @@ class Project:
         return self.reference_md.simulation_box
     simulation_box = property(get_simulation_box, None, None, "Reference MD simulation box vectors, or 'dyn' if dynamic (read only)")
 
+    def get_reference_simulation_box_data(self) -> tuple:
+        """Get the reference MD simulation box data.
+        It has a different name than in the MD so MDs can compare their box with the reference MD box."""
+        return self.reference_md.simulation_box_data
+    reference_simulation_box_data = property(get_reference_simulation_box_data, None, None, "Reference MD simulation box data (read only)")
+
     def get_simulation_box_size(self) -> Optional[tuple]:
         """Get the reference MD simulation box size."""
         return self.reference_md.simulation_box_size

@@ -1,3 +1,4 @@
+import json
 from mddb_workflow.tools.get_atom_counts import get_atom_counts
 from mddb_workflow.tools.get_system_keywords import get_system_keywords
 from mddb_workflow.tools.get_lipids import get_lipids_selection
@@ -309,6 +310,10 @@ def generate_md_metadata (
     snapshots : int,
     reference_frame : int,
     global_rmsd : Optional[tuple[float, float, float]],
+    simulation_box : tuple[tuple],
+    simulation_box_size : tuple,
+    simulation_box_shape : str,
+    reference_simulation_box_data : tuple,
     warnings : dict,
     output_file : 'File'
     ):
@@ -343,8 +348,26 @@ def generate_md_metadata (
     if directory:
         del other_md_inputs[MD_DIRECTORY]
 
-    # Search for other metadata inputs specific for this MD
+    # The project metadata has the box of the reference replica
+    # If this replica has a different box then write it here to replace the project box
+    # Values read from the cache are lists while new values are tuples, so compare them as JSON
+    def is_different (value, reference_value) -> bool:
+        return json.dumps(value) != json.dumps(reference_value)
     metadata = {}
+    reference_box, reference_box_size, _, _, reference_box_shape = reference_simulation_box_data
+    if is_different(simulation_box, reference_box):
+        metadata['BOX'] = simulation_box
+    if is_different(simulation_box_shape, reference_box_shape):
+        metadata['BOXTYPE'] = simulation_box_shape
+    if is_different(simulation_box_size, reference_box_size):
+        # Write the box sizes only if all of them are available (they may be 0)
+        # Otherwise write them empty so the project box sizes are not used for this replica
+        if simulation_box_size and all(simulation_box_size):
+            metadata['BOXSIZEX'], metadata['BOXSIZEY'], metadata['BOXSIZEZ'] = simulation_box_size
+        else:
+            metadata['BOXSIZEX'] = metadata['BOXSIZEY'] = metadata['BOXSIZEZ'] = None
+
+    # Search for other metadata inputs specific for this MD
     for field in METADATA_FIELDS:
         input_field = field.lower()
         field_value = other_md_inputs.get(input_field, None)
