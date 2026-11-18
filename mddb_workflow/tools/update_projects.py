@@ -65,10 +65,16 @@ ANALYSIS_FILENAME_EXCEPTIONS = {
 ANALYSIS_TASKS = [ 'inter' ] + [ flag for flag, task in md_requestables.items()
     if isinstance(task, Task) and task.func.__module__.startswith('mddb_workflow.analyses.') ]
 # Set the files to be loaded for every project task
+# The metadata of every MD is updated along with the project metadata, so its files are loaded too
 PROJECT_TASK_FILES = {
-    'pmeta': [ OUTPUT_METADATA_FILENAME ],
+    'pmeta': [ OUTPUT_METADATA_FILENAME, f'*/{OUTPUT_METADATA_FILENAME}' ],
     'stopology': [ f'stopology/{STANDARD_TOPOLOGY_FILENAME}' ],
     'memmap': [ MEMBRANE_MAPPING_FILENAME ],
+}
+# Set the tasks with no version of their own which must be run along with a versioned task
+# The project metadata version stands for the metadata of every MD as well
+COUPLED_TASKS = {
+    'pmeta': [ 'mdmeta' ],
 }
 # Set the flags of all tasks whose version is tracked, so they may be updated
 UPDATABLE_TASKS = list(PROJECT_TASK_FILES) + ANALYSIS_TASKS
@@ -162,6 +168,11 @@ def get_task_files (task : str) -> list[str]:
     if project_files: return project_files
     # Analyses write their outputs in a directory named after the task flag in every MD directory
     return [ f'*/{task}/*' ]
+
+
+def add_coupled_tasks (tasks : list[str]) -> list[str]:
+    """Add the tasks which must be run along with the given tasks."""
+    return tasks + [ coupled for task in tasks for coupled in COUPLED_TASKS.get(task, []) ]
 
 
 def check_inputs_accession (project_directory : str, accession : str):
@@ -273,8 +284,8 @@ def update_projects (
                     'mercy': mercy,
                     'faith': faith,
                 },
-                include=tasks_to_update,
-                overwrite=stale_tasks,
+                include=add_coupled_tasks(tasks_to_update),
+                overwrite=add_coupled_tasks(stale_tasks),
             )
             # Keep track of the updated task versions
             for task in tasks_to_update:
