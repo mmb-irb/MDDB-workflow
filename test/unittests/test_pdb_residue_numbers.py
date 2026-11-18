@@ -118,6 +118,35 @@ def test_decimal_residue_numbers_unchanged():
 
 
 @pytest.mark.unit_int
+def test_repeated_chain_blocks_are_not_merged():
+    """Atoms in a later block of the same chain letter go to a new residue, not to the earlier one with the same label."""
+    residues = [
+        ('A', '0', 'WAT', WAT),
+        ('B', '0', 'WAT', WAT),
+        ('A', '0', 'WAT', WAT),
+        ('B', '0', 'WAT', WAT),
+    ]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert [residue.atom_indices for residue in structure.residues] == [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]]
+    assert [chain.name for chain in structure.chains] == ['A', 'B', 'A', 'B']
+    assert [chain.residue_indices for chain in structure.chains] == [[0], [1], [2], [3]]
+
+
+@pytest.mark.unit_int
+def test_same_number_written_differently_is_not_merged():
+    """Only the last residue is reused, even if an earlier one has the same number (e.g. '  10' and ' 010')."""
+    residues = [
+        ('A', '  10', 'WAT', WAT),
+        ('A', ' 010', 'WAT', WAT),
+        ('A', '  10', 'WAT', WAT),
+    ]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert [residue.number for residue in structure.residues] == [10, 10, 10]
+    assert [residue.atom_indices for residue in structure.residues] == [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+    assert [chain.residue_indices for chain in structure.chains] == [[0, 1, 2]]
+
+
+@pytest.mark.unit_int
 def test_hexadecimal_residue_numbers_unchanged():
     """A PDB with hexadecimal residue numbers and no placeholders is parsed in base 16."""
     residues = [

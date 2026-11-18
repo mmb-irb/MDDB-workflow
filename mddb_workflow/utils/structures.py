@@ -1597,8 +1597,9 @@ class Structure:
             # DANI: If we always check for an already existing residue there will never be repeated residues
             # DANI: However we may create residues with unconnected atoms silently (they were separated in the PDB)
             # DANI: For this reason we must only consider the last processed residue
+            # Compare by identity, since residue equality only compares numbers while parsing (chains are not set yet)
             parsed_residue = label_residues.get(residue_label, None)
-            if parsed_residue and parsed_residue != parsed_residues[-1]:
+            if parsed_residue and parsed_residue is not parsed_residues[-1]:
                 parsed_residue = None
             # Some writers (e.g. VMD) write a placeholder such as '****' for every residue number which overflows
             # In this case consecutive residues share the same label, so we can not rely on it to split them
