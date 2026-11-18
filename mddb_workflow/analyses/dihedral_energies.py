@@ -110,9 +110,10 @@ def compute_dihedral_energies(
     for energies in dihedral_energies.values():
         output_data.append({
             'indices': energies['atom_indices'],
-            'torsion': mean(energies['torsion']),
-            'ee': mean(energies['ee']) if len(energies['ee']) > 0 else None,
-            'vdw': mean(energies['vdw']) if len(energies['vdw']) > 0 else None,
+            # Convert numpy floats (e.g. float32 from MDtraj distances) to python floats so they are JSON serializable
+            'torsion': float(mean(energies['torsion'])),
+            'ee': float(mean(energies['ee'])) if len(energies['ee']) > 0 else None,
+            'vdw': float(mean(energies['vdw'])) if len(energies['vdw']) > 0 else None,
         })
 
     # Write results to disk

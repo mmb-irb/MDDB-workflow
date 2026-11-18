@@ -49,11 +49,14 @@ def load_sequence2(sequence, unit_len, unit_name='hexamer'):
             assert len(sequences) == 2
         except AssertionError:
             raise AssertionError("Error in sequence file! Check its not empty")
+    # The inverse complement is computed as DNA so the adenine complement is T
+    # Otherwise it can not be guessed from sequences with no A/T bases (e.g. CGCGCG) and NucleicAcid raises an error
     nucleic_acid = NucleicAcid(
         sequence=sequences[0],
         ic_sequence=sequences[1],
         unit_name=unit_name,
-        unit_len=unit_len)
+        unit_len=unit_len,
+        Ac='T')
     return nucleic_acid
 # This function is used to reverse the sequence and obtain the inverse complement.
 def reverse_sequence(sequence,DNA=True):

@@ -179,7 +179,10 @@ def helical_parameters (
     )
 
     # Curves+ can not read mmCIF so we give it a PDB
-    curves_structure_filepath = os.path.abspath(f'{output_directory}/{CURVES_STRUCTURE_FILENAME}')
+    # Curves+ truncates long paths (it is Fortran) so we pass it the relative path
+    # The absolute path is kept to remove the file later, since the working directory is changed in between
+    curves_structure_filepath = f'{output_directory}/{CURVES_STRUCTURE_FILENAME}'
+    curves_structure_absolute_filepath = os.path.abspath(curves_structure_filepath)
     structure.generate_pdb_file(curves_structure_filepath, show_warnings=False, accept_limitations=True)
     terminal_execution(
         trajectory_file.path,
@@ -188,7 +191,7 @@ def helical_parameters (
         sequences[0],
         output_directory
     )
-    os.remove(curves_structure_filepath)
+    os.remove(curves_structure_absolute_filepath)
     # Save in a dictionary all the computations done by the different functions called by send_files function
     dictionary_information = send_files(sequences[0], frames_limit, output_directory)
     # Set the path into the original directory outside the folder helicalparameters
@@ -415,8 +418,9 @@ def terminal_execution(
     os.chdir(output_directory)
 
     # If output has not been generated then warn the user
-    if not os.path.exists('test.cda'):
-        raise ToolError('Something went wrong with Curves+ software')
+    # Note that Curves+ may write an empty output file when it fails (e.g. when an input file is missing)
+    if not os.path.exists('test.cda') or os.path.getsize('test.cda') == 0:
+        raise ToolError(f'Something went wrong with Curves+ software. Check its output in {output_directory}/test.lis')
     # Change the file name as Canals just take the name of the .cda file to differentiate between .lis and .cda
     move("test.cda","cinput.cda")
     # We have set up level1 and level2 to 0 as if lev1=lev2=0, lev1 is set to 1 and lev2 is set to the length of the oligmer
