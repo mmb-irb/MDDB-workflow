@@ -11,6 +11,7 @@ loader_nodes.yaml
 
 # Resources
 **/blastdb
+**/resources/interproscan
 
 # Test
 atommass.dat

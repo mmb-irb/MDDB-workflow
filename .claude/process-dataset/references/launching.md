@@ -157,9 +157,40 @@ PLAS-20K it turned projects that hung for 20+ min into 1–5 min runs. Requireme
 - The local copy is a snapshot (check the file dates), while remote NCBI is live, so a few UniProt
   matches may differ. Note the database date in the README.
 
-`-lb` only replaces BLAST. Other external requests in the workflow (PubChem, the RCSB ligand page,
-InterProScan) still go over the network and return HTTP 429 when too many tasks hit them at once from
-the same IP. Keep the whole run's concurrency moderate and add a random start delay to each array task
+**Use local InterProScan with `-lip`.** The `chains` task sends every protein sequence without a
+reference in the database to the EBI InterProScan service. When EBI's job system is saturated it
+answers HTTP 400 and the task stops with `RemoteServiceError: InterProScan is overloaded right now`;
+in a PLAS-20K re-run (40 concurrent tasks) this stopped ~84% of the projects. `-lip/--local_interproscan`
+runs InterProScan 6.0.3.0 locally, with the InterPro 111.0 data. Requirements:
+
+- Nextflow 25.10.4 or newer in the environment (`conda install -c bioconda nextflow`) and Apptainer or
+  Singularity on the compute nodes.
+- The setup in `mddb_workflow/resources/interproscan/` (pipeline, member database data and container
+  images, about 37 GB on disk, about 40 min). Unlike BLAST it is **never done by the runs themselves**,
+  so a run with `-lip` and no setup stops at the `chains` task saying how to do it. Check it before
+  submitting an array, and do it once (on a node with internet) if it prints `not set up`:
+  ```bash
+  python -m mddb_workflow.utils.interproscan            # prints whether it is set up
+  python -m mddb_workflow.utils.interproscan --setup    # one-time setup, keep it out of scratch
+  ```
+- Known sequences take their precalculated matches from the InterPro Matches API (an EBI service, but a
+  quick lookup, not a job queue), only while it serves the same InterPro release as the local data
+  (pinned to 111.0). After a new InterPro release, or without internet, every chain is calculated locally
+  after a warning, which is slower (see below): `python -m mddb_workflow.utils.interproscan` prints both
+  releases. Local results lack the licensed analyses and InterPro-N that EBI runs. Note the release in the
+  dataset README.
+- Every chain without a reference runs InterProScan on its own: about 20 s when the Matches API knows it,
+  about 1.5 min otherwise (mostly start-up, whatever the length), with 4 CPUs and about 2.5 GB of memory
+  (measured 2026-11-17). Add this to the task's `--time` for the projects with most chains.
+- In our tests 5 runs in about 110 failed in their first seconds with a Nextflow `Buffer underflow` error
+  and worked when run again, so a failed run is tried up to 5 times. It is a race in Nextflow 26.10 and
+  older (nextflow-io/nextflow#7925, fixed in 26.11.0-edge by #7946): several InterProScan subworkflows split
+  the same FASTA at once and share one chunk cache. A run is also stopped after 1 hour. If a task still
+  fails, its log shows the end of the Nextflow log.
+
+`-lb` and `-lip` only replace BLAST and InterProScan. Other external requests in the workflow
+(PubChem, the RCSB ligand page) still go over the network and return HTTP 429 when too many tasks
+hit them at once from the same IP. Keep the whole run's concurrency moderate and add a random start delay to each array task
 (`sleep $((RANDOM % 61))` before `mwf run`), so that tasks do not all reach the ligand step together.
 
 ## Workflow flags for re-processing and imaging

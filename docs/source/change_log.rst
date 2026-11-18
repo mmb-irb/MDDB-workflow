@@ -10,6 +10,15 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ============
 
+Added
+-----
+- Add a local InterProScan flag (``-lip``) to run the ``chains`` task with a local InterProScan 6.0.3.0 (InterPro
+  111.0 data) instead of the remote EBI service, which fails when it is overloaded. It needs Nextflow and Apptainer,
+  Singularity or Docker, and is set up once with ``python -m mddb_workflow.utils.interproscan --setup`` (about 37 GB).
+  Known sequences take their precalculated matches from the InterPro Matches API while it serves the same InterPro
+  release as the local data, so results never mix releases. Results
+  have the same format as remote ones but lack the licensed analyses (Phobius, SignalP) and InterPro-N
+
 Changed
 -------
 - Run the remote InterProScan of the ``chains`` task with the EBI InterProScan 6 service (``iprscan6``) instead of

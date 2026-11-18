@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 
 from mddb_workflow.utils.auxiliar import load_json, save_json, retry_request
 from mddb_workflow.utils.auxiliar import RemoteServiceError, DatabaseUnavailableError
+from mddb_workflow.utils.interproscan import run_local_interproscan
 from mddb_workflow.utils.type_hints import *
 
 # Set the URL of the EBI InterProScan 6 service
@@ -129,10 +130,12 @@ def prepare_chain_references(
     structure: 'Structure',
     chains_references_file: 'File',
     database: 'Database',
+    local_interproscan: bool = False,
 ):
     """Define the main function that will be called from the main script.
     This function will get the parsed chains from the structure and request the InterProScan service
     to obtain the data for each chain.
+    If 'local_interproscan' is True, InterProScan runs locally instead of using the remote EBI service.
     """
     # Obtain the protein parsed chains from the structure
     protein_parsed_chains = structure.get_parsed_chains(only_protein=True)
@@ -150,6 +153,8 @@ def prepare_chain_references(
 
     # Save the jobids of every call to InterProScan
     interproscan_jobids = {}
+    # Save the sequences to be run in the local InterProScan
+    local_sequences = []
 
     # Iterate protein sequences
     for sequence in protein_sequences:
@@ -180,8 +185,19 @@ def prepare_chain_references(
         # Request the InterProScan service (sequence length must be at least 3)
         # Keep the returned job ids to check the status and get the results later
         if chain_data['interproscan'] is None and len(chain_data['sequence']) > 2:
+            if local_interproscan:
+                local_sequences.append(sequence)
+                continue
             interproscan_jobid = request_interproscan(sequence)
             interproscan_jobids[sequence] = interproscan_jobid
+
+    # Run the local InterProScan for all missing sequences
+    if len(local_sequences) > 0:
+        print(f' Running InterProScan locally for {len(local_sequences)} sequences. It takes 20 seconds to 2 minutes per sequence...')
+        for sequence in local_sequences:
+            save_interproscan_result(sequence, run_local_interproscan(sequence), chains_data, chains_references_file)
+        print(' Protein chains data obtained')
+        return
 
     # Get the pending interpsocan jobids
     pending_jobids = list(interproscan_jobids.values())
@@ -213,7 +229,7 @@ def get_interproscan_results(
         # Note that chains already obtained are saved, so they are not requested again
         if time.time() - start_time > INTERPROSCAN_TIMEOUT:
             raise RemoteServiceError(f'{len(pending_jobids)} InterProScan jobs did not finish in '
-                f'{INTERPROSCAN_TIMEOUT // 60} minutes. Run the workflow again later.')
+                f'{INTERPROSCAN_TIMEOUT // 60} minutes. Run the workflow again later, or run InterProScan locally (-lip).')
         time.sleep(3)  # Wait for 3 seconds
         print(f' We are still waiting for {len(pending_jobids)} jobs to finish', end='\r')
         for sequence, interproscan_jobid in interproscan_jobids.items():

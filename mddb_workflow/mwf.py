@@ -1558,6 +1558,7 @@ class Project:
         sample_trajectory: Optional[int] = None,
         screenshot_frame: Optional[int] = None,
         local_blast: bool = False,
+        local_interproscan: bool = False,
     ):
         """Initialize a Project.
 
@@ -1690,6 +1691,13 @@ class Project:
                 Run the protein mapping blast locally against a Swiss-Prot database (downloaded on first use)
                 instead of using the remote NCBI blast service. Requires BLAST+ to be installed, which can
                 be done withc 'conda install -c bioconda blast' or 'apt install ncbi-blast+'.
+            local_interproscan (bool):
+                Run InterProScan 6 locally for the chain references instead of using the remote EBI service.
+                Requires Nextflow and Apptainer, Singularity or Docker, and a local setup done once with
+                'python -m mddb_workflow.utils.interproscan --setup' (about 37 GB of disk).
+                Local results lack the licensed analyses and InterPro-N, which EBI runs.
+                Known sequences take their precalculated matches from the InterPro Matches API, when it serves
+                the same InterPro release as the local data. Otherwise all matches are calculated locally.
 
         """
         # Save input parameters
@@ -1804,6 +1812,7 @@ class Project:
         self.ignore_bonds = ignore_bonds
         self.ignore_box = ignore_box
         self.local_blast = local_blast
+        self.local_interproscan = local_interproscan
 
         # Other values which may be found/calculated on demand
         self._cg_selection = MISSING_VALUE

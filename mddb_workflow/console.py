@@ -809,6 +809,7 @@ run_parser_workflow_args = [
     (['-skip', '--skip_frames'], {'type': int, 'nargs': 2, 'action': 'append', 'default': None, 'metavar': ('MD_INDEX', 'N_FRAMES'), 'help': project_init_help['skip_frames']}),
     (['-sfr', '--screenshot_frame'], {'type': int, 'default': None, 'help': project_init_help['screenshot_frame']}),
     (['-lb', '--local_blast'], {'action': 'store_true', 'help': project_init_help['local_blast']}),
+    (['-lip', '--local_interproscan'], {'action': 'store_true', 'help': project_init_help['local_interproscan']}),
 ]
 for flags, kwargs in run_parser_workflow_args:
     run_parser_workflow_group.add_argument(*flags, **kwargs)

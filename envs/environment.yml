@@ -66,3 +66,5 @@ dependencies:
   - pymongo
   # Optional dependencies
   # - bioconda::blast
+  # Nextflow for the local InterProScan (mwf run -lip), which also needs Apptainer, Singularity or Docker
+  # - bioconda::nextflow>=25.10.4
