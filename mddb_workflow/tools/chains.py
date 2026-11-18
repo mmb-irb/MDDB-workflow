@@ -6,19 +6,27 @@ from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 
-from mddb_workflow.utils.auxiliar import warn, load_json, save_json, retry_request
+from mddb_workflow.utils.auxiliar import load_json, save_json, retry_request
 from mddb_workflow.utils.auxiliar import RemoteServiceError, DatabaseUnavailableError
 from mddb_workflow.utils.type_hints import *
 
+# Set the URL of the EBI InterProScan 6 service
+INTERPROSCAN_URL = 'https://www.ebi.ac.uk/Tools/services/rest/iprscan6'
+
+# Set the time to wait for the InterProScan jobs (seconds)
+# AGUS: a veces ha llegado a tardar ~6 minutos que es excesivo, creo que  minutos es suficiente tiempo de espera
+INTERPROSCAN_TIMEOUT = 300
+
 # Set analysis version
-CHAINS_VERSION = '0.1'
+# 0.2: InterProScan 6 results (library labels and some match fields changed from InterProScan 5)
+CHAINS_VERSION = '0.2'
 
 
 @retry_request
 def request_interproscan(sequence: str) -> str:
     """Get the sequence and name of the chain in the structure and request the InterProScan."""
     # Set the request URL
-    request_url = 'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/run'
+    request_url = f'{INTERPROSCAN_URL}/run'
     # Set the POST data
     data = urlencode({
         'email': 'daniel.beltran@irbbarcelona.org',
@@ -51,7 +59,7 @@ def check_interproscan_overload(error: HTTPError, message: str):
 def check_interproscan_status(jobid: str) -> str:
     """Check the status of the InterProScan job."""
     # Set the request URL
-    request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/status/{jobid}'
+    request_url = f'{INTERPROSCAN_URL}/status/{jobid}'
     try:
         with urlopen(request_url) as response:
             return response.read().decode("utf-8")
@@ -67,7 +75,7 @@ def check_interproscan_status(jobid: str) -> str:
 def check_interproscan_result(jobid: str) -> dict:
     """Obtain the result of the InterProScan job in json format."""
     # Set the request URL
-    request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{jobid}/json'
+    request_url = f'{INTERPROSCAN_URL}/result/{jobid}/json'
     try:
         with urlopen(request_url) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -93,6 +101,28 @@ def import_chains(chains_references_file: 'File') -> dict:
             if expected_field not in imported_chain:
                 imported_chain[expected_field] = None
     return imported_chains
+
+
+def clean_interproscan_result(interproscan_result: dict) -> dict:
+    """Remove versions and pathways so Mongo don't get confused when they change."""
+    interproscan_result.pop('interproscan-version', None)
+    interproscan_result.pop('interpro-version', None)
+    # RUBEN: creo que results siempre tiene un solo elemento, pero por si acaso iteramos
+    for result in interproscan_result['results']:
+        for match in result['matches']:
+            if match['signature'].get('entry') is not None:
+                match['signature']['entry'].pop('pathwayXRefs', None)
+    return interproscan_result
+
+
+def save_interproscan_result(sequence: str, interproscan_result: dict, chains_data: list, chains_references_file: 'File'):
+    """Add the InterProScan result of a sequence to its chain data and save all chains data.
+    Every result is saved as soon as it is done, so it is kept if the run is interrupted.
+    """
+    chain_data = next(data for data in chains_data if data['sequence'] == sequence)
+    chain_data['version'] = CHAINS_VERSION
+    chain_data['interproscan'] = clean_interproscan_result(interproscan_result)
+    save_json(chains_data, chains_references_file.path)
 
 
 def prepare_chain_references(
@@ -171,9 +201,6 @@ def get_interproscan_results(
     chains_data: list,
     chains_references_file: 'File',
 ) -> None:
-    # Set the timeout for the InterProScan jobs
-    # AGUS: a veces ha llegado a tardar ~6 minutos que es excesivo, creo que  minutos es suficiente tiempo de espera
-    TIMEOUT = 300  # 5 min (seg)
     start_time = time.time()
     # Jobs which fail in InterProScan are sent again, since failures are often temporary problems on their side
     MAX_RESUBMISSIONS = 2
@@ -182,9 +209,11 @@ def get_interproscan_results(
     # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list
     # until there are no more jobids in either list
     while len(pending_jobids) >= 1:
-        if time.time() - start_time > TIMEOUT:
-            warn("Waiting time exceeded the limit. Chains data could not be obtained. Exiting analysis.")
-            return
+        # Stop with an error so the task is not taken as done and the missing chains are requested in the next run
+        # Note that chains already obtained are saved, so they are not requested again
+        if time.time() - start_time > INTERPROSCAN_TIMEOUT:
+            raise RemoteServiceError(f'{len(pending_jobids)} InterProScan jobs did not finish in '
+                f'{INTERPROSCAN_TIMEOUT // 60} minutes. Run the workflow again later.')
         time.sleep(3)  # Wait for 3 seconds
         print(f' We are still waiting for {len(pending_jobids)} jobs to finish', end='\r')
         for sequence, interproscan_jobid in interproscan_jobids.items():
@@ -208,23 +237,12 @@ def get_interproscan_results(
                 continue
             if status != 'FINISHED':
                 raise RemoteServiceError(f'InterProScan job {interproscan_jobid} ended with status {status}.' +
-                    f' Check the details in https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{interproscan_jobid}/error')
-            # Retrive the results from InterProScan
+                    f' Check the details in {INTERPROSCAN_URL}/result/{interproscan_jobid}/error')
+            # Retrive the results from InterProScan and add them to the corresponding chain data
             interproscan_result = check_interproscan_result(interproscan_jobid)
-            # Get corresponding chain data and add the InterProScan results
-            chain_data = next(data for data in chains_data if data['sequence'] == sequence)
-            chain_data['version'] = CHAINS_VERSION
-            chain_data['interproscan'] = interproscan_result
-            # Remove version and pathways so Mongo don't get confused when they change
-            del chain_data['interproscan']['interproscan-version']
-            # RUBEN: creo que results siempre tiene un solo elemento, pero por si acaso iteramos
-            for result in chain_data['interproscan']['results']:
-                for match in result['matches']:
-                    if match['signature']['entry'] is not None:
-                        del match['signature']['entry']['pathwayXRefs']
+            save_interproscan_result(sequence, interproscan_result, chains_data, chains_references_file)
             # Remove the jobid from the queue list
             pending_jobids.remove(interproscan_jobid)
-            # Save the result
-            save_json(chains_data, chains_references_file.path)
 
     print(' Protein chains data obtained              ')
+

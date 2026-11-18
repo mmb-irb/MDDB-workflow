@@ -10,6 +10,14 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ============
 
+Changed
+-------
+- Run the remote InterProScan of the ``chains`` task with the EBI InterProScan 6 service (``iprscan6``) instead of
+  InterProScan 5. New chain references have version 0.2: InterProScan 6 names some member databases differently
+  (e.g. ``Pfam`` instead of ``PFAM``) and changed a few match fields
+- Stop the ``chains`` task with an error when the remote InterProScan jobs do not finish in 5 minutes. Before, the
+  task ended as done and the missing chains were never requested again
+
 [0.1.12] - 2026-11-16
 =====================
 
