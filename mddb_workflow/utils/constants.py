@@ -270,6 +270,9 @@ DATABASE_DOCUMENT_LIST_PATTERNS = [
 # º is forbidden since paths including this characters are not readable by MDtraj
 FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']
 
+# Precision (nm) of the coordinates in xtc files
+XTC_PRECISION = 0.001
+
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9
 # How much better two groups of jumps fit the RMSD jumps than one for the trajectory integrity test to fail

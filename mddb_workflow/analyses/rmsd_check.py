@@ -13,7 +13,7 @@ from scipy import special
 from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, InputsUpdated, warn, fail
 from mddb_workflow.utils.auxiliar import round_to_hundredths
 from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG, BIMODALITY_BIC_CUTOFF, BIMODALITY_SEPARATION_CUTOFF
-from mddb_workflow.utils.constants import META_BIMODALITY_SEPARATION_CUTOFF
+from mddb_workflow.utils.constants import META_BIMODALITY_SEPARATION_CUTOFF, XTC_PRECISION
 from mddb_workflow.utils.constants import RED_HEADER, COLOR_END
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory
 from mddb_workflow.utils.mdt_spells import iterate_xtc_frames, unrotate_box
@@ -339,7 +339,9 @@ def check_trajectory_integrity (
                 max_z_score = z_score
                 max_z_score_frame = i
             # If z score bypassed the limit then report it
-            if z_score > standard_deviations_cutoff:
+            # Jumps closer to the average than the xtc precision are rounding noise, whatever their z score
+            # e.g. bonds of rigid waters only change by rounding, so a frame with a bit more or less noise stands out
+            if z_score > standard_deviations_cutoff and abs(rmsd_jump - mean_rmsd_jump) > XTC_PRECISION:
                 # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
                 if i - 1 == bypassed_frames:
                     bypassed_frames += 1
