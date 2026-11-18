@@ -10,6 +10,32 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ============
 
+[0.1.13] - 2026-11-18
+=====================
+
+Added
+-----
+- Check the installed dependencies against ``environment.yml`` when running ``mwf``
+- Add the quickhash (sampled XXH64) of the biobb provenance files
+- Allow ``filter_selection`` per MD, like image and fit
+- Write the box of every replica in its MD metadata when it differs from the reference replica
+- Update and load the metadata of every MD along with the project metadata in ``mwf uproj``
+- Save the cell shift and the two sides of the closest cross-PBC contacts in the warning
+- Allow publishing the container image of an existing version manually
+
+Changed
+-------
+- Calculate the order of every tail of lipids split in several residues
+
+Fixed
+-----
+- Write dihedral energies as python floats so they are JSON serializable
+- Fix helical parameters with long paths (Curves+ truncated them) and with sequences without A/T bases
+- Ignore the bond between rigid water hydrogens when mining PSF and prmtop topologies
+- Guess bonded atoms named CS as carbon, not caesium
+- Do not merge residues with a repeated label into older residues when reading PDB files
+- Read PDB residue numbers which switch from decimal to hexadecimal after 9999
+
 [0.1.12] - 2026-11-16
 =====================
 
