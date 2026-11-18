@@ -1,6 +1,7 @@
 """Check the installed packages against the conda environment file of the repository.
 
 This runs before anything else when the mwf command is launched.
+It is skipped in packaged installs (e.g. bioconda) since they do not include the environment file.
 It only uses the standard library and yaml so it does not depend on the packages it checks.
 """
 import re
@@ -97,9 +98,9 @@ def check_dependencies():
     """Check every dependency in the environment file is installed with a valid version.
     Stop with a message listing all problems found otherwise.
     """
-    if not ENVIRONMENT_FILE.exists():
-        raise SystemExit(f'Missing environment file {ENVIRONMENT_FILE} to check the dependencies\n'
-            'Note that the workflow must be installed from the repository (pip install -e .)')
+    # The environment file only exists when the workflow is installed from the repository (pip install -e .)
+    # Packaged installs (e.g. bioconda or pip) do not ship it, but their dependencies were already resolved by the package manager
+    if not ENVIRONMENT_FILE.exists(): return
     with open(ENVIRONMENT_FILE) as file:
         environment = yaml.safe_load(file)
     installed = get_conda_packages()
