@@ -88,22 +88,34 @@ def aa_lipid_order(universe, snapshots, frame_step, lipids):
     order_parameters_dict = {}
     for ref in lipids:
         inchikey = ref['generated_inchikey']
-        # Take the first residue of the reference
-        res = universe.residues[ref['residue_indices'][0]]
-        # If not the cholesterol inchikey
-        if inchikey != 'HVYWMOMLDIMFJA-DPAQBDIFSA-N':
-            # Lipids can have multiple acyl chains
-            tail_C_names = get_acyl_chain_atom_names(res, sort_key=natural_sort_key)
-        else:
-            tail_C_names = [sorted(
-                [a.name for a in res.atoms.select_atoms('element C and bonded element H')],
-                key=natural_sort_key)]
+        # Force fields like AMBER Lipid14 split a lipid in several residues whose tails share atom names (e.g. PA, PC and OL)
+        # Group the residues by lipid, so every tail is searched only in the residues at its position in the lipid
+        lipids_resindices = {}
+        for residue in universe.residues[ref['residue_indices']]:
+            lipids_resindices.setdefault(residue.atoms[0].fragindex, []).append(residue.resindex)
+        lipids_resindices = list(lipids_resindices.values())
+        # Take the tails of the first lipid of the reference
+        tails = []
+        for position, resindex in enumerate(lipids_resindices[0]):
+            res = universe.residues[resindex]
+            # If not the cholesterol inchikey
+            if inchikey != 'HVYWMOMLDIMFJA-DPAQBDIFSA-N':
+                # Lipids can have multiple acyl chains
+                tail_C_names = get_acyl_chain_atom_names(res, sort_key=natural_sort_key)
+            else:
+                tail_C_names = [sorted(
+                    [a.name for a in res.atoms.select_atoms('element C and bonded element H')],
+                    key=natural_sort_key)]
+            # Lipids with another residue at this position (e.g. residues in another order) are left out of its tails
+            position_resindices = [resindices[position] for resindices in lipids_resindices
+                if len(resindices) > position and universe.residues[resindices[position]].resname == res.resname]
+            tails += [(C_names, position_resindices) for C_names in tail_C_names]
 
         order_parameters_dict[inchikey] = {}
         # For every 'tail'
-        for tail_idx, C_names in enumerate(tail_C_names):
+        for tail_idx, (C_names, resindices) in enumerate(tails):
             # Find all C-H bonds indices
-            ch_pairs = find_CH_bonds(universe, ref["residue_indices"], C_names)
+            ch_pairs = find_CH_bonds(universe, resindices, C_names)
             # Initialize the order parameters to sum over the trajectory
             order_parameters = []
             costheta_sums = {C_name: np.zeros(

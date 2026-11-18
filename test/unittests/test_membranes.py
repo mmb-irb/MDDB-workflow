@@ -913,6 +913,46 @@ def test_coarse_grain_order_parameters_no_tails():
     assert cg_order_parameters(gorder_data, {'DPPC': []}) == {}
 
 
+def test_acyl_chains_skip_sugar_rings():
+    """The carbons of pyranose sugars are an open chain closed by the ring oxygen, so they are not an acyl chain."""
+    from mddb_workflow.utils.mda_spells import get_all_acyl_chains
+    # Octyl glucoside
+    universe = mda.Universe.from_smiles('CCCCCCCCOC1OC(CO)C(O)C(O)C1O', generate_coordinates=False)
+    assert [len(chain) for chain in get_all_acyl_chains(universe.residues[0])] == [8]
+
+
+def test_all_atom_order_parameters_of_split_lipids():
+    """Lipids split in several residues (e.g. PA, PC and OL in AMBER Lipid14) get the order parameters of every tail
+    from its own residues, although the tails share atom names and their ester carbons are in the head residue.
+    """
+    from mddb_workflow.analyses.lipid_order import aa_lipid_order
+    tail_carbons = [f'C1{i}' for i in range(2, 8)]
+    tail_names = tail_carbons + [f'H{i}R' for i in range(2, 8)]
+    names = tail_names + ['C11', 'O11', 'C1', 'O21', 'C21'] + tail_names
+    n_lipids = 2
+    universe = mda.Universe.empty(len(names) * n_lipids, n_residues=3 * n_lipids, trajectory=True,
+        atom_resindex=np.repeat(np.arange(3 * n_lipids), [12, 5, 12] * n_lipids))
+    universe.add_TopologyAttr('names', names * n_lipids)
+    universe.add_TopologyAttr('elements', [name[0] for name in names] * n_lipids)
+    universe.add_TopologyAttr('resnames', ['PA', 'PC', 'OL'] * n_lipids)
+    bonds = []
+    for start in range(0, len(names) * n_lipids, len(names)):
+        for tail_start in (start, start + 17):
+            bonds += [(tail_start + i, tail_start + i + 1) for i in range(5)]
+            bonds += [(tail_start + i, tail_start + 6 + i) for i in range(6)]
+        # The ester carbons of the PC residue are bonded to the first carbon of the PA and OL tails
+        bonds += [(start + 12 + i, start + 13 + i) for i in range(4)] + [(start + 12, start), (start + 16, start + 17)]
+    universe.add_TopologyAttr('bonds', bonds)
+    # C-H bonds of the PA tails along the z axis and of the OL tails perpendicular to it
+    universe.select_atoms('resname PA and element H').positions = [0, 0, 1]
+    universe.select_atoms('resname OL and element H').positions = [1, 0, 0]
+    lipids = [{'generated_inchikey': 'POPC', 'residue_indices': list(range(3 * n_lipids))}]
+    assert aa_lipid_order(universe, 1, 1, lipids) == {'POPC': {
+        '0': {'atoms': tail_carbons, 'avg': [1.0] * 6, 'std': [0.0] * 6},
+        '1': {'atoms': tail_carbons, 'avg': [-0.5] * 6, 'std': [0.0] * 6},
+    }}
+
+
 class TestLipidInteractions:
 
     def test_coarse_grain_lipids_from_membrane_map(self, monkeypatch):

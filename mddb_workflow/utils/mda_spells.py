@@ -1,4 +1,5 @@
 import json
+import networkx as nx
 import numpy as np
 import pickle
 
@@ -171,7 +172,7 @@ def get_tpr_bonds_mdanalysis(tpr_filepath: str) -> list[tuple[int, int]]:
 
 
 def get_all_acyl_chains(residue: 'MDAnalysis.Residue', min_length=6, removeHs=True) -> list[list[int]]:
-    """Find all groups of connected Carbon atoms within a residue, including cyclic structures.
+    """Find all groups of connected Carbon atoms within a residue which are not in rings.
 
     Returns:
         list
@@ -190,43 +191,20 @@ def get_all_acyl_chains(residue: 'MDAnalysis.Residue', min_length=6, removeHs=Tr
             visited.add(current_atom.index)
             if current_atom.element == 'C':
                 group.add(current_atom.index)
-                # Add all bonded carbon atoms to the visit queue
+                # Add all bonded carbon atoms of the residue to the visit queue
+                # e.g. AMBER Lipid14 has the ester carbon of the PA tail in the PC residue
                 for bond in current_atom.bonds:
                     for bonded_atom in bond.atoms:
                         if (bonded_atom.element == 'C' and
+                                bonded_atom.resindex == residue.resindex and
                                 bonded_atom.index not in visited):
                             to_visit.append(bonded_atom)
         return list(group)
 
-    def is_cyclic_group(group_indices):
-        """Return True when the carbon-only subgraph contains a cycle."""
-        group_set = set(group_indices)
-        adjacency = {idx: set() for idx in group_set}
-        for idx in group_set:
-            atom = residue.universe.atoms[idx]
-            for bonded_atom in atom.bonded_atoms:
-                if bonded_atom.index in group_set:
-                    adjacency[idx].add(bonded_atom.index)
-
-        seen = set()
-
-        def dfs(node, parent):
-            """Depth-first search to detect cycles."""
-            seen.add(node)
-            for neigh in adjacency[node]:
-                if neigh == parent:
-                    continue
-                if neigh in seen:
-                    return True
-                if dfs(neigh, node):
-                    return True
-            return False
-
-        for node in adjacency:
-            if node not in seen and dfs(node, -1):
-                return True
-        return False
-
+    # Atoms in rings of the residue, also rings closed through other atoms (e.g. the O5 of pyranose sugars)
+    residue_atoms = set(residue.atoms.indices.tolist())
+    graph = nx.Graph([bond for bond in residue.atoms.bonds.indices.tolist() if residue_atoms.issuperset(bond)])
+    ring_atoms = {index for cycle in nx.cycle_basis(graph) for index in cycle}
     # Get all Carbon atoms in the residue
     carbon_atoms = residue.atoms.select_atoms('element C')
     visited = set()
@@ -241,8 +219,8 @@ def get_all_acyl_chains(residue: 'MDAnalysis.Residue', min_length=6, removeHs=Tr
         if carbon.index not in visited:
             # Get all carbons connected to this one
             connected_carbons = explore_carbon_group(carbon, visited)
-            # Skip rings/cycles; acyl chains should be acyclic carbon chains.
-            if is_cyclic_group(connected_carbons):
+            # Skip rings; acyl chains are acyclic carbon chains
+            if ring_atoms.intersection(connected_carbons):
                 continue
             if len(connected_carbons) >= min_length:  # Only add non-empty groups
                 carbon_groups.append(sorted(connected_carbons))
