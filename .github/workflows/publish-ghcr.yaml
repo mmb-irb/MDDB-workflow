@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - '*'
+  # Manual trigger, to publish again an existing version
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to publish (e.g. v0.1.12)'
+        required: true
 
 env:
   REGISTRY: ghcr.io
@@ -27,7 +33,8 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=${{ github.ref_name }}
+          # Manual runs take the version from their input instead of the pushed tag
+          VERSION=${{ inputs.version || github.ref_name }}
           # Remove 'v' prefix if it exists
           VERSION=${VERSION#v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
