@@ -1,14 +1,22 @@
 
+import os
 import json
 import time
+import signal
+import hashlib
+import multiprocessing
+from pathlib import Path
+from shutil import rmtree
 
 from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 
-from mddb_workflow.utils.auxiliar import load_json, save_json, retry_request
+from mddb_workflow.utils.auxiliar import load_json, save_json, retry_request, warn, get_available_cpus
 from mddb_workflow.utils.auxiliar import RemoteServiceError, DatabaseUnavailableError
 from mddb_workflow.utils.interproscan import run_local_interproscan
+from mddb_workflow.utils.interproscan import take_directory_lock, stop_on_termination, raise_on_termination
+from mddb_workflow.utils.interproscan import MAX_ATTEMPTS, RUN_TIMEOUT
 from mddb_workflow.utils.type_hints import *
 
 # Set the URL of the EBI InterProScan 6 service
@@ -262,3 +270,88 @@ def get_interproscan_results(
 
     print(' Protein chains data obtained              ')
 
+
+# Chain references are remade with the local InterProScan, which takes from 20 seconds to 2 minutes per sequence
+# Every new reference is saved in a directory shared by all nodes and processes, in a file per sequence
+# Thus every sequence is run once, although it is in several nodes or several processes share the work
+CHAIN_REFERENCES_DIRECTORY = 'chain_references'
+# A process claims a sequence before running it, so no other process runs it at the same time
+# A claim of a process in another host is taken as abandoned when it is older than the longest possible run
+CHAIN_CLAIM_EXPIRATION = MAX_ATTEMPTS * RUN_TIMEOUT + 600
+# Set the result of a sequence which is being run by another process
+CLAIMED = 'claimed'
+
+
+def get_chain_reference_filepath(sequence: str) -> Path:
+    """Get the file where the new reference of a sequence is saved."""
+    return Path(CHAIN_REFERENCES_DIRECTORY) / f'{hashlib.md5(sequence.encode()).hexdigest()}.json'
+
+
+def make_chain_reference(sequence: str) -> str | None:
+    """Run the local InterProScan for a sequence in a worker process and save its new reference in the shared directory.
+    Return the error, if any, or CLAIMED if another process is running it.
+    """
+    os.makedirs(CHAIN_REFERENCES_DIRECTORY, exist_ok=True)
+    filepath = get_chain_reference_filepath(sequence)
+    claim_directory = filepath.with_suffix('.claim')
+    if take_directory_lock(claim_directory, CHAIN_CLAIM_EXPIRATION) is not None: return CLAIMED
+    try:
+        # Another process may have finished it while we were claiming it
+        if filepath.exists(): return None
+        # Sequences shorter than 3 residues are not run, as in the chains task
+        interproscan = clean_interproscan_result(run_local_interproscan(sequence)) if len(sequence) > 2 else None
+        reference = { 'sequence': sequence, 'version': CHAINS_VERSION, 'interproscan': interproscan }
+        # Write it with a temporary name so an interrupted write is never taken as a reference
+        incomplete_filepath = filepath.with_suffix(f'.{os.getpid()}.part')
+        save_json(reference, str(incomplete_filepath))
+        os.replace(incomplete_filepath, filepath)
+    except Exception as error:
+        return f'{type(error).__name__}: {error}'
+    finally:
+        rmtree(claim_directory, ignore_errors=True)
+    return None
+
+
+def assign_cpus(cpu_sets: 'multiprocessing.Queue'):
+    """Restrict a worker process to its own CPUs, so the InterProScan runs at once do not compete for them.
+    Workers are terminated when the pool is stopped, so they stop their InterProScan run and release its claim.
+    """
+    cpus = cpu_sets.get()
+    # With only a number of CPUs, the run is told to use this many, as if it was a SLURM job of its own
+    if isinstance(cpus, int): os.environ['SLURM_CPUS_PER_TASK'] = str(cpus)
+    else: os.sched_setaffinity(0, cpus)
+    signal.signal(signal.SIGTERM, stop_on_termination)
+
+
+def make_chain_references(sequences: list[str], workers: int = 1):
+    """Make the new references which are missing in the shared directory, with several InterProScan runs at once.
+    Runs are done in worker processes, which are forked so they keep the decision about the Matches API made by this process.
+    The CPUs of this process (or of its SLURM job) are split among the runs.
+    """
+    missing_sequences = [sequence for sequence in sequences if not get_chain_reference_filepath(sequence).exists()]
+    print(f'  Running InterProScan for {len(missing_sequences)} sequences with no new reference yet, {workers} at once')
+    if len(missing_sequences) == 0: return
+    cpus = sorted(os.sched_getaffinity(0))
+    available_cpus = get_available_cpus()
+    cpus_per_worker = max(1, available_cpus // workers)
+    context = multiprocessing.get_context('fork')
+    cpu_sets = context.Queue()
+    for worker in range(workers):
+        # SLURM does not always pin the job to its CPUs, and then the CPUs it may run on are shared with other jobs
+        # Then workers are not pinned to any of them, but every run uses only its share of the CPUs of the job
+        if len(cpus) > available_cpus: cpu_sets.put(cpus_per_worker)
+        else: cpu_sets.put(cpus[worker * cpus_per_worker:(worker + 1) * cpus_per_worker] or cpus)
+    # When terminated (e.g. by scancel), stop the InterProScan runs and release their claims
+    # Note that the pool stops its workers when leaving, also if this process is interrupted
+    failed_count = claimed_count = 0
+    with raise_on_termination(), context.Pool(workers, initializer=assign_cpus, initargs=(cpu_sets,)) as pool:
+        errors = pool.imap(make_chain_reference, missing_sequences)
+        # Show the progress of the runs and warn about the failed ones as they end
+        for s, (sequence, error) in enumerate(zip(missing_sequences, errors), 1):
+            if error == CLAIMED:
+                claimed_count += 1
+            elif error:
+                failed_count += 1
+                warn(f'InterProScan failed for sequence {sequence[:20]}...: {error}')
+            print(f'  InterProScan done for {s}/{len(missing_sequences)} sequences '
+                f'({failed_count} failed, {claimed_count} run by another process)')

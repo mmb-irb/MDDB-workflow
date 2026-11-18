@@ -18,8 +18,9 @@ import pytest
 
 import mddb_workflow.utils.interproscan as interproscan
 import mddb_workflow.tools.chains as chains
+import mddb_workflow.tools.update_references as update_references
 from mddb_workflow.utils.file import File
-from mddb_workflow.utils.auxiliar import ToolError, DatabaseUnavailableError, load_json
+from mddb_workflow.utils.auxiliar import ToolError, DatabaseUnavailableError, load_json, get_available_cpus
 
 
 def build_match(accession: str, entry_accession: str | None) -> dict:
@@ -515,3 +516,128 @@ def test_cleanup_with_no_entry_field():
         'results': [{'matches': [match, build_match('PF00002', 'IPR000002')]}]})
     assert set(result) == {'results'}
     assert 'pathwayXRefs' not in result['results'][0]['matches'][1]['signature']['entry']
+
+
+@pytest.mark.unit_int
+class TestChainReferencesUpdate:
+    """Remaking chain references with mwf upref and the local InterProScan, with the database and InterProScan faked."""
+
+    @pytest.fixture(autouse=True)
+    def update(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(update_references, 'prepare_local_interproscan', lambda: True)
+        # Tests are not run as a SLURM job, unless they say so
+        monkeypatch.delenv('SLURM_CPUS_PER_TASK', raising=False)
+        monkeypatch.delenv('SLURM_CPUS_ON_NODE', raising=False)
+        # Every run is written in a file, with the CPUs it may run on and how many it uses
+        # Thus runs in forked workers are counted as well
+        self.runs_directory = tmp_path / 'runs'
+        self.runs_directory.mkdir()
+        def fake_run(sequence):
+            cpus = {'allowed': sorted(os.sched_getaffinity(0)), 'used': get_available_cpus()}
+            (self.runs_directory / f'{sequence}.{os.getpid()}').write_text(json.dumps(cpus))
+            return {'interproscan-version': '6.0.3.0', 'interpro-version': '111.0',
+                'results': [{'sequence': sequence, 'matches': [build_match('PF00001', 'IPR000001')]}]}
+        monkeypatch.setattr(chains, 'run_local_interproscan', fake_run)
+        # A sequence in two nodes, an unversioned one, an updated one and one too short to run
+        nodes = {
+            'https://a.test/api/': [{'sequence': 'MKVLAAGIV', 'version': '0.1'}, {'sequence': 'GSHMSELLK'},
+                {'sequence': 'WWWWWWW', 'version': chains.CHAINS_VERSION}, {'sequence': 'MK', 'version': '0.1'}],
+            'https://b.test/api/': [{'sequence': 'MKVLAAGIV', 'version': '0.1'}],
+        }
+        class FakeDatabase:
+            def __init__(self, url):
+                self.url = url
+            def get_all_refences_data(self, endpoint):
+                assert endpoint == 'chains'
+                return nodes[self.url]
+        monkeypatch.setattr(update_references, 'Database', FakeDatabase)
+        # The loader uploads the references file of a node, which is then moved aside
+        self.uploads = {}
+        uploads = self.uploads
+        class FakeLoader:
+            def __init__(self, loader_directory, node):
+                self.node = node
+            def load(self, directory):
+                uploads.setdefault(self.node, []).extend(load_json(f'{directory}/chains.json'))
+                return True
+            def close_ssh_connection(self):
+                pass
+        monkeypatch.setattr(update_references, 'Loader', FakeLoader)
+
+    def runs(self) -> list[str]:
+        return sorted(path.name.split('.')[0] for path in self.runs_directory.iterdir())
+
+    def test_sequences_are_run_once_for_all_nodes(self):
+        """Chains are remade with the local InterProScan, once per sequence although it is in several nodes."""
+        update_references.update_references('https://a.test/api/', 'chains', 'loader')
+        update_references.update_references('https://b.test/api/', 'chains', 'loader')
+        # Updated references and sequences shorter than 3 residues are not run
+        assert self.runs() == ['GSHMSELLK', 'MKVLAAGIV']
+        references = {reference['sequence']: reference for reference in self.uploads['https://a.test/api/']}
+        assert set(references) == {'MKVLAAGIV', 'GSHMSELLK', 'MK'}
+        assert all(reference['version'] == chains.CHAINS_VERSION for reference in references.values())
+        assert references['MK']['interproscan'] is None
+        assert set(references['MKVLAAGIV']['interproscan']) == {'results'}
+        assert [reference['sequence'] for reference in self.uploads['https://b.test/api/']] == ['MKVLAAGIV']
+
+    def test_no_loader(self):
+        """Without a loader, references are only made, in the shared directory, to be uploaded later."""
+        update_references.update_references('https://a.test/api/', 'chains')
+        assert self.runs() == ['GSHMSELLK', 'MKVLAAGIV']
+        assert len(list(Path(chains.CHAIN_REFERENCES_DIRECTORY).glob('*.json'))) == 3
+        assert not Path('a.test').exists()
+        # A later run with the loader uploads them with no new runs
+        update_references.update_references('https://a.test/api/', 'chains', 'loader')
+        assert self.runs() == ['GSHMSELLK', 'MKVLAAGIV']
+        assert len(self.uploads['https://a.test/api/']) == 3
+
+    def test_workers(self):
+        """Several InterProScan runs are done at once, each with its own CPUs."""
+        cpus = sorted(os.sched_getaffinity(0))
+        update_references.update_references('https://a.test/api/', 'chains', workers=2)
+        assert self.runs() == ['GSHMSELLK', 'MKVLAAGIV']
+        for run in self.runs_directory.iterdir():
+            assert int(run.name.split('.')[1]) != os.getpid()
+            if len(cpus) >= 2: assert json.loads(run.read_text())['used'] == len(cpus) // 2
+
+    def test_workers_in_a_job_not_pinned_to_its_cpus(self, monkeypatch):
+        """In a SLURM job which may run on more CPUs than it requested, runs share the requested ones by number."""
+        cpus = sorted(os.sched_getaffinity(0))
+        if len(cpus) < 3: pytest.skip('It needs at least 3 CPUs')
+        monkeypatch.setenv('SLURM_CPUS_PER_TASK', str(len(cpus) - 1))
+        update_references.update_references('https://a.test/api/', 'chains', workers=2)
+        assert self.runs() == ['GSHMSELLK', 'MKVLAAGIV']
+        # Workers are not pinned to CPUs which other jobs may use, but they use only their share
+        for run in self.runs_directory.iterdir():
+            assert json.loads(run.read_text()) == {'allowed': cpus, 'used': (len(cpus) - 1) // 2}
+
+    def test_claimed_sequences(self, capsys):
+        """A sequence claimed by a running process is not run again, but an expired claim of another host is taken."""
+        claim = chains.get_chain_reference_filepath('MKVLAAGIV').with_suffix('.claim')
+        take_lock(claim, socket.gethostname(), os.getpid())
+        expired_claim = chains.get_chain_reference_filepath('GSHMSELLK').with_suffix('.claim')
+        take_lock(expired_claim, 'another-host', 1, age=10 * interproscan.RUN_TIMEOUT)
+        update_references.update_references('https://a.test/api/', 'chains', 'loader')
+        assert self.runs() == ['GSHMSELLK']
+        assert sorted(reference['sequence'] for reference in self.uploads['https://a.test/api/']) == ['GSHMSELLK', 'MK']
+        output = capsys.readouterr().out
+        assert '(0 failed, 1 run by another process)' in output
+        assert 'Failed to update 1 out of 3 references' in output
+
+    def test_setup_is_checked_before_downloading(self, monkeypatch):
+        """With no local InterProScan, the update stops before downloading the references."""
+        def not_set_up():
+            raise ToolError('The local InterProScan is not set up')
+        monkeypatch.setattr(update_references, 'prepare_local_interproscan', not_set_up)
+        def no_download(self, endpoint):
+            raise AssertionError('References must not be downloaded')
+        monkeypatch.setattr(update_references.Database, 'get_all_refences_data', no_download)
+        with pytest.raises(ToolError, match='not set up'):
+            update_references.update_references('https://a.test/api/', 'chains')
+
+    @pytest.mark.parametrize('set_up', [True, False])
+    def test_all_types(self, monkeypatch, set_up):
+        """Chain references are updated with all types only if the local InterProScan is set up."""
+        monkeypatch.setattr(update_references, 'local_interproscan_exists', lambda: set_up)
+        assert ('chains' in update_references.get_all_reference_types()) == set_up

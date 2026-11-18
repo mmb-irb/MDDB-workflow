@@ -9,11 +9,12 @@ from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError,
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, PROTEIN_REFERENCES_FILENAME
 from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHIKEY_REFERENCES_FILENAME, INCOMPLETE_REFERENCE_VERSION
 from mddb_workflow.utils.constants import PDB_REFERENCE_VERSION, PDB_REFERENCES_FILENAME
-from mddb_workflow.utils.constants import CACHE_FILENAME
+from mddb_workflow.utils.constants import CACHE_FILENAME, OUTPUT_CHAINS_FILENAME
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.database import Database, get_available_nodes
 from mddb_workflow.utils.loader import Loader
+from mddb_workflow.utils.interproscan import local_interproscan_exists, prepare_local_interproscan
 from mddb_workflow.core.dataclass import InChIKeyData
 
 from mddb_workflow.tools.generate_map import get_uniprot_reference
@@ -21,6 +22,7 @@ from mddb_workflow.tools.generate_pdb_references import get_pdb_reference
 from mddb_workflow.tools.get_inchi_keys import make_inchikey_reference
 from mddb_workflow.tools.get_lipids import generate_lipid_references
 from mddb_workflow.tools.get_ligands import generate_ligand_references
+from mddb_workflow.tools.chains import CHAINS_VERSION, get_chain_reference_filepath, make_chain_references
 
 
 def get_inchi_reference(inchi: str, cache: 'Cache') -> dict:
@@ -61,11 +63,32 @@ REFERENCE_TYPE_CONFIGURATIONS = {
         'maker': lambda pdb_id, cache, database: get_pdb_reference(pdb_id, cache, database),
         'output': PDB_REFERENCES_FILENAME,
     },
+    # Chain references are remade with the local InterProScan, which must be set up
+    # They are all made before (see make_chain_references), several at once, so here they are only loaded
+    # A sequence whose run failed has no file and is counted as failed
+    'chains': {
+        'version': CHAINS_VERSION,
+        'endpoint': 'chains',
+        'id_key': 'sequence',
+        'maker': lambda sequence, cache, database: load_json(str(get_chain_reference_filepath(sequence))),
+        'output': OUTPUT_CHAINS_FILENAME,
+    },
 }
 # Set a flag to update them all
 ALL_FLAG = 'all'
 # Collect all requestable available reference types
 AVAILABLE_REFERENCE_TYPES = list(REFERENCE_TYPE_CONFIGURATIONS.keys())
+
+
+def get_all_reference_types() -> list[str]:
+    """Get the reference types to update when all are requested.
+    Chain references are included only if the local InterProScan is set up, since it is needed to remake them.
+    """
+    if local_interproscan_exists(): return AVAILABLE_REFERENCE_TYPES
+    print('Chain references are not updated since the local InterProScan is not set up')
+    return [reference_type for reference_type in AVAILABLE_REFERENCE_TYPES if reference_type != 'chains']
+
+
 # Set every how many updated references we upload to the database
 LOADER_BATCH = 100
 
@@ -75,20 +98,25 @@ def update_references (
     node_url_or_alias : str,
     reference_type : str,
     loader_directory : str | None = None,
-    force : bool = False):
+    force : bool = False,
+    workers : int = 1):
+    """Remake the outdated references of a node and upload them, if a loader is passed.
+    For chain references, 'workers' local InterProScan runs are done at once.
+    Without a loader, chain references are only made and saved in the shared directory.
+    """
 
     # If all nodes are requested then simply call this same function with every node
     if node_url_or_alias == ALL_FLAG:
         # Get the available nodes
         available_nodes = get_available_nodes()
         for node_alias in available_nodes.keys():
-            update_references(node_alias, reference_type, loader_directory, force)
+            update_references(node_alias, reference_type, loader_directory, force, workers)
         return
 
     # If all reference types are requested then simply call this same function with every type
     if reference_type == ALL_FLAG:
-        for current_reference_type in REFERENCE_TYPE_CONFIGURATIONS.keys():
-            update_references(node_url_or_alias, current_reference_type, loader_directory, force)
+        for current_reference_type in get_all_reference_types():
+            update_references(node_url_or_alias, current_reference_type, loader_directory, force, workers)
         return
 
     # Make sure the type is known
@@ -98,6 +126,9 @@ def update_references (
 
     print(f'Updating references of type "{reference_type}" from "{node_url_or_alias}"')
     reference_config = REFERENCE_TYPE_CONFIGURATIONS[reference_type]
+
+    # Make sure the references can be remade before downloading them all
+    if reference_type == 'chains': prepare_local_interproscan()
 
     # Instantiate the database handler
     database = Database(node_url_or_alias)
@@ -118,6 +149,13 @@ def update_references (
     ]
     remote_outdated_count = len(outdated_reference_ids)
     print(f'  Found {remote_outdated_count} remote outdated references out of {len(references)}')
+
+    # Run InterProScan for all outdated chains first, several at once, so they are only loaded later
+    # Without a loader they are only made, since the shared directory keeps them already
+    # Thus several processes may share the work (e.g. SLURM array tasks) and a last one with the loader uploads them
+    if reference_type == 'chains':
+        make_chain_references(outdated_reference_ids, workers)
+        if not loader: return
 
     # Make a directory for the current url or alias
     directory = sub('https?://', '', node_url_or_alias.replace('/api/', ''))
@@ -185,7 +223,9 @@ def update_references (
         if loader and len(updated_references) >= LOADER_BATCH:
             load_batch()
         # Update the next reference
-        print(f'  Remaking {outdated_reference_id} ({o}/{remote_outdated_count})')
+        # Long ids (e.g. sequences) are shortened in the logs
+        label = outdated_reference_id if len(outdated_reference_id) <= 40 else outdated_reference_id[:37] + '...'
+        print(f'  Remaking {label} ({o}/{remote_outdated_count})')
         # Wrap the updater in a try/except so we are resilient when having response issues
         try:
             new_reference = reference_maker(outdated_reference_id, cache, database)

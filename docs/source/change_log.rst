@@ -18,6 +18,9 @@ Added
   Known sequences take their precalculated matches from the InterPro Matches API while it serves the same InterPro
   release as the local data, so results never mix releases. Results
   have the same format as remote ones but lack the licensed analyses (Phobius, SignalP) and InterPro-N
+- Remake chain references with the local InterProScan with ``mwf upref -rt chains``. ``-w`` runs several sequences
+  at once, and with no loader (``-ld``) the references are only made, in a directory shared by all nodes and processes,
+  so the work can be split in SLURM array tasks and every sequence is run once
 
 Changed
 -------

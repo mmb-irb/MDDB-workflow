@@ -177,6 +177,24 @@ References made before (version 0.1) come from InterProScan 5, whose results use
 Switching a project between ``-lip`` and the remote service makes the ``chains`` task run again:
 chains whose references are already in the database are taken from there and only the others are run with the new engine.
 
+Chain references already in the database are remade with the local InterProScan with ``mwf upref -rt chains``.
+New references are saved in the ``chain_references`` directory, a file per sequence, so a sequence in several nodes is run once
+and an interrupted update goes on where it stopped. ``-w`` sets how many InterProScan runs are done at once,
+splitting the CPUs among them (about 4 CPUs per run work well):
+
+.. code-block:: bash
+
+   mwf upref -nd all -rt chains -w 16 -ld <loader directory>
+
+Without the loader (``-ld``), chain references are only made, so the work may also be split among several processes
+(e.g. SLURM array tasks) running in the same directory. Every process claims a sequence before running it, so no sequence is run twice.
+Then a last run with the loader uploads them all. Note that every process downloads the references of the nodes first.
+
+.. code-block:: bash
+
+   mwf upref -nd all -rt chains -w 16    # in every task
+   mwf upref -nd all -rt chains -ld <loader directory>
+
 
 Tests and other checking processes
 -----------------------------------
