@@ -30,6 +30,44 @@ Changed
 - Stop the ``chains`` task with an error when the remote InterProScan jobs do not finish in 5 minutes. Before, the
   task ended as done and the missing chains were never requested again
 
+[0.1.14] - 2026-11-18
+=====================
+
+Changed
+-------
+- Count only RMSD jumps further from the average than the xtc precision in the trajectory integrity test
+
+Fixed
+-----
+- Skip the dependency check in packaged installs (e.g. bioconda) which do not include ``environment.yml``
+- Push the release tag with a personal token so it triggers the container image publication
+
+[0.1.13] - 2026-11-18
+=====================
+
+Added
+-----
+- Check the installed dependencies against ``environment.yml`` when running ``mwf``
+- Add the quickhash (sampled XXH64) of the biobb provenance files
+- Allow ``filter_selection`` per MD, like image and fit
+- Write the box of every replica in its MD metadata when it differs from the reference replica
+- Update and load the metadata of every MD along with the project metadata in ``mwf uproj``
+- Save the cell shift and the two sides of the closest cross-PBC contacts in the warning
+- Allow publishing the container image of an existing version manually
+
+Changed
+-------
+- Calculate the order of every tail of lipids split in several residues
+
+Fixed
+-----
+- Write dihedral energies as python floats so they are JSON serializable
+- Fix helical parameters with long paths (Curves+ truncated them) and with sequences without A/T bases
+- Ignore the bond between rigid water hydrogens when mining PSF and prmtop topologies
+- Guess bonded atoms named CS as carbon, not caesium
+- Do not merge residues with a repeated label into older residues when reading PDB files
+- Read PDB residue numbers which switch from decimal to hexadecimal after 9999
+
 [0.1.12] - 2026-11-16
 =====================
 

@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_BONDS, InputError, warn
-from mddb_workflow.utils.constants import AUTOMATIC_FLAG
+from mddb_workflow.utils.constants import AUTOMATIC_FLAG, XTC_PRECISION
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.mdt_spells import rotate_boxes, iterate_xtc_frames
 from mddb_workflow.utils.mdt_spells import read_xtc_sample_frames, is_box_rotated, has_box
@@ -30,9 +30,6 @@ AUTO_TRANSLATION_CUTOFF = 0.5
 
 # Number of frames read at once in the no-jump step
 NO_JUMP_CHUNK_SIZE = 100
-
-# Precision (nm) of the coordinates in xtc files
-XTC_PRECISION = 0.001
 
 # Number of frames along the trajectory where split or scattered molecules are searched when the image is automatic
 SPLIT_CHECK_FRAMES = 10

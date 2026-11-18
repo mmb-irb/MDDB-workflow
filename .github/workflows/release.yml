@@ -167,6 +167,9 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4.7.3
         with:
           folder: ./reports
+          # This action replaces the git remote with its own token, which is also used to push the tag later
+          # Tags pushed with the default token do not trigger other workflows (e.g. the container image publication)
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Create and push tag
         if: success()
