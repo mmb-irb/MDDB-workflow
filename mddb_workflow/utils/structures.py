@@ -52,6 +52,12 @@ SUSPICIOUS_CHAINS_PER_RESIDUE = 0.5
 # Set letters to be found in alphanumerical bases
 hexadecimal_letters    = set(AVAILABLE_CAPS[:6] + AVAILABLE_LOWS[:6])
 alphanumerical_letters = set(AVAILABLE_CAPS[6:] + AVAILABLE_LOWS[6:])
+# Residue numbers which do not fit in 4 decimal characters are written in hexadecimal from 10000 (2710) on,
+# while lower numbers stay decimal (VMD and generate_pdb do so)
+FIRST_HEXADECIMAL_RESIDUE_NUMBER = 10000
+# How far apart consecutive residue numbers of a chain may be to read a number without hexadecimal letters
+# (e.g. '2719') as part of a hexadecimal run, so gaps are tolerated but a decimal number is not mistaken for one
+HEXADECIMAL_RUN_MAX_GAP = 1000
 
 # Set the expected number of bonds for each atom according to its element
 coherent_bonds_with_hydrogen = {
@@ -1282,8 +1288,10 @@ class Structure:
         self._dummy_atom_indices = None
         # Set the scale of the residue numbers
         # It may be decimal (10), hexadecimal(16) or alphanumeric(36)
-        # Note that hybrid scales (1-9999 decimal and different further) are not explicitly supported
-        # However, the scale is guessed on read and conserved on write, so the original numeration would be conserved
+        # Decimal numbers which switch to hexadecimal from 10000 on (as VMD writes them) are read as such,
+        # and then the base is 16 (see parse_hybrid_residue_numbers)
+        # Other hybrid scales (e.g. hybrid-36: 1-9999 decimal and base 36 further) are not explicitly supported
+        # The scale is only informative: generate_pdb always writes numbers in decimal up to 9999 and in hexadecimal further
         # The default values is used only when the structure is not read from a PDB
         self.residue_numeration_base = residue_numeration_base
 
@@ -1516,22 +1524,12 @@ class Structure:
         """
         # Filter the PDB content in case a model was passed
         filtered_pdb_content = filter_pdb_model(pdb_content, model) if model else pdb_content
-        # Split the PDB content in lines
-        pdb_lines = filtered_pdb_content.split('\n')
+        # Split the PDB content in lines and parse atoms only
+        atom_lines = [line for line in filtered_pdb_content.split('\n') if line[0:6] in ('ATOM  ', 'HETATM')]
         # Before we start, we must guess the numeration system
         # To do so mine all residue numbers
-        all_residue_number_characters = set()
-        for line in pdb_lines:
-            # Parse atoms only
-            start = line[0:6]
-            is_atom = start == 'ATOM  ' or start == 'HETATM'
-            if not is_atom: continue
-            # Mine all residue numbers
-            residue_number = line[22:26]
-            for character in residue_number:
-                all_residue_number_characters.add(character)
-        # Remove white spaces
-        all_residue_number_characters.discard(' ')
+        all_residue_numbers = {line[22:26].strip() for line in atom_lines}
+        all_residue_number_characters = set(''.join(all_residue_numbers))
         # If we find a non-numerical and non-alphabetical character then we assume it has a weird numeration system
         # Since we can not support every scenario, in this cases we set the numeration totally ignoring the one in the PDB
         weird_character = next((character for character in all_residue_number_characters if not (character.isalnum() or character == '-')), None)
@@ -1540,16 +1538,19 @@ class Structure:
             warn(f'Weird residue numeration including "{weird_character}" characters found in the PDB file. Ignoring it.')
             residue_numeration_base = None
         # Search among all resiude numbers any letters (non-numerical characters)
-        elif next((letter for letter in alphanumerical_letters if letter in all_residue_number_characters), None):
+        elif all_residue_number_characters & alphanumerical_letters:
             residue_numeration_base = 36
-        elif next((letter for letter in hexadecimal_letters if letter in all_residue_number_characters), None):
-            residue_numeration_base = 16
+        # Otherwise numbers are hexadecimal, or decimal which may switch to hexadecimal from 10000 on (as VMD writes them)
+        # Read them in hexadecimal by now and tell which ones are decimal once all residues are read
+        # Residues are compared by number while reading, and both bases tell the same numbers apart
         else:
-            residue_numeration_base = 10
+            residue_numeration_base = 16
         # Read the pdb content line by line and set the parsed atoms, residues and chains
         parsed_atoms = []
         parsed_residues = []
         parsed_chains = []
+        # Keep the residue numbers as they are written in the PDB, for every parsed residue
+        parsed_residue_number_texts = []
         # Save chains and residues also in dictionaries only to find them faster
         name_chains = {}
         label_residues = {}
@@ -1558,12 +1559,7 @@ class Structure:
         residue_index = -1
         # Keep track of the atom names in the last issued residue
         current_residue_atom_names = set()
-        for line in pdb_lines:
-            # Parse atoms only
-            start = line[0:6]
-            is_atom = start == 'ATOM  ' or start == 'HETATM'
-            if not is_atom:
-                continue
+        for line in atom_lines:
             # Mine all atom data
             atom_name = line[11:16].strip()
             residue_name = line[17:21].strip()
@@ -1605,23 +1601,22 @@ class Structure:
             # In this case consecutive residues share the same label, so we can not rely on it to split them
             # Start a new residue whenever the residue name changes or an atom name is repeated
             is_placeholder_number = is_residue_number_placeholder(residue_number)
-            if parsed_residue and is_placeholder_number:
-                if residue_name != parsed_residue.name or atom_name in current_residue_atom_names:
-                    parsed_residue = None
+            if parsed_residue and is_placeholder_number and (
+                residue_name != parsed_residue.name or atom_name in current_residue_atom_names):
+                parsed_residue = None
             # If the parsed residue was not yet instantiated then do it now
             if not parsed_residue:
                 # Parse the residue number if it is to be parsed
                 if residue_numeration_base and not is_placeholder_number:
                     parsed_residue_number = int(residue_number, residue_numeration_base)
                 # If we decided to ignore the numeration system then we just issue a new residue number
-                # Use the last residue number from the current chain as reference
+                # Follow the last residue of the current chain, which is the last parsed residue if the chain has any
                 else:
-                    chain_last_residue_index = parsed_chain.residue_indices[-1] if len(parsed_chain.residue_indices) > 0 else None
-                    chain_last_residue_number = parsed_residues[chain_last_residue_index].number if chain_last_residue_index != None else 0
-                    parsed_residue_number = chain_last_residue_number + 1
+                    parsed_residue_number = parsed_residues[-1].number + 1 if parsed_chain.residue_indices else 1
                 # Instantiate the new parsed residue
                 parsed_residue = Residue(name=residue_name, number=parsed_residue_number, icode=icode)
                 parsed_residues.append(parsed_residue)
+                parsed_residue_number_texts.append(residue_number)
                 label_residues[residue_label] = parsed_residue
                 # Add current residue to the parsed chain
                 residue_index += 1
@@ -1631,6 +1626,19 @@ class Structure:
             atom_index += 1
             parsed_residue.atom_indices.append(atom_index)
             current_residue_atom_names.add(atom_name)
+        # A number with hexadecimal letters below 10000 (e.g. 'a' or '270f') can only be from a fully hexadecimal numeration
+        # Otherwise numbers are decimal, but they may switch to hexadecimal from 10000 on: set them chain by chain
+        if residue_numeration_base == 16 and not any(has_hexadecimal_letters(number)
+                and int(number, 16) < FIRST_HEXADECIMAL_RESIDUE_NUMBER for number in all_residue_numbers):
+            residue_numeration_base = 10
+            for parsed_chain in parsed_chains:
+                residue_indices = parsed_chain.residue_indices
+                numbers, chain_has_hexadecimal = parse_hybrid_residue_numbers(
+                    [parsed_residue_number_texts[index] for index in residue_indices])
+                for index, number in zip(residue_indices, numbers):
+                    parsed_residues[index].number = number
+                # If some numbers are hexadecimal then the numeration is not purely decimal
+                if chain_has_hexadecimal: residue_numeration_base = 16
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains, residue_numeration_base=residue_numeration_base)
 
     @classmethod
@@ -3594,9 +3602,62 @@ def get_lower_numbers(numbers_text: str) -> str:
 def is_residue_number_placeholder(residue_number: str) -> bool:
     """Check if a PDB residue number is a placeholder with no numerical meaning (e.g. '****').
     VMD writes this placeholder for every residue number which overflows the 4 PDB characters."""
-    stripped_residue_number = residue_number.strip()
-    if len(stripped_residue_number) == 0: return False
-    return not any(character.isalnum() for character in stripped_residue_number)
+    return residue_number.strip() != '' and not any(character.isalnum() for character in residue_number)
+
+
+def has_hexadecimal_letters(residue_number: str) -> bool:
+    """Check if a PDB residue number includes hexadecimal letters (a-f, A-F)."""
+    return any(character in hexadecimal_letters for character in residue_number)
+
+
+def parse_hybrid_residue_numbers(residue_numbers: list[str]) -> tuple[list[int], bool]:
+    """Parse the PDB residue numbers of one chain, in the order of the PDB, when they are written in decimal
+    up to 9999 and in hexadecimal from 10000 ('2710') on, as VMD and generate_pdb write them.
+    A number with hexadecimal letters (e.g. '271a') is hexadecimal.
+    A number without them (e.g. '2719') is decimal, unless read in hexadecimal it is 10000 or more and:
+      - it follows a hexadecimal number, within HEXADECIMAL_RUN_MAX_GAP after it (e.g. '271f' -> '2720');
+      - it precedes a hexadecimal number, within HEXADECIMAL_RUN_MAX_GAP before it (e.g. '2719' -> '271a'),
+        which covers chains starting above 9999 and gaps in the numeration;
+      - it is '2710' right after 9999 (e.g. a chain of 10005 residues, with no letters in its numbers).
+    A placeholder with no numerical meaning (e.g. '-') follows the previous residue, as when the numeration is ignored.
+    Return the numbers and whether any of them is hexadecimal.
+    """
+    texts = [residue_number.strip() for residue_number in residue_numbers]
+    is_placeholder = [is_residue_number_placeholder(text) for text in texts]
+    is_hexadecimal = [has_hexadecimal_letters(text) for text in texts]
+    numbers = [None if placeholder else int(text, 16 if hexadecimal else 10)
+        for text, placeholder, hexadecimal in zip(texts, is_placeholder, is_hexadecimal)]
+
+    def in_run(lower: int, upper: int) -> bool:
+        return lower < upper <= lower + HEXADECIMAL_RUN_MAX_GAP
+
+    def hexadecimal_value(index: int) -> Optional[int]:
+        """Value of a number without hexadecimal letters read in hexadecimal, if it is high enough to be one."""
+        if is_placeholder[index]: return None
+        value = int(texts[index], 16)
+        return value if value >= FIRST_HEXADECIMAL_RESIDUE_NUMBER else None
+
+    # Forwards: continue hexadecimal runs, and start them where the numeration goes from 9999 to '2710'
+    for index in range(1, len(texts)):
+        if is_hexadecimal[index]: continue
+        value = hexadecimal_value(index)
+        if value is None: continue
+        previous = numbers[index - 1]
+        if (is_hexadecimal[index - 1] and in_run(previous, value)) or \
+            (previous == FIRST_HEXADECIMAL_RESIDUE_NUMBER - 1 and value == FIRST_HEXADECIMAL_RESIDUE_NUMBER):
+            is_hexadecimal[index] = True
+            numbers[index] = value
+    # Backwards: extend hexadecimal runs to the numbers without letters just before them
+    for index in range(len(texts) - 2, -1, -1):
+        if is_hexadecimal[index] or not is_hexadecimal[index + 1]: continue
+        value = hexadecimal_value(index)
+        if value is not None and in_run(value, numbers[index + 1]):
+            is_hexadecimal[index] = True
+            numbers[index] = value
+    # Number placeholders after the previous residue
+    for index, placeholder in enumerate(is_placeholder):
+        if placeholder: numbers[index] = numbers[index - 1] + 1 if index > 0 else 1
+    return numbers, any(is_hexadecimal)
 
 
 def filter_pdb_model(pdb_content: str, model: int) -> str:

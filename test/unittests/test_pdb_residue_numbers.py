@@ -6,7 +6,7 @@ Consecutive residues sharing the placeholder must still be parsed as separated r
 """
 import pytest
 
-from mddb_workflow.utils.structures import Structure, is_residue_number_placeholder
+from mddb_workflow.utils.structures import Structure, is_residue_number_placeholder, parse_hybrid_residue_numbers
 
 
 def pdb_line(serial: str, atom_name: str, residue_name: str, chain: str, residue_number: str,
@@ -27,7 +27,9 @@ def build_pdb(residues: list[tuple[str, str, str, list[str]]]) -> str:
             serial += 1
             # Like VMD, write atom serials above 99999 in hexadecimal
             serial_text = str(serial) if serial <= 99999 else hex(serial)[2:]
-            coords = (float(serial), float(serial) * 0.5, -float(serial))
+            # Keep coordinates within the 8 PDB columns (below 1000) for big structures
+            coordinate = float(serial % 1000)
+            coords = (coordinate, coordinate * 0.5, -coordinate)
             lines.append(pdb_line(serial_text, atom_name, residue_name, chain, residue_number, coords))
     lines.append('END')
     return '\n'.join(lines) + '\n'
@@ -156,3 +158,158 @@ def test_hexadecimal_residue_numbers_unchanged():
     structure = Structure.from_pdb(build_pdb(residues))
     assert structure.residue_numeration_base == 16
     assert [residue.number for residue in structure.residues] == [0xfffe, 0xffff]
+
+
+def vmd_residue_number(number: int) -> str:
+    """Write a residue number like VMD: decimal up to 9999, then hexadecimal."""
+    return str(number) if number <= 9999 else hex(number)[2:]
+
+
+@pytest.mark.unit_int
+def test_hybrid_decimal_hexadecimal_residue_numbers():
+    """Decimal numbers up to 9999 followed by hexadecimal ones (VMD) keep their values, e.g. '10' is 10, '2710' is 10000."""
+    numbers = list(range(1, 10051))
+    residues = [('X', vmd_residue_number(number), 'ALA', ['CA']) for number in numbers]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert [residue.number for residue in structure.residues] == numbers
+    assert structure.residue_numeration_base == 16
+
+
+@pytest.mark.unit_int
+def test_hybrid_residue_numbers_without_letters():
+    """Up to 10009 residues the hexadecimal numbers have no letters ('2710' to '2719'), but they are still hexadecimal."""
+    numbers = list(range(9990, 10006))
+    residues = [('X', vmd_residue_number(number), 'ALA', ['CA']) for number in numbers]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert [residue.number for residue in structure.residues] == numbers
+
+
+@pytest.mark.unit_int
+def test_hybrid_residue_numbers_restart_in_new_chain():
+    """A new chain which starts again at 1 is decimal again after a hexadecimal run."""
+    residues = [
+        ('X', '9999', 'ALA', ['CA']),
+        ('X', '2710', 'ALA', ['CA']),
+        ('X', '271a', 'ALA', ['CA']),
+        ('Y', '1', 'ALA', ['CA']),
+        ('Y', '10', 'ALA', ['CA']),
+        ('Y', '100', 'ALA', ['CA']),
+    ]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert [residue.number for residue in structure.residues] == [9999, 10000, 10010, 1, 10, 100]
+
+
+@pytest.mark.unit_int
+def test_fully_hexadecimal_residue_numbers():
+    """Numbers with hexadecimal letters below 10000 mean the whole numeration is hexadecimal."""
+    residues = [('X', number, 'ALA', ['CA']) for number in ['1', 'a', 'f', '10', '1f']]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert structure.residue_numeration_base == 16
+    assert [residue.number for residue in structure.residues] == [1, 10, 15, 16, 31]
+
+
+@pytest.mark.unit_int
+def test_decimal_residue_numbers_going_back_stay_decimal():
+    """A decimal numeration which goes back is not mistaken for a hexadecimal one."""
+    residues = [
+        ('A', '9500', 'ALA', ['CA']),
+        ('A', '3000', 'LIG', ['C1']),  # 0x3000 = 12288, too far after 9500
+        ('B', '9999', 'ALA', ['CA']),
+        ('C', '2710', 'ALA', ['CA']),  # Another chain: decimal
+    ]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert structure.residue_numeration_base == 10
+    assert [residue.number for residue in structure.residues] == [9500, 3000, 9999, 2710]
+
+
+@pytest.mark.unit_int
+def test_hybrid_residue_numbers_round_trip():
+    """generate_pdb writes numbers above 9999 in hexadecimal and reading them back gives the same numbers."""
+    numbers = list(range(1, 10051))
+    residues = [('X', vmd_residue_number(number), 'ALA', ['CA']) for number in numbers]
+    structure = Structure.from_pdb(build_pdb(residues))
+    reparsed = Structure.from_pdb(structure.generate_pdb())
+    assert [residue.number for residue in reparsed.residues] == numbers
+
+
+def chain_residues(chain: str, numbers: list[str]) -> list[tuple[str, str, str, list[str]]]:
+    """One single-atom residue per residue number, in a chain."""
+    return [(chain, number, 'ALA', ['CA']) for number in numbers]
+
+
+def parsed_numbers(residues: list[tuple[str, str, str, list[str]]]) -> list[int]:
+    return [residue.number for residue in Structure.from_pdb(build_pdb(residues)).residues]
+
+
+@pytest.mark.unit_int
+def test_hybrid_residue_numbers_starting_above_9999():
+    """A chain starting above 9999 is hexadecimal from its first number, before any letter ('2711' is 10001)."""
+    numbers = list(range(10001, 10040))
+    residues = [('X', vmd_residue_number(number), 'ALA', ['CA']) for number in numbers]
+    structure = Structure.from_pdb(build_pdb(residues))
+    assert [residue.number for residue in structure.residues] == numbers
+    assert structure.residue_numeration_base == 16
+    # The same once written by generate_pdb and read back
+    reparsed = Structure.from_pdb(structure.generate_pdb())
+    assert [residue.number for residue in reparsed.residues] == numbers
+
+
+@pytest.mark.unit_int
+@pytest.mark.parametrize('numbers', [['9500', '2750'], ['9998', '9999', '2800'], ['9999', '2711']])
+def test_decimal_residue_numbers_going_back_to_2710_or_more_stay_decimal(numbers: list[str]):
+    """With no hexadecimal letters, only '2710' right after 9999 is hexadecimal: other numbers going back are decimal."""
+    structure = Structure.from_pdb(build_pdb(chain_residues('A', numbers)))
+    assert [residue.number for residue in structure.residues] == [int(number) for number in numbers]
+    assert structure.residue_numeration_base == 10
+
+
+@pytest.mark.unit_int
+@pytest.mark.parametrize('next_chain_numbers', [['9001', '9002'], ['3000', '3001'], ['2712', '2713']])
+def test_hexadecimal_run_ends_at_chain_change(next_chain_numbers: list[str]):
+    """A decimal chain after a hexadecimal run is decimal, even if its numbers could continue the run."""
+    residues = chain_residues('X', ['9999', '2710', '2711']) + chain_residues('L', next_chain_numbers)
+    assert parsed_numbers(residues) == [9999, 10000, 10001] + [int(number) for number in next_chain_numbers]
+
+
+@pytest.mark.unit_int
+def test_hexadecimal_run_at_the_start_of_a_new_chain():
+    """A new chain whose numbers continue after 9999 is hexadecimal when it has hexadecimal letters further."""
+    residues = chain_residues('A', ['9998', '9999']) + chain_residues('B', ['2710', '2711', '271a'])
+    assert parsed_numbers(residues) == [9998, 9999, 10000, 10001, 10010]
+
+
+@pytest.mark.unit_int
+def test_hybrid_residue_numbers_with_gaps():
+    """Numbers without letters just before hexadecimal ones are hexadecimal, also after a gap in the numeration."""
+    # From 8999 to 10000: the run starts after the gap
+    assert parsed_numbers(chain_residues('X', ['8999', '2710', '2711', '271a'])) == [8999, 10000, 10001, 10010]
+    # From 10010 to 12288, more than the maximum gap: '3000' is decimal at first, but '300a' (12298) follows it
+    residues = chain_residues('X', ['9999', '2710', '271a', '3000', '3001', '300a'])
+    assert parsed_numbers(residues) == [9999, 10000, 10010, 12288, 12289, 12298]
+
+
+@pytest.mark.unit_int
+@pytest.mark.parametrize('texts, expected, any_hexadecimal', [
+    ([], [], False),
+    (['1', '2', '3'], [1, 2, 3], False),
+    (['-2', '-1', '0', '1'], [-2, -1, 0, 1], False),
+    (['9998', '9999', '0', '1'], [9998, 9999, 0, 1], False),  # Decimal numeration cycling after 9999
+    (['9999', '2710', '2711'], [9999, 10000, 10001], True),
+    (['2711', '271A', '271B'], [10001, 10010, 10011], True),  # Uppercase letters
+    (['9999', '2710', '271a', '1000', '1001'], [9999, 10000, 10010, 1000, 1001], True),  # Going back to decimal
+    ([' 2719', '271a '], [10009, 10010], True),  # Padding
+    (['5', '-', '6'], [5, 6, 6], False),  # Placeholder: after the previous residue
+    (['-', '--', '1'], [1, 2, 1], False),
+    (['9999', '2710', '-', '271a'], [9999, 10000, 10001, 10010], True),
+])
+def test_parse_hybrid_residue_numbers(texts: list[str], expected: list[int], any_hexadecimal: bool):
+    """Parse one chain of hybrid decimal and hexadecimal residue numbers."""
+    assert parse_hybrid_residue_numbers(texts) == (expected, any_hexadecimal)
+
+
+@pytest.mark.unit_int
+def test_placeholder_residue_numbers_in_decimal_numeration():
+    """A residue number made only of '-' is not a number: it follows the previous residue, as before the hybrid numeration."""
+    structure = Structure.from_pdb(build_pdb(chain_residues('A', ['5', '-', '6'])))
+    assert [residue.number for residue in structure.residues] == [5, 6, 6]
+    assert structure.residue_numeration_base == 10
