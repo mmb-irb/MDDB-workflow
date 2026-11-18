@@ -308,9 +308,6 @@ def check_cross_periodic_contacts(
             description += f'\n  {label_a} — {label_b} ({distance * 10:.2f} Å)'
         if len(example_pairs) > MAX_REPORTED_PAIRS:
             description += f'\n  etc. ({len(example_pairs)} pairs)'
-        # Directions in which periodic images are in contact, where opposite shifts are the same direction
-        directions = sorted({ name_cell_shift(cell_shift) for cell_shift in example_cell_shifts }, key=lambda name: (len(name), name))
-        description += f'\nPeriodic images in contact through: {", ".join(directions)}'
         # Atoms overlapping through the boundary are not physical, so the box is likely wrong
         if closest_distance < OVERLAP_DISTANCE:
             description += (f'\nSome atoms overlap their periodic neighbours (down to {closest_distance * 10:.2f} Å).'
@@ -319,21 +316,27 @@ def check_cross_periodic_contacts(
         # Atoms in contact in the example frame
         structure_pairs = non_pbc_indices[example_pairs]
         contact_selection = Selection([ int(index) for index in np.unique(structure_pairs) ])
-        # Atoms whose periodic image is in contact with other atoms, grouped by the cell shift of the image
-        images = []
-        for cell_shift in np.unique(example_cell_shifts, axis=0):
-            shift_pairs = structure_pairs[np.all(example_cell_shifts == cell_shift, axis=1)]
-            image_selection = Selection([ int(index) for index in np.unique(shift_pairs[:, 1]) ])
-            images.append((cell_shift, image_selection))
+        # A pair in contact through a cell shift is also in contact through the opposite shift with its atoms swapped
+        # Flip shifts so their first non-zero value is positive and opposite shifts are the same
+        flipped = example_cell_shifts[np.arange(len(example_cell_shifts)), np.argmax(example_cell_shifts != 0, axis=1)] < 0
+        cell_shifts = example_cell_shifts.copy()
+        cell_shifts[flipped] *= -1
+        structure_pairs[flipped] = structure_pairs[flipped][:, ::-1]
+        # Keep only the pairs in contact through the same cell shift as the closest pair
+        # Pairs are sorted by distance, so the closest pair is the first one
+        cell_shift = cell_shifts[0]
+        shift_pairs = structure_pairs[np.all(cell_shifts == cell_shift, axis=1)]
+        selection_a = Selection([ int(index) for index in np.unique(shift_pairs[:, 0]) ])
+        selection_b = Selection([ int(index) for index in np.unique(shift_pairs[:, 1]) ])
+        # Atoms in selection b moved by the shift (in box vectors) are in contact with atoms in selection a
         data['frame'] = example_frame
-        data['directions'] = directions
-        data['selection'] = format_selection(structure, contact_selection)
-        data['images'] = [ { 'shift': cell_shift.tolist(), 'selection': format_selection(structure, image_selection) }
-            for cell_shift, image_selection in images ]
+        data['selection_a'] = format_selection(structure, selection_a)
+        data['selection_b'] = format_selection(structure, selection_b)
+        data['images'] = cell_shift.tolist()
         # Write a VMD script for the user to see the contacts
         # This is not part of the warning since it is only useful for the workflow user
         write_view_script(view_script_filename, input_structure_filename, input_trajectory_filename,
-            example_frame, example_box_vectors, contact_selection, images)
+            example_frame, example_box_vectors, contact_selection, [ (cell_shift, selection_b) ])
     message = '. '.join(titles)
     description = '\n'.join(descriptions)
     view_hint = f'To see the atoms in contact run:\n  vmd -e {view_script_filename}' if violation_frames else ''
@@ -416,18 +419,6 @@ def write_view_script(
     ]
     with open(script_filename, 'w') as script_file:
         script_file.write('\n'.join(commands) + '\n')
-
-
-def name_cell_shift(cell_shift : np.ndarray) -> str:
-    """Name the direction of a cell shift, e.g. [1, 0, -1] is 'x-z'.
-
-    Opposite shifts get the same name (e.g. [-1, 0, 1] is also 'x-z'), since both are the same contact seen from each side.
-    In non orthogonal boxes x, y and z stand for the first, second and third box vectors.
-    """
-    # Flip the shift so the first non-zero value is positive
-    if cell_shift[np.nonzero(cell_shift)[0][0]] < 0: cell_shift = -cell_shift
-    name = ''.join(f'{"+" if shift > 0 else "-"}{axis}' for axis, shift in zip('xyz', cell_shift) if shift != 0)
-    return name[1:]
 
 
 def to_tcl_vector(vector : np.ndarray) -> str:
