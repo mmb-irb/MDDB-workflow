@@ -1,16 +1,36 @@
 import time
 import requests
-from mddb_workflow.utils.auxiliar import RequestError, RateLimitError, retry_request, get_retry_after
+from mddb_workflow.utils.auxiliar import RequestError, RateLimitError, retry_request, get_retry_after, warn
 from mddb_workflow.utils.type_hints import *
 from functools import lru_cache
 
+# PubChem stops requests after its own time limit (~28 s) and answers it with a timeout error
+# We must wait longer than PubChem so we get its answer instead of a timeout of our own
+PUBCHEM_REQUEST_TIMEOUT = 60  # seconds
+
+
+class PubChemTimeoutError (RequestError):
+    """Quiet exception for when PubChem gives up on a request after its server-side time limit.
+    PubChem answers 504 with the 'PUGREST.Timeout' fault, which happens again for every retry.
+    """
+    pass
+
+
+def _is_pubchem_timeout(r: requests.Response) -> bool:
+    """Check if a response is the PubChem server-side timeout."""
+    if r.status_code != 504: return False
+    try:
+        return r.json()['Fault']['Code'] == 'PUGREST.Timeout'
+    except (ValueError, KeyError, TypeError):
+        return False
+
 
 def _make_get_request(url: str) -> requests.Response:
-    return requests.get(url, timeout=30)
+    return requests.get(url, timeout=PUBCHEM_REQUEST_TIMEOUT)
 
 
 def _make_post_request(url, payload):
-    return requests.post(url, data=payload, timeout=30)
+    return requests.post(url, data=payload, timeout=PUBCHEM_REQUEST_TIMEOUT)
 
 
 @retry_request
@@ -51,6 +71,9 @@ def make_pubchem_request(
     if r.status_code == 429:
         raise RateLimitError(f"Too many requests in the {error_context} request. Throttling: {throttling}",
             retry_after=get_retry_after(r.headers))
+    # Do not retry PubChem timeouts, since they repeat for the same request
+    if _is_pubchem_timeout(r):
+        raise PubChemTimeoutError(f"The {error_context} request timed out in PubChem")
     if 'temporarily unable' in r.text:
         raise requests.exceptions.ConnectionError("PubChem is temporarily unable to process requests. Please try again later.")
     raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + "): " + r.text + "\nThrottling: " + throttling)
@@ -63,8 +86,13 @@ def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
     """
     url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
     # PubChem answers 400 when it is not able to standardize the structure
-    data = make_pubchem_request(url, payload={'inchi': inchi},
-        error_context='PubChem standardization', no_result_codes=(400,))
+    # Some structures always time out in PubChem, so we can not standardize them either
+    try:
+        data = make_pubchem_request(url, payload={'inchi': inchi},
+            error_context='PubChem standardization', no_result_codes=(400,))
+    except PubChemTimeoutError:
+        warn(f'PubChem standardization timed out for {inchi}. Skipping it.')
+        return None
     if data:
         results = []
         for compound in data['PC_Compounds']:
