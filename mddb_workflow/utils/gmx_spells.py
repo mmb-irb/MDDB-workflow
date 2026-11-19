@@ -412,28 +412,14 @@ def get_tpr_content (tpr_filepath : str) -> tuple[str, str]:
     # Read the tpr file making a 'dump'
     return run_gromacs(f'dump -s {tpr_filepath}')
 
-# Regular expresion to mine atom charges
-GROMACS_TPR_ATOM_CHARGES_REGEX = r"q=([0-9e+-. ]*),"
-
 
 def get_tpr_charges (tpr_filepath : str) -> list[float]:
-    """ Get tpr atom charges.
-    This works for the new tpr format (tested in 122). """
-    # Read the TPR
-    tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
-    # Mine the atomic charges
-    charges = []
-    # Iterate tpr content lines
-    for line in tpr_content.split('\n'):
-        # Skip everything which is not atomic charges data
-        if line[0:16] != '            atom': continue
-        # Parse the line to get only charges
-        match = search(GROMACS_TPR_ATOM_CHARGES_REGEX, line)
-        if match: charges.append(float(match[1]))
-    # If we successfully got atom charges then return them
+    """ Get the charge of every atom in a tpr.
+    Read them from the json dump, which has one value per atom (as for bonds and masses),
+    since the plain 'gmx dump' lists the atoms of each molecule type only once (e.g. 53 charges for 12240 atoms). """
+    parsed_tpr = read_and_parse_tpr(tpr_filepath)
+    charges = parsed_tpr['gromacs-topology']['charge']['value']
     if len(charges) > 0: return charges
-    # If there are no charges at the end then something went wrong
-    print(tpr_error_logs)
     raise RuntimeError(f'Charges extraction from tpr file "{tpr_filepath}" has failed')
 
 # Regular expresion to mine atom bonds
