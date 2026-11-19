@@ -17,7 +17,7 @@ dependencies:
   # Fpocket is used for the pockets analysis
   - fpocket
   # Gromacs is used for several processing and analysis steps
-  - bioconda::gromacs_mddb=2025.3=he1b2d42_4
+  - bioconda::gromacs_mddb=2025.3=he1b2d42_6
   # MDanalysis is used for some processing steps
   # MDanalysis reads mmCIF files since version 2.11 and it needs gemmi to do so
   - mdanalysis >=2.11.0
@@ -49,7 +49,8 @@ dependencies:
   # We must declare pip explicitly according to a warning
   - pip
   # This library is used to calculate TM scores
-  - biotite
+  # Biotite 2 changed the superimpose API used by the tmscores analysis
+  - biotite >=1.4,<2
   # For helical parameters. Can break the environment?
   - bioconda::curves
   # Visual tool to display graphs in terminal and even text logs

@@ -691,9 +691,10 @@ class Residue:
             return self._classification
         # It may be water with a not known name
         # Literally check if its a molecule with 3 atoms: 2 hydrogens and 1 oxygen
-        if self.atom_count == 3:
-            atom_elements = [atom.element for atom in self.atoms]
-            if atom_elements.count('H') == 2 and atom_elements.count('O') == 1:
+        # Dummy atoms are not counted, since they may be virtual sites (e.g. MW in TIP4P water named 'water')
+        if self.atom_count <= 5:
+            atom_elements = [atom.element for atom in self.atoms if atom.element != DUMMY_ATOM_ELEMENT]
+            if len(atom_elements) == 3 and atom_elements.count('H') == 2 and atom_elements.count('O') == 1:
                 self._classification = 'solvent'
                 return self._classification
         # -------------------------------------------------------------------------------------------------------
@@ -1551,8 +1552,7 @@ class Structure:
         parsed_chains = []
         # Keep the residue numbers as they are written in the PDB, for every parsed residue
         parsed_residue_number_texts = []
-        # Save chains and residues also in dictionaries only to find them faster
-        name_chains = {}
+        # Save residues also in a dictionary only to find them faster
         label_residues = {}
         # Keep track of the last issued atom and residue indices
         atom_index = -1
@@ -1580,14 +1580,12 @@ class Structure:
             # DANI: If we always check for an already existing chain there will never be repeated chains
             # DANI: However we may create chains with unconnected atoms silently (they were separated in the PDB)
             # DANI: For this reason we must only consider the last processed chain
-            parsed_chain = name_chains.get(chain_name, None)
-            if parsed_chain and parsed_chain != parsed_chains[-1]:
-                parsed_chain = None
+            if parsed_chains and parsed_chains[-1].name == chain_name:
+                parsed_chain = parsed_chains[-1]
             # If the parsed chain was not yet instantiated then do it now
-            if not parsed_chain:
+            else:
                 parsed_chain = Chain(name=chain_name)
                 parsed_chains.append(parsed_chain)
-                name_chains[chain_name] = parsed_chain
             # Get the parsed residue
             residue_label = (chain_name, residue_number, icode)
             # DANI: If we always check for an already existing residue there will never be repeated residues
