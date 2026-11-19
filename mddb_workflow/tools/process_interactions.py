@@ -49,7 +49,7 @@ def process_interactions(
     snapshots: int,
     output_directory: str,
     mercy: list[str],
-    interactions_auto: str,
+    interactions_auto: Optional[str | bool],
     pbc_selection: 'Selection',
     cg_selection: 'Selection',
     frames_limit: int = 1000,
@@ -61,18 +61,16 @@ def process_interactions(
     It can automatically detect interactions based on chain names or ligand information, or use a predefined list of interactions.
     """
     # Set our own internal interactions
-    interactions = []
-
-    # If there are no interactions then stop here
-    if input_interactions is None: return []
     # If interactions is not a list then make it a list of it
     # if it is already a list then copy it to avoid mutating the original
-    if type(input_interactions) == list:
+    if input_interactions is None:
+        interactions = []
+    elif type(input_interactions) == list:
         interactions = [*input_interactions]
     else:
         interactions = [input_interactions]
-    # If interactions is an empty list then stop here
-    if len(input_interactions) == 0: return []
+    # If there are no interactions and we are not asked to guess them then stop here
+    if len(interactions) == 0 and not interactions_auto: return []
 
     # Get explicit interactions (not keywords)
     # Duplicate input interactions to avoid modifying the originals
@@ -121,7 +119,10 @@ def process_interactions(
     keyword_interactions = set([inter for inter in interactions if type(inter) == str])
 
     # If the iauto argument is used from the console then add it here
-    if interactions_auto:
+    # It is True when no selection is passed, so the whole structure is used
+    if interactions_auto is True:
+        keyword_interactions.add(AUTOMATIC_FLAG)
+    elif interactions_auto:
         keyword_interactions.add(f'{AUTOMATIC_FLAG} "{interactions_auto}"')
 
     # Now process keyword interactions
