@@ -119,8 +119,10 @@ def lipid_molecules(lipid_map: dict[str, 'InChIKeyData'], universe: 'Universe') 
 
     Lipids spanning several residues (InChI key fragments, e.g. PEG-lipids with a residue per PEG monomer or
     gangliosides with a residue per sugar) are one lipid, represented by its residue with most tail atoms (see
-    all_atom_tails), e.g. the glycerol of PEG-lipids or the ceramide of gangliosides, which has the polar atom at the
-    interface with the tails. Ties are broken by residue order. Any other residue represents itself.
+    all_atom_tails) among the ones with atoms other than carbons and hydrogens, if any: the glycerol of PEG-lipids or
+    the ceramide of gangliosides, which has the polar atom at the interface with the tails, or the head group residue
+    of AMBER lipids (PC), whose acyl chains are residues of their own (PA, OL). Ties are broken by residue order. Any
+    other residue represents itself.
     Returns the residue indices of the lipids and the residue index of the lipid of every residue in the universe.
     """
     lipid_of = np.arange(len(universe.residues))
@@ -129,13 +131,18 @@ def lipid_molecules(lipid_map: dict[str, 'InChIKeyData'], universe: 'Universe') 
         if data.moltype == 'fragment' and len(data.fragments) > 0: molecules.extend(data.fragments)
         else: molecules.extend([resindex] for resindex in data.resindices)
     tail_counts = np.zeros(len(universe.residues), dtype=int)
+    hydrocarbon = np.zeros(len(universe.residues), dtype=bool)
     multi_residue = [molecule for molecule in molecules if len(molecule) > 1]
     if len(multi_residue) > 0:
-        tails = all_atom_tails(universe.residues[np.unique(np.concatenate(multi_residue))].atoms)
-        if tails is not None: tail_counts = np.bincount(tails.resindices, minlength=len(universe.residues))
+        atoms = universe.residues[np.unique(np.concatenate(multi_residue))].atoms
+        tails = all_atom_tails(atoms)
+        if tails is not None:
+            tail_counts = np.bincount(tails.resindices, minlength=len(universe.residues))
+            heteroatoms = atoms[~np.isin(atoms.elements, ['C', 'H'])]
+            hydrocarbon = ~np.isin(np.arange(len(universe.residues)), heteroatoms.resindices)
     lipid_resindices = []
     for molecule in molecules:
-        representative = max(molecule, key=lambda resindex: (tail_counts[resindex], -resindex))
+        representative = max(molecule, key=lambda resindex: (not hydrocarbon[resindex], tail_counts[resindex], -resindex))
         lipid_of[molecule] = representative
         lipid_resindices.append(representative)
     return np.array(lipid_resindices, dtype=int), lipid_of

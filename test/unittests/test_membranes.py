@@ -740,6 +740,25 @@ def two_residue_peg_lipid() -> 'mda.Universe':
     return universe
 
 
+POPC_SMILES = 'CCCCCCCCCCCCCCCC(=O)OCC(COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCC/C=C\\CCCCCCCC'
+
+
+def split_popc() -> 'mda.Universe':
+    """Get a POPC split like in AMBER Lipid21: the palmitoyl and oleoyl chains, made only of carbons and hydrogens, in
+    the PA and OL residues and the glycerol, ester and phosphocholine groups in the PC residue between them.
+    """
+    lipid = mda.Universe.from_smiles(POPC_SMILES, generate_coordinates=False)
+    anchors = [atom if atom.element != 'H' else atom.bonded_atoms[0] for atom in lipid.atoms]
+    # The SMILES starts with the 15 palmitoyl chain carbons and ends with the 17 oleoyl ones (52 heavy atoms)
+    resindices = [0 if anchor.index < 15 else 2 if anchor.index >= 35 else 1 for anchor in anchors]
+    universe = mda.Universe.empty(len(lipid.atoms), n_residues=3, atom_resindex=resindices, trajectory=True)
+    universe.add_TopologyAttr('names', lipid.atoms.names)
+    universe.add_TopologyAttr('elements', lipid.atoms.elements)
+    universe.add_TopologyAttr('resnames', ['PA', 'PC', 'OL'])
+    universe.add_TopologyAttr('bonds', lipid.bonds.indices)
+    return universe
+
+
 class TestLipidMolecules:
     """Lipids spanning several residues (e.g. PEG-lipids or gangliosides) are one lipid each."""
 
@@ -755,6 +774,23 @@ class TestLipidMolecules:
         headgroups = all_atom_headgroups(lipid_map, universe)
         assert len(headgroups) == 1
         assert headgroups[0].resindex == 1 and headgroups[0].element == 'O'
+
+    def test_split_lipid_residue(self):
+        """A lipid whose acyl chains are residues of their own (AMBER lipids) is represented by its head group residue,
+        which has the polar atom, although the chains have the tail atoms.
+        """
+        from mddb_workflow.tools.membrane_mapping import lipid_molecules, all_atom_headgroups
+        universe = split_popc()
+        lipid_map = {'POPC': InChIKeyData(inchi='', resindices=[0, 1, 2], fragments=[[0, 1, 2]], moltype='fragment')}
+        lipid_resindices, lipid_of = lipid_molecules(lipid_map, universe)
+        assert lipid_resindices.tolist() == [1]
+        assert lipid_of.tolist() == [1, 1, 1]
+        headgroups = all_atom_headgroups(lipid_map, universe)
+        assert len(headgroups) == 1 and headgroups[0].element == 'P'
+        # With charges, the most charged atom of the head group residue (P31 has +1.08 in AMBER)
+        universe.add_TopologyAttr('charges', np.where(universe.atoms.elements == 'P', 1.08, 0))
+        headgroups = all_atom_headgroups(lipid_map, universe)
+        assert len(headgroups) == 1 and headgroups[0].element == 'P'
 
     def test_tails_in_another_residue(self, capsys):
         """Lipids whose tails are not in the residue of their polar atom form a hydrophobic core and their leaflets
