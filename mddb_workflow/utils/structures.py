@@ -691,9 +691,10 @@ class Residue:
             return self._classification
         # It may be water with a not known name
         # Literally check if its a molecule with 3 atoms: 2 hydrogens and 1 oxygen
-        if self.atom_count == 3:
-            atom_elements = [atom.element for atom in self.atoms]
-            if atom_elements.count('H') == 2 and atom_elements.count('O') == 1:
+        # Dummy atoms are not counted, since they may be virtual sites (e.g. MW in TIP4P water named 'water')
+        if self.atom_count <= 5:
+            atom_elements = [atom.element for atom in self.atoms if atom.element != DUMMY_ATOM_ELEMENT]
+            if len(atom_elements) == 3 and atom_elements.count('H') == 2 and atom_elements.count('O') == 1:
                 self._classification = 'solvent'
                 return self._classification
         # -------------------------------------------------------------------------------------------------------
