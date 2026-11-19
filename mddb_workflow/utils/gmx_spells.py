@@ -467,6 +467,123 @@ def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
     return tpr_bonds
 
 
+# Regular expressions to read residues from the tpr dump
+GROMACS_DUMP_MOLBLOCK_TYPE_REGEX = r'^\s+moltype\s+= (\d+) '
+GROMACS_DUMP_MOLBLOCK_COUNT_REGEX = r'^\s+#molecules\s+= (\d+)'
+GROMACS_DUMP_MOLTYPE_REGEX = r'^   moltype \((\d+)\):'
+GROMACS_DUMP_ATOM_RESIDUE_REGEX = r'^\s+atom\[\s*\d+\]=\{.*resind=\s*(\d+),'
+GROMACS_DUMP_RESIDUE_NUMBER_REGEX = r'^\s+residue\[\d+\]=\{name=".*", nr=(-?\d+), ic='
+
+def get_tpr_residue_numbers (tpr_filepath : str) -> tuple[np.ndarray, np.ndarray]:
+    """ Get the residue index of every atom and the number of every residue in a tpr.
+    Numbers are the ones Gromacs shows for the whole system (e.g. in a gro file written from the tpr).
+    The tpr stores residues once per molecule type, so they are repeated here for every molecule. """
+    # Read only the topology part of the dump, which comes before coordinates
+    process = Popen([ GROMACS_EXECUTABLE, 'dump', '-s', tpr_filepath, '-quiet' ],
+        stdout = PIPE, stderr = PIPE, text = True)
+    molblocks = []
+    moltypes = {}
+    current_moltype = None
+    for line in process.stdout:
+        if line.startswith('grp[') or line.startswith('box ('): break
+        if match := search(GROMACS_DUMP_MOLBLOCK_TYPE_REGEX, line):
+            molblocks.append([ int(match[1]), None ])
+        elif match := search(GROMACS_DUMP_MOLBLOCK_COUNT_REGEX, line):
+            molblocks[-1][1] = int(match[1])
+        elif match := search(GROMACS_DUMP_MOLTYPE_REGEX, line):
+            current_moltype = { 'atom_residues': [], 'residue_numbers': [] }
+            moltypes[int(match[1])] = current_moltype
+        elif current_moltype is None: continue
+        elif match := search(GROMACS_DUMP_ATOM_RESIDUE_REGEX, line):
+            current_moltype['atom_residues'].append(int(match[1]))
+        elif match := search(GROMACS_DUMP_RESIDUE_NUMBER_REGEX, line):
+            current_moltype['residue_numbers'].append(int(match[1]))
+    process.kill()
+    error_logs = process.stderr.read()
+    process.wait()
+    if len(molblocks) == 0 or len(moltypes) == 0:
+        raise RuntimeError(f'Failed to read residues from tpr file "{tpr_filepath}":\n{error_logs}')
+    # Gromacs gives new numbers to molecules with a single residue (e.g. water and ions)
+    # They are numbered after the highest number in the rest of molecules
+    # This is not done when the system is a single molecule
+    is_single_molecule = len(molblocks) == 1 and molblocks[0][1] == 1
+    renumber_limit = 0 if is_single_molecule else 1
+    last_number = max([ max(moltype['residue_numbers']) for moltype in moltypes.values()
+        if len(moltype['residue_numbers']) > renumber_limit ], default = 0)
+    atom_residues = []
+    residue_numbers = []
+    for moltype_index, molecule_count in molblocks:
+        moltype = moltypes[moltype_index]
+        moltype_residue_count = len(moltype['residue_numbers'])
+        moltype_atom_residues = np.array(moltype['atom_residues'])
+        for _ in range(molecule_count):
+            atom_residues.append(moltype_atom_residues + len(residue_numbers))
+            if moltype_residue_count <= renumber_limit:
+                residue_numbers += range(last_number + 1, last_number + 1 + moltype_residue_count)
+                last_number += moltype_residue_count
+            else:
+                residue_numbers += moltype['residue_numbers']
+    return np.concatenate(atom_residues), np.array(residue_numbers)
+
+
+def set_filtered_tpr_residue_numbers (
+    tpr_filepath : str,
+    atom_residues : np.ndarray,
+    residue_numbers : np.ndarray):
+    """ Overwrite residue numbers in a tpr written by 'convert-tpr -n'.
+    This tpr has a single molecule type with all atoms, written in binary as follows:
+    - Atom count and residue count
+    - One record per atom (32 bytes, or 48 in double precision) which ends with its residue index and element number
+    - 3 name indices per atom (name, type and type B)
+    - One record per residue (9 bytes): name index, number and insertion code
+    We find this block by checking the counts and the residue index of every atom, then write the numbers. """
+    atom_count = len(atom_residues)
+    residue_count = len(residue_numbers)
+    with open(tpr_filepath, 'rb') as file:
+        data = bytearray(file.read())
+    counts_bytes = struct.pack('>ii', atom_count, residue_count)
+    found_residue_starts = []
+    counts_start = data.find(counts_bytes)
+    while counts_start != -1:
+        atoms_start = counts_start + 8
+        for atom_size in (32, 48):
+            residues_start = atoms_start + atom_count * (atom_size + 12)
+            if residues_start + 9 * residue_count > len(data): continue
+            atoms = np.frombuffer(data, dtype='>i4', count=atom_count * atom_size // 4, offset=atoms_start)
+            if np.array_equal(atoms.reshape(atom_count, atom_size // 4)[:, -2], atom_residues):
+                found_residue_starts.append(residues_start)
+        counts_start = data.find(counts_bytes, counts_start + 1)
+    if len(found_residue_starts) != 1:
+        raise RuntimeError(f'Expected to find residues once in tpr file "{tpr_filepath}" but found them {len(found_residue_starts)} times')
+    residues_start = found_residue_starts[0]
+    for residue_index, residue_number in enumerate(residue_numbers):
+        number_start = residues_start + 9 * residue_index + 4
+        data[number_start:number_start + 4] = struct.pack('>i', int(residue_number))
+    with open(tpr_filepath, 'wb') as file:
+        file.write(data)
+
+
+def convert_tpr_with_index (
+    input_tpr_filepath : str,
+    output_tpr_filepath : str,
+    index_filepath : str,
+    group_name : str):
+    """ Filter a tpr with 'convert-tpr -n' and keep the original residue numbers.
+    convert-tpr numbers residues from 1 in the filtered tpr, so we write back the original ones after. """
+    run_gromacs(f'convert-tpr -s {input_tpr_filepath} -o {output_tpr_filepath} \
+                -n {index_filepath}', user_input = group_name)
+    # Get the original residue of every kept atom
+    kept_atoms = np.array(read_ndx(File(index_filepath))[group_name])
+    original_atom_residues, original_residue_numbers = get_tpr_residue_numbers(input_tpr_filepath)
+    kept_atom_original_residues = original_atom_residues[kept_atoms]
+    # convert-tpr starts a new residue every time the original residue changes between kept atoms
+    new_residue_starts = np.ones(len(kept_atoms), dtype=bool)
+    new_residue_starts[1:] = kept_atom_original_residues[1:] != kept_atom_original_residues[:-1]
+    filtered_atom_residues = np.cumsum(new_residue_starts) - 1
+    filtered_residue_numbers = original_residue_numbers[kept_atom_original_residues[new_residue_starts]]
+    set_filtered_tpr_residue_numbers(output_tpr_filepath, filtered_atom_residues, filtered_residue_numbers)
+
+
 def filter_tpr (
     input_structure_file : 'File',
     output_structure_file : 'File',
@@ -483,8 +600,8 @@ def filter_tpr (
         file.write(filter_index_content)
 
     # Filter the tpr
-    run_gromacs(f'convert-tpr -s {input_structure_file.path} -o {output_structure_file.path} \
-                -n {filter_index_filename}', user_input = filter_selection_name)
+    convert_tpr_with_index(input_structure_file.path, output_structure_file.path,
+        filter_index_filename, filter_selection_name)
 
     # Cleanup the index file
     remove(filter_index_filename)
@@ -626,10 +743,9 @@ def tpr_filter(
     index_filepath : str,
     filter_group_name : str
 ):
-    """ Filter atoms in both a pdb and a xtc file. """
+    """ Filter atoms in a tpr file. """
     # Filter the topology
-    run_gromacs(f'convert-tpr -s {input_tpr_filepath} -o {output_tpr_filepath} \
-                -n {index_filepath}', user_input = filter_group_name)
+    convert_tpr_with_index(input_tpr_filepath, output_tpr_filepath, index_filepath, filter_group_name)
 
 
 def make_index (input_structure_file : 'File', output_index_file : 'File', mask : str) -> str:

@@ -72,7 +72,7 @@ def filter_atoms (
         # Filter both structure and trajectory using Gromacs, since is more efficient than pytraj
         # Set up an index file with all atom indices manually
         # As long as indices are for atoms and not residues there should never be any incompatibility
-        keep_selection.to_ndx_file(output_filepath = index_filename)
+        keep_selection.to_ndx_file(selection_name = filter_group_name, output_filepath = index_filename)
         # Filter the trajectory
         # Gromacs can not read mmCIF so we give it a PDB, where chains do not matter
         input_structure = Structure.from_file(input_structure_file.path)
