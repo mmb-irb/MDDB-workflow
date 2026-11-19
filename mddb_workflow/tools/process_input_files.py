@@ -9,7 +9,7 @@ from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.gmx_spells import count_xtc_frames, copy_xtc_frames
+from mddb_workflow.utils.gmx_spells import count_xtc_frames, copy_xtc_frames, count_complete_xtc_frames
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 
@@ -57,7 +57,7 @@ def process_input_files(
     fit: bool | str,
     translation: list[float] | str,
     input_chainer: Optional[dict],
-    input_skip_frames: Optional[int],
+    input_skip_frames: Optional[tuple[int, int]],
     # Selections
     # Note that they are not used directly but they are used inderictly
     # However we must add them as arguments, so this task will be run again if they change
@@ -102,7 +102,7 @@ def process_input_files(
         self.register.add_warning(FAITH_BYPASS, 'All processing steps and tests were skipped')
         output_structure_file.set_symlink_to(input_structure_file, force=True)
         if len(input_trajectory_files) > 1: raise InputError('Please do not use the --faith argument')
-        if input_skip_frames: raise InputError('Frames can not be skipped when using the --faith argument')
+        if input_skip_frames and any(input_skip_frames): raise InputError('Frames can not be skipped when using the --faith argument')
         output_trajectory_file.set_symlink_to(input_trajectory_files[0], force=True)
         if output_topology_file != MISSING_TOPOLOGY:
             output_topology_file.set_symlink_to(input_topology_file, force=True)
@@ -189,19 +189,27 @@ def process_input_files(
 
     # --- SKIPPING FRAMES ------------------------------------------------------------
 
-    # Remove the first frames of the trajectory if it was requested
+    # Remove the first and the last frames of the trajectory if it was requested
     # Note that the converted trajectory may be the input trajectory itself so we never modify it
     skipped_trajectory_file = converted_trajectory_file
-    if input_skip_frames:
+    first_frames, last_frames = input_skip_frames or (0, 0)
+    if first_frames or last_frames:
         skipped_trajectory_file = File(f'{output_directory}/{SKIPPED_TRAJECTORY}')
         incompleted_skipped_trajectory_file = _prepare_incomplete_output(output_directory, SKIPPED_TRAJECTORY)
         if not skipped_trajectory_file.exists:
-            print(f' * Skipping the first {input_skip_frames} frames')
-            written_frames = copy_xtc_frames(converted_trajectory_file.path, incompleted_skipped_trajectory_file.path,
-                lambda frame: frame >= input_skip_frames)
+            if first_frames: print(f' * Skipping the first {first_frames} frames')
+            frames = lambda frame: frame >= first_frames
+            if last_frames:
+                # An incomplete last frame counts as a frame, so it can be skipped
+                complete_frames, incomplete_last_frame = count_complete_xtc_frames(converted_trajectory_file.path)
+                print(f' * Skipping the last {last_frames} frames' + (' (the last one is incomplete)' if incomplete_last_frame else ''))
+                frames = range(first_frames, complete_frames + incomplete_last_frame - last_frames)
+            written_frames = copy_xtc_frames(converted_trajectory_file.path, incompleted_skipped_trajectory_file.path, frames,
+                allow_incomplete_last_frame=bool(last_frames))
             if written_frames == 0:
                 incompleted_skipped_trajectory_file.remove()
-                raise InputError(f'Cannot skip {input_skip_frames} frames: the trajectory has not enough frames')
+                raise InputError(f'Cannot skip the first {first_frames} and the last {last_frames} frames: '
+                    'the trajectory has not enough frames')
             _commit_incomplete_output(incompleted_skipped_trajectory_file, skipped_trajectory_file)
 
     # --- provisional reference structure ---

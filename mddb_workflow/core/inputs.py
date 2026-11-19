@@ -92,6 +92,9 @@ class ProjectInputs:
         if not self.is_file_available:
             warn('Missing inputs file. Allowed tasks will be very limited.')
 
+        # Frames to skip forced from the command line replace only the ones of the MDs they name
+        self._merge_forced_skip_frames()
+
         # Persist forced inputs after ProjectInputs has validated them.  This
         # prevents the user from losing a lot of time for a silly typo.
         self.apply_forced_inputs()
@@ -117,6 +120,18 @@ class ProjectInputs:
                     f' Did you forget the quotes maybe? Try this: -fin {suggested_fix}')
         # Save forced inputs as a dict
         return {name: value for name, value in forced_inputs}
+
+    def _merge_forced_skip_frames(self) -> None:
+        """Add the frames to skip of the inputs file for the MDs which are not in the forced value.
+        e.g. -skip 0 9 with "skip_frames: {0: 5, 1: 7}" in the inputs file gives {0: [9], 1: 7}
+        """
+        forced_skip_frames = self.forced_inputs.get('skip_frames')
+        if not isinstance(forced_skip_frames, dict) or not self.is_file_available: return
+        # Keys may come as strings (e.g. quoted keys in the inputs file) so we convert them to integers
+        file_skip_frames = self.file_inputs.get('skip_frames') or {}
+        merged_skip_frames = { int(md_index): frames for md_index, frames in file_skip_frames.items() }
+        merged_skip_frames.update({ int(md_index): frames for md_index, frames in forced_skip_frames.items() })
+        self.forced_inputs['skip_frames'] = merged_skip_frames
 
     def apply_forced_inputs(self) -> None:
         """Persist forced values in the input document when it is available.
@@ -414,7 +429,25 @@ class ProjectInputs:
         if repeats:
             raise InputError('Duplicated values in MD inputs (see warnings above).' +
                 ' All MD names and directories must be unique.')
+        # Make sure all MD indices where frames are to be skipped exist
+        for md_index in self.get_skip_frames():
+            if md_index >= len(md_config):
+                raise InputError(f'Frames are to be skipped for MD index {md_index} but there are only {len(md_config)} MDs (indices start at 0)')
         return md_config
+
+    def get_skip_frames(self) -> dict[int, tuple[int, int]]:
+        """Get the numbers of frames to skip from the beginning and from the end of the trajectory of every MD.
+        In the inputs positive numbers are frames from the beginning and negative numbers are frames from the end.
+        Both numbers for the same MD come as a list (e.g. 0: [100, -1]).
+        """
+        skip_frames = {}
+        for md_index, numbers in (self.get('skip_frames') or {}).items():
+            # Numbers may come as strings (e.g. quoted keys in the inputs file) so we convert them to integers
+            numbers = [int(number) for number in (numbers if isinstance(numbers, list) else [numbers])]
+            first_frames = next((number for number in numbers if number >= 0), 0)
+            last_frames = next((-number for number in numbers if number < 0), 0)
+            skip_frames[int(md_index)] = (first_frames, last_frames)
+        return skip_frames
 
     def validate(self, inputs_data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Validate a document or the current effective values.

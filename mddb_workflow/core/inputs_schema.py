@@ -220,7 +220,7 @@ class WorkflowInputs(InputsBaseModel):
     fit: Optional[Union[bool, Literal['auto']]] = None
     translation: Optional[Union[str, list[float]]] = None
     chainer: Optional[dict[str, str]] = None
-    skip_frames: Optional[dict[int, int]] = None
+    skip_frames: Optional[dict[int, Union[int, list[int]]]] = None
     mercy: Optional[Union[bool, list[str]]] = None
     trust: Optional[Union[bool, list[str]]] = None
     faith: Optional[bool] = None
@@ -249,11 +249,13 @@ class WorkflowInputs(InputsBaseModel):
     def check_skip_frames(cls, value):
         if value is None:
             return value
-        for md_index, frames in value.items():
+        for md_index, numbers in value.items():
             if md_index < 0:
                 raise ValueError(f'Wrong MD index {md_index} in "skip_frames": it must not be a negative number.')
-            if frames < 0:
-                raise ValueError(f'Wrong number of frames for MD {md_index} in "skip_frames": it must not be a negative number.')
+            numbers = numbers if isinstance(numbers, list) else [numbers]
+            if sum(number >= 0 for number in numbers) > 1 or sum(number < 0 for number in numbers) > 1:
+                raise ValueError(f'Wrong frames {numbers} for MD {md_index} in "skip_frames": use at most '
+                    'one positive number (frames from the beginning) and one negative number (frames from the end).')
         return value
 
     @field_validator('mercy', 'trust')
