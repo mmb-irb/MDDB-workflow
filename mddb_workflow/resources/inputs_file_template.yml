@@ -682,6 +682,9 @@ chainer:
 
 # Set a number of frames to be excluded from the beginning of the trajectory of each MD.
 # Use a dict where keys are MD indices (starting at 0, as in 'mdref') and values are the number of frames to skip.
+# Negative numbers exclude frames from the end instead; use a list to exclude frames from both ends.
+# An incomplete last frame (e.g. after an interrupted simulation or file transfer) counts as one frame.
+# Otherwise trajectories with an incomplete last frame are not processed.
 # MDs out of this dict keep all their frames.
 # These frames are removed before any other processing step (e.g. filtering, imaging or fitting).
 # Note that frames are counted after merging all input trajectory files of the MD.
@@ -691,7 +694,8 @@ chainer:
 #
 # skip_frames:
 #   0: 100
-#   2: 50
+#   1: -1
+#   2: [50, -1]
 
 skip_frames:
 

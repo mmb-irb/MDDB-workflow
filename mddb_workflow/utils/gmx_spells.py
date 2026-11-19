@@ -810,6 +810,29 @@ def count_xtc_frames (trajectory_file : 'File') -> int:
 _XTC_COORDINATES_OFFSET = 4 + _XTC_PRE_BOX + 4 # magic + header + repeated natoms
 _XTC_NCOORD_BYTES_OFFSET = _XTC_COORDINATES_OFFSET + _XTC_COMPRESSED_HEADER
 
+def _get_xtc_frame_end (mapped_file : mmap.mmap, start : int) -> Optional[int]:
+    """Get the byte where the frame starting at a given byte ends in a memory mapped XTC file.
+    If the file ends before the frame does, return a byte after the end of the file.
+    Return None if there is no frame starting there, i.e. the data is not valid.
+    """
+    size = len(mapped_file)
+    # The file may end in the middle of the magic number
+    if start + 4 > size:
+        return size + 1 if _XTC_INT.pack(_XTC_MAGIC).startswith(mapped_file[start:size]) else None
+    if _XTC_INT.unpack_from(mapped_file, start)[0] != _XTC_MAGIC: return None
+    if start + _XTC_COORDINATES_OFFSET > size: return size + 1
+    natoms = _XTC_INT.unpack_from(mapped_file, start + _XTC_COORDINATES_OFFSET - 4)[0]
+    if natoms <= _XTC_MAX_UNCOMPRESSED_ATOMS:
+        return start + _XTC_COORDINATES_OFFSET + 3 * 4 * natoms
+    if start + _XTC_NCOORD_BYTES_OFFSET + 4 > size: return size + 1
+    ncoord_bytes = _XTC_INT.unpack_from(mapped_file, start + _XTC_NCOORD_BYTES_OFFSET)[0]
+    return start + _XTC_NCOORD_BYTES_OFFSET + 4 + ((ncoord_bytes + 3) // 4) * 4
+
+def _is_incomplete_xtc_frame (mapped_file : mmap.mmap, start : int) -> bool:
+    """Check if the data from a given byte to the end of a memory mapped XTC file is a frame cut before its end."""
+    end = _get_xtc_frame_end(mapped_file, start)
+    return end is not None and end > len(mapped_file)
+
 def _iterate_xtc_frame_bounds (mapped_file : mmap.mmap) -> Generator[tuple[int, int], None, None]:
     """Yield the start and end byte of every frame in a memory mapped XTC file.
     Stop at the first incomplete or corrupted frame.
@@ -818,21 +841,38 @@ def _iterate_xtc_frame_bounds (mapped_file : mmap.mmap) -> Generator[tuple[int, 
     """
     size = len(mapped_file)
     start = 0
-    while start + _XTC_COORDINATES_OFFSET <= size:
-        if _XTC_INT.unpack_from(mapped_file, start)[0] != _XTC_MAGIC: return
-        natoms = _XTC_INT.unpack_from(mapped_file, start + _XTC_COORDINATES_OFFSET - 4)[0]
-        if natoms <= _XTC_MAX_UNCOMPRESSED_ATOMS:
-            end = start + _XTC_COORDINATES_OFFSET + 3 * 4 * natoms
-        else:
-            if start + _XTC_NCOORD_BYTES_OFFSET + 4 > size: return
-            ncoord_bytes = _XTC_INT.unpack_from(mapped_file, start + _XTC_NCOORD_BYTES_OFFSET)[0]
-            end = start + _XTC_NCOORD_BYTES_OFFSET + 4 + ((ncoord_bytes + 3) // 4) * 4
-        # Make sure the frame is complete, which may not be the case of the last frame
-        if end > size: return
+    while start < size:
+        end = _get_xtc_frame_end(mapped_file, start)
+        # Make sure the frame is valid and complete, which may not be the case of the last frame
+        if end is None or end > size: return
         yield start, end
         start = end
 
-def copy_xtc_frames (input_xtc_path : str, output_xtc_path : str, frames : Callable[[int], bool] | list[int]) -> int:
+def count_complete_xtc_frames (xtc_path : str) -> tuple[int, bool]:
+    """Count the complete frames in an XTC file and check if it ends with an incomplete frame.
+    This may happen if the simulation or a file transfer was interrupted.
+    Raise an error if there is not valid data after the complete frames, since the file is then corrupted.
+    """
+    with open(xtc_path, 'rb') as xtc_file:
+        size = fstat(xtc_file.fileno()).st_size
+        # Note that empty files can not be memory mapped
+        if size == 0: return 0, False
+        with mmap.mmap(xtc_file.fileno(), 0, access=mmap.ACCESS_READ) as mapped_file:
+            complete_frames = 0
+            end = 0
+            for _, end in _iterate_xtc_frame_bounds(mapped_file):
+                complete_frames += 1
+            if end == size: return complete_frames, False
+            if _is_incomplete_xtc_frame(mapped_file, end): return complete_frames, True
+    raise RuntimeError(f'Trajectory {xtc_path} is corrupted: after {complete_frames} complete frames (byte {end}) '
+        f'there is not valid data ({size - end} remaining bytes)')
+
+def copy_xtc_frames (
+    input_xtc_path : str,
+    output_xtc_path : str,
+    frames : Callable[[int], bool] | list[int],
+    allow_incomplete_last_frame : bool = False,
+) -> int:
     """Write a new XTC file with a selection of frames from another XTC file.
 
     Frames are copied byte by byte, without decompressing coordinates, so the output
@@ -840,6 +880,7 @@ def copy_xtc_frames (input_xtc_path : str, output_xtc_path : str, frames : Calla
     Frames may be a list of frame indices (0-based) or a function which says if a given frame index is to be kept.
     Frames are always written in their original order.
     Input and output files may be the same.
+    An incomplete last frame is an error, unless it is allowed and frames are a list which does not include it.
     Return the number of written frames.
 
     Made by Claude.
@@ -869,12 +910,20 @@ def copy_xtc_frames (input_xtc_path : str, output_xtc_path : str, frames : Calla
                         output_file.write(mapped_file[start:end])
                         written_frames += 1
                 # If we read the whole trajectory then there must be no remaining bytes
+                # Unless they are an incomplete last frame which is allowed and was not requested
                 else:
-                    if end < size:
+                    incomplete_last_frame = end < size and _is_incomplete_xtc_frame(mapped_file, end)
+                    skipped_incomplete_last_frame = allow_incomplete_last_frame and incomplete_last_frame \
+                        and last_frame is not None and last_frame < read_frames
+                    if end < size and not skipped_incomplete_last_frame:
                         remove(auxiliar_output_path)
-                        raise RuntimeError(f'Trajectory {input_xtc_path} is corrupted: '
-                            f'after {read_frames} complete frames (byte {end}) there is an incomplete or not valid frame '
-                            f'({size - end} remaining bytes). This may happen if the simulation or a file transfer was interrupted.')
+                        message = f'Trajectory {input_xtc_path} is corrupted: ' \
+                            f'after {read_frames} complete frames (byte {end}) there is an incomplete or not valid frame ' \
+                            f'({size - end} remaining bytes). This may happen if the simulation or a file transfer was interrupted.'
+                        if incomplete_last_frame:
+                            message += ' If the rest of the trajectory is fine, skip the incomplete last frame' \
+                                ' with a negative number in the "skip_frames" input.'
+                        raise RuntimeError(message)
     rename(auxiliar_output_path, output_xtc_path)
     return written_frames
 

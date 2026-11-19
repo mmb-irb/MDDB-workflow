@@ -83,7 +83,8 @@ def check_trajectory_integrity (
     snapshots : int,
     # Used only to suggest how to skip non-equilibrated frames
     md_index : int,
-    skipped_frames : int) -> bool:
+    skipped_frames : int,
+    skipped_last_frames : int = 0) -> bool:
 
     # Skip the test if we trust
     if TRAJECTORY_INTEGRITY_FLAG in trust:
@@ -552,8 +553,11 @@ def check_trajectory_integrity (
         title = f'RMSD jumps along the trajectory in fragment "{worst_report["name"]}" (first {graph_frames_limit} frames)'
         display_rmsd_jumps_graph(report_data, title)
         # Note that frames already skipped must be added to the suggested number of frames to skip
+        # Frames skipped from the end must be suggested as well, since the suggested value replaces the current one
+        skip_arguments = f'-skip {md_index} {skipped_frames + max_bypassed_frames}'
+        if skipped_last_frames: skip_arguments += f' -skip {md_index} -{skipped_last_frames}'
         message += f' Use the "--mercy {TRAJECTORY_INTEGRITY_FLAG}" flag to skip this error' \
-            f' or exclude these frames from the trajectory with "-skip {md_index} {skipped_frames + max_bypassed_frames}"' \
+            f' or exclude these frames from the trajectory with "{skip_arguments}"' \
             ' (or the "skip_frames" input).'
         raise TestFailure(f'{message}\n{description}\n{view_hint}')
 

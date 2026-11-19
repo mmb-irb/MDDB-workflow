@@ -863,11 +863,11 @@ class MD:
     fit = property(processing_input_getter('fit'), None, None, "Set if the trajectory is to be fitted (read only)")
     translation = property(processing_input_getter('translation'), None, None, "Translation for the imaging process (read only)")
 
-    # Number of frames to be excluded from the beginning of the trajectory
+    # Numbers of frames to be excluded from the beginning and from the end of the trajectory
     # Note that it is None when there is nothing to skip so the processing is not run again in old projects
-    def get_input_skip_frames(self) -> Optional[int]:
+    def get_input_skip_frames(self) -> Optional[tuple[int, int]]:
         return self.project.skip_frames.get(self.index)
-    input_skip_frames = property(get_input_skip_frames, None, None, "Number of initial frames to be excluded from the processed trajectory (read only)")
+    input_skip_frames = property(get_input_skip_frames, None, None, "Numbers of initial and final frames to be excluded from the processed trajectory (read only)")
 
     # Run the actual processing to generate output processed files out of input raw files
     # And by "files" I mean structure, trajectory and topology
@@ -1313,6 +1313,7 @@ class MD:
         if self._trajectory_integrity is not MISSING_VALUE:
             return self._trajectory_integrity
         # Otherwise we must find the value
+        skipped_first_frames, skipped_last_frames = self.input_skip_frames or (0, 0)
         self._trajectory_integrity = check_trajectory_integrity(
             input_structure_filename=self.structure_file.path,
             input_trajectory_filename=self.trajectory_file.path,
@@ -1328,7 +1329,8 @@ class MD:
             update_image=self.update_image_input,
             snapshots=self.snapshots,
             md_index=self.index,
-            skipped_frames=self.input_skip_frames or 0,
+            skipped_frames=skipped_first_frames,
+            skipped_last_frames=skipped_last_frames,
         )
         return self._trajectory_integrity
 
@@ -1656,8 +1658,10 @@ class Project:
                 Value passed through console overrides the one in inputs file.
             skip_frames (list[list[int]]):
                 Pairs of MD index (starting at 0) and number of frames to be excluded from the beginning of its trajectory.
-                e.g. -skip 0 100 -skip 2 50
-                Value passed through console overrides the one in inputs file.
+                Negative numbers exclude frames from the end instead, so both ends may be set for the same MD.
+                An incomplete last frame (e.g. after an interrupted simulation or file transfer) counts as one frame.
+                e.g. -skip 0 100 -skip 0 -1 -skip 2 50
+                Value passed through console overrides the one in inputs file for the MDs it names, and it is saved there.
             pca_analysis_selection (str):
                 Atom selection for PCA analysis in VMD syntax.
             pca_fit_selection (str):
@@ -1829,9 +1833,14 @@ class Project:
         self._pdb_ids = MISSING_VALUE
         self._mds = MISSING_VALUE
 
-        # Selections passed through console override the ones in the inputs file
+        # Selections and frames to skip passed through console override the ones in the inputs file
         # Thus they are handled as forced inputs
         forced_inputs = [ *(forced_inputs or []) ]
+        # Frames to skip come as pairs of MD index and number of frames, which are joined as in the inputs file
+        # e.g. -skip 0 100 -skip 0 -1 -> 0: [100, -1]
+        skip_frames_input = {}
+        for md_index, frames in skip_frames or []:
+            skip_frames_input.setdefault(md_index, []).append(frames)
         argument_inputs = {
             'pbc_selection': pbc_selection,
             'cg_selection': cg_selection,
@@ -1839,6 +1848,7 @@ class Project:
             'qm_selection': qm_selection,
             'dummy_selection': dummy_selection,
             'forced_class_selections': forced_class_selections,
+            'skip_frames': skip_frames_input or None,
         }
         for input_name, input_value in argument_inputs.items():
             if input_value is not None: forced_inputs.append([input_name, input_value])
@@ -1873,20 +1883,6 @@ class Project:
         if self.trust is None or type(self.trust) is bool:
             self.trust = AVAILABLE_CHECKINGS if self.trust else []
 
-        # Set the number of frames to skip per MD index
-        # Values from the console come as pairs and values from the inputs file come as a dict
-        # Numbers may come as strings (e.g. quoted keys in the inputs file) so we convert them to integers
-        if skip_frames:
-            skip_frames_pairs = skip_frames
-        else:
-            skip_frames_pairs = (self.inputs.get('skip_frames') or {}).items()
-        self.skip_frames = {}
-        for md_index, frames in skip_frames_pairs:
-            md_index, frames = int(md_index), int(frames)
-            if md_index < 0 or frames < 0:
-                raise InputError(f'Wrong skip frames "{md_index}: {frames}": values must not be negative numbers')
-            self.skip_frames[md_index] = frames
-
         # Set the MD configuration
         self.md_config: list[dict] = self.inputs.merge_md_config(
             input_md_config,
@@ -1899,10 +1895,8 @@ class Project:
         # Make sure the values make sense and fill any gaps (e.g. missing names or directories)
         self.md_config = self.inputs.validate_md_config(self.md_config)
 
-        # Make sure all MD indices where frames are to be skipped exist
-        for md_index in self.skip_frames:
-            if md_index >= len(self.md_config):
-                raise InputError(f'Frames are to be skipped for MD index {md_index} but there are only {len(self.md_config)} MDs (indices start at 0)')
+        # Set the numbers of frames to skip from the beginning and from the end per MD index
+        self.skip_frames = self.inputs.get_skip_frames()
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
         self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))
