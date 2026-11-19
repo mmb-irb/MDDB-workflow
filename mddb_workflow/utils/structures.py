@@ -2567,11 +2567,16 @@ class Structure:
             chain_name = letter if letter else self.get_available_chain_name()
             self.set_selection_chain_name(fragment, chain_name)
 
-    def auto_chainer(self, verbose: bool = False):
+    def auto_chainer(self, verbose: bool = False, keep_author_names: bool = False):
         """Smart function to set chains automatically.
         Original chains will be overwritten.
+        If keep_author_names is True then every new chain with exactly the same residues
+        as an original chain takes the original chain name.
         """
         if verbose: print('Running auto-chainer')
+        # Save the residues of every original chain with a name
+        author_chain_names = { frozenset(chain.residue_indices): chain.name
+            for chain in self.chains if chain.name.strip() }
         # Set all chains to X
         self.chainer(letter='X')
         # Set solvent and ions as a unique chain
@@ -2613,6 +2618,34 @@ class Structure:
         # This means the whole system is a single ligand or "other"
         if self.chain_count == 1 and self.chains[0].name == 'X':
             self.chainer(letter='A')
+        if keep_author_names:
+            self.restore_author_chain_names(author_chain_names)
+
+    def restore_author_chain_names(self, author_chain_names: dict[frozenset, str]):
+        """Rename chains with the original name of the chain having exactly the same residues.
+        Other chains keep their names unless the name is now used by a renamed chain.
+        In this case they get the first available name.
+        """
+        # Rename the chains which match an original chain
+        # If two original chains had the same name then only the first match takes the name
+        kept_names = set()
+        renamed_chain_indices = set()
+        for chain_index, chain in enumerate(self.chains):
+            author_name = author_chain_names.get(frozenset(chain.residue_indices), None)
+            if author_name is None or author_name in kept_names: continue
+            chain.name = author_name
+            kept_names.add(author_name)
+            renamed_chain_indices.add(chain_index)
+        # Rename the rest of chains if their name is now used by a renamed chain
+        new_names = []
+        for chain_index, chain in enumerate(self.chains):
+            if chain_index in renamed_chain_indices: continue
+            used_names = [ other.name for other_index, other in enumerate(self.chains) if other_index != chain_index ]
+            if chain.name in used_names:
+                chain.name = self.get_available_chain_name()
+            new_names.append(chain.name)
+        print(f' Author chains kept: {", ".join(sorted(kept_names)) or "none"}')
+        print(f' New chains: {", ".join(new_names) or "none"}')
 
     def raw_protein_chainer(self):
         """This is an alternative system to find protein chains (anything else is chained as 'X').

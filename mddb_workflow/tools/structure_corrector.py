@@ -263,7 +263,8 @@ def structure_corrector(
       -> Atoms in the united atom selection may have less bonds, since their hydrogens may be absorbed
     * Forced chains -> Chains are set according to the 'chainer' input, if passed
       -> Missing chains are not fixed and forced chains must not be modified by further corrections
-    * Missing chains -> Chains are added through VMD
+    * Chains -> Chains are always guessed for the whole system, unless forced by the 'chainer' input
+      -> Author chains with exactly the same residues as a guessed chain keep the author name
     * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
     * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
     * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
@@ -629,28 +630,25 @@ def structure_corrector(
     # Check if chains are missing. If so, create a new chainned structure and set it as the reference
     chains = structure.chains
 
-    # In case there are not chains at all
-    # If chains were forced then we respect them, even if there is a single chain
-    if not chainer and len(chains) == 1 and (chains[0].name == ' ' or chains[0].name == 'X'):
-        warn('Chains are missing and they will be added')
-        # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
-        # Note that we rely in fragments (and thus in bonds) to guess chains
+    # Chains are always guessed for the whole system, unless they were forced by the user
+    # Author chains with exactly the same residues as a guessed chain keep the author name
+    # Atoms with no chain are not a problem for the workflow but they are for the web client
+    some_chain_is_missing = any(chain.name == ' ' for chain in chains)
+    single_x_chain = len(chains) == 1 and chains[0].name == 'X'
+    if not chainer:
+        # We rely in fragments (and thus in bonds) to guess chains
+        # If we have bonds guessed from coarse grain (i.e. we have no topology) then we keep author chains
         if structure.is_missing_any_bonds():
-            raise InputError('We cannot guess chains with bonds guessed from coarse grain.\n'
-                ' Please either provide a topology including bonds or set chains in the structure PDB file.')
-        # Run the chainer
-        structure.auto_chainer()
-        write_updated_structure(structure, output_structure_file, 'modified (no chains)')
-
-    else:
-        # In case there are some missing chains
-        # Note that atoms with no chain are not a problem for the workflow but they are for the web client
-        unlettered_chain = next((chain for chain in chains if chain.name == ' '), None)
-        if unlettered_chain:
-            new_chain_name = structure.get_available_chain_name()
-            warn(f'Some chains are missing -> Unchained regions will be chained as {new_chain_name}')
-            unlettered_chain.name = new_chain_name
-            write_updated_structure(structure, output_structure_file, 'modified (missing chains)')
+            if some_chain_is_missing or single_x_chain:
+                raise InputError('We cannot guess chains with bonds guessed from coarse grain.\n'
+                    ' Please either provide a topology including bonds or set chains in the structure PDB file.')
+            print(' Author chains are kept since we cannot guess chains with bonds guessed from coarse grain')
+        else:
+            print(' Guessing chains')
+            previous_atom_chains = [ atom.chain.name for atom in structure.atoms ]
+            structure.auto_chainer(keep_author_names=True)
+            if previous_atom_chains != [ atom.chain.name for atom in structure.atoms ]:
+                write_updated_structure(structure, output_structure_file, 'modified (guessed chains)')
 
     # ------------------------------------------------------------------------------------------
     # Splitted chains --------------------------------------------------------------------------
