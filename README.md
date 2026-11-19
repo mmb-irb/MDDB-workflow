@@ -37,6 +37,7 @@ At this point your environment is ready to use and it includes the `mwf` command
 In HPC clusters running conda to install the dependencies cannot be possible in cases where you have no internet access. For this cases you can follow the next steps to install the workflow in your remote machine.
 
 When running the workflow, do not forget to exclude the tasks that need internet accesion by using the flag `-i network`.
+The chain references (`chains` task) may still be done with no internet by running InterProScan 6 locally with the flag `-lip`, which needs Nextflow and Apptainer, Singularity or Docker. Set it up once with `python -m mddb_workflow.utils.interproscan --setup` in a machine with internet; runs work offline after that (see the usage docs).
 
 ### Using conda-pack
 

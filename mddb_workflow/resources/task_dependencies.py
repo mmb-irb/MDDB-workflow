@@ -102,6 +102,7 @@ CONFIGURATION_ARGUMENTS = {
     'interaction_cutoff',
     'interactions_auto',
     'local_blast',
+    'local_interproscan',
     'maximum_pockets_number',
     'mercy',
     'most_populated_frames_number',

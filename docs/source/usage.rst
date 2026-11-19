@@ -127,6 +127,75 @@ To do so, you must head to the |loader|.
     <a href="https://github.com/mmb-irb/MDDB-loader" target="_blank">MDDB-loader</a>
 
 
+Local BLAST and InterProScan
+-----------------------------
+
+Two tasks call remote services which may be slow or overloaded when many projects are run at once:
+the protein mapping (``protmap``) runs a BLAST in NCBI and the chain references (``chains``) run InterProScan in EBI.
+Both may run locally instead:
+
+* ``-lb`` / ``--local_blast``: run ``blastp`` against a local Swiss-Prot database.
+  It requires BLAST+ (``conda install -c bioconda blast``) and the database is downloaded on first use.
+* ``-lip`` / ``--local_interproscan``: run InterProScan 6.0.3.0 locally, with the InterPro 111.0 data.
+  It requires Nextflow 25.10.4 or newer (``conda install -c bioconda nextflow``)
+  and a container runtime: Apptainer, Singularity or Docker, used in this order of preference.
+  Every chain is run on its own, as the EBI service does, since some e-values depend on the number of sequences in the run.
+  Known sequences take their precalculated matches from the InterPro Matches API, which takes about 20 seconds per chain;
+  the others are calculated, which takes about 1.5 minutes per chain with 4 CPUs and about 2.5 GB of memory.
+  The API is used only when it serves the same InterPro release as the local data, so the results of a project never mix releases.
+  Otherwise (e.g. after a new InterPro release, or with no internet) every match is calculated locally, after a warning.
+  A failed run is tried up to 5 times, since Nextflow 26.10 and older fail now and then in the first seconds of a run
+  with a ``Buffer underflow`` error (a race fixed in Nextflow 26.11.0-edge), and the run works when tried again.
+
+The local InterProScan is set up once, in the workflow resources, with the following command.
+It downloads the InterProScan pipeline, the data of the member databases and the container images,
+by running every analysis once. It takes about 40 minutes, mostly downloading from EBI, and about 37 GB of disk.
+Nextflow and Apptainer keep their files in the same directory, instead of the home directory.
+Only one setup runs at a time. If a setup is interrupted, the next one downloads the data again from the start,
+since InterProScan would take a partly downloaded database as complete.
+
+.. code-block:: bash
+
+   python -m mddb_workflow.utils.interproscan --setup
+
+Runs with ``-lip`` never set it up themselves, so it must be set up before launching many runs at once (e.g. a SLURM array).
+Check it with the following command, which prints whether the local InterProScan is set up:
+
+.. code-block:: bash
+
+   python -m mddb_workflow.utils.interproscan
+
+The EBI service also runs InterProScan 6, so local results have the same format, with two differences:
+
+* EBI also runs the licensed analyses Phobius and SignalP, and the machine learning model InterPro-N, which local runs do not.
+* EBI uses the latest InterPro data, while local runs use the pinned InterPro 111.0, so matches may differ after a new InterPro release.
+
+Chain references made with InterProScan 6 have version 0.2.
+References made before (version 0.1) come from InterProScan 5, whose results use other names for some member databases
+(e.g. ``PFAM`` instead of ``Pfam`` or ``GENE3D`` instead of ``CATH-Gene3D``) and some other fields.
+
+Switching a project between ``-lip`` and the remote service makes the ``chains`` task run again:
+chains whose references are already in the database are taken from there and only the others are run with the new engine.
+
+Chain references already in the database are remade with the local InterProScan with ``mwf upref -rt chains``.
+New references are saved in the ``chain_references`` directory, a file per sequence, so a sequence in several nodes is run once
+and an interrupted update goes on where it stopped. ``-w`` sets how many InterProScan runs are done at once,
+splitting the CPUs among them (about 4 CPUs per run work well):
+
+.. code-block:: bash
+
+   mwf upref -nd all -rt chains -w 16 -ld <loader directory>
+
+Without the loader (``-ld``), chain references are only made, so the work may also be split among several processes
+(e.g. SLURM array tasks) running in the same directory. Every process claims a sequence before running it, so no sequence is run twice.
+Then a last run with the loader uploads them all. Note that every process downloads the references of the nodes first.
+
+.. code-block:: bash
+
+   mwf upref -nd all -rt chains -w 16    # in every task
+   mwf upref -nd all -rt chains -ld <loader directory>
+
+
 Tests and other checking processes
 -----------------------------------
 

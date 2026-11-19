@@ -152,3 +152,7 @@ the user's SLURM group/account. Ask the user, or check their existing job script
   `<workflow repo>/mddb_workflow/resources/blastdb/swissprot.*` (BLAST+ must be in `<env>`). It is
   downloaded on first use; make sure it exists before launching an array so tasks do not race to
   download it (see `launching.md`).
+- Local InterProScan (`mwf run -lip`) uses `<workflow repo>/mddb_workflow/resources/interproscan/`
+  (Nextflow must be in `<env>`, and Apptainer on the nodes). Runs never set it up, so set it up once with
+  `python -m mddb_workflow.utils.interproscan --setup` before launching (see `launching.md`). Keep it
+  out of `/scratch`, whose 60-day cleanup would delete parts of it.

@@ -18,7 +18,7 @@ from mddb_workflow.utils.nassa_file import generate_nassa_config
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
-from mddb_workflow.tools.update_references import update_references, AVAILABLE_REFERENCE_TYPES, ALL_FLAG
+from mddb_workflow.tools.update_references import update_references, get_all_reference_types, AVAILABLE_REFERENCE_TYPES, ALL_FLAG
 from mddb_workflow.tools.update_projects import update_projects, UPDATABLE_TASKS
 from mddb_workflow.tools.viewer import view_project
 from mddb_workflow.analyses.nassa import workflow_nassa
@@ -713,12 +713,12 @@ def main():
         if ALL_FLAG in types:
             if len(types) > 1:
                 raise InputError('If you ask for "all" reference types then it is redundant asking for any more types')
-            types = AVAILABLE_REFERENCE_TYPES
+            types = get_all_reference_types()
         # Iterate nodes
         for node_alias in nodes:
             # Iterate reference types
             for reference_type in types:
-                update_references(node_alias, reference_type, args.loader, args.force)
+                update_references(node_alias, reference_type, args.loader, args.force, args.workers)
     # Update projects
     elif subcommand == 'uproj':
         # Set the final list of nodes
@@ -809,6 +809,7 @@ run_parser_workflow_args = [
     (['-skip', '--skip_frames'], {'type': int, 'nargs': 2, 'action': 'append', 'default': None, 'metavar': ('MD_INDEX', 'N_FRAMES'), 'help': project_init_help['skip_frames']}),
     (['-sfr', '--screenshot_frame'], {'type': int, 'default': None, 'help': project_init_help['screenshot_frame']}),
     (['-lb', '--local_blast'], {'action': 'store_true', 'help': project_init_help['local_blast']}),
+    (['-lip', '--local_interproscan'], {'action': 'store_true', 'help': project_init_help['local_interproscan']}),
 ]
 for flags, kwargs in run_parser_workflow_args:
     run_parser_workflow_group.add_argument(*flags, **kwargs)
@@ -1133,10 +1134,17 @@ upref_parser.add_argument("-rt", "--types", required=True, nargs='*',
 upref_parser.add_argument("-ld", "--loader", type=str,
     help=f"Set the path to the directory where the loader is installed, so the workflow can use it. "
         "If the loader is available then the new references will be automatically uploaded in batches. "
-        "Note that using the loader makes the process more memory efficient and faster.")
+        "Note that using the loader makes the process more memory efficient and faster. "
+        "Without it, chain references are only made, in the 'chain_references' directory, so several processes "
+        "may share this directory (e.g. SLURM array tasks) and every sequence is run once. "
+        "Then run the update with the loader to upload them.")
 upref_parser.add_argument("-f", "--force", default=False, action='store_true',
     help="Remake all references, also those already generated with the latest version. "
         "References already remade in the local output file of a previous run are not remade, move this file to remake them.")
+upref_parser.add_argument("-w", "--workers", type=int, default=1,
+    help="Chain references are remade with the local InterProScan (set it up with "
+        "'python -m mddb_workflow.utils.interproscan --setup'). Set how many InterProScan runs are done at once. "
+        "The CPUs of this process are split among them, and about 4 CPUs per run work well.")
 
 
 # The update projects command

@@ -10,6 +10,26 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ============
 
+Added
+-----
+- Add a local InterProScan flag (``-lip``) to run the ``chains`` task with a local InterProScan 6.0.3.0 (InterPro
+  111.0 data) instead of the remote EBI service, which fails when it is overloaded. It needs Nextflow and Apptainer,
+  Singularity or Docker, and is set up once with ``python -m mddb_workflow.utils.interproscan --setup`` (about 37 GB).
+  Known sequences take their precalculated matches from the InterPro Matches API while it serves the same InterPro
+  release as the local data, so results never mix releases. Results
+  have the same format as remote ones but lack the licensed analyses (Phobius, SignalP) and InterPro-N
+- Remake chain references with the local InterProScan with ``mwf upref -rt chains``. ``-w`` runs several sequences
+  at once, and with no loader (``-ld``) the references are only made, in a directory shared by all nodes and processes,
+  so the work can be split in SLURM array tasks and every sequence is run once
+
+Changed
+-------
+- Run the remote InterProScan of the ``chains`` task with the EBI InterProScan 6 service (``iprscan6``) instead of
+  InterProScan 5. New chain references have version 0.2: InterProScan 6 names some member databases differently
+  (e.g. ``Pfam`` instead of ``PFAM``) and changed a few match fields
+- Stop the ``chains`` task with an error when the remote InterProScan jobs do not finish in 5 minutes. Before, the
+  task ended as done and the missing chains were never requested again
+
 [0.1.14] - 2026-11-18
 =====================
 
