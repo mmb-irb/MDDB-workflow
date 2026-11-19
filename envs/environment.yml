@@ -17,7 +17,7 @@ dependencies:
   # Fpocket is used for the pockets analysis
   - fpocket
   # Gromacs is used for several processing and analysis steps
-  - bioconda::gromacs_mddb=2025.3=he1b2d42_4
+  - bioconda::gromacs_mddb=2025.3=he1b2d42_6
   # MDanalysis is used for some processing steps
   # MDanalysis reads mmCIF files since version 2.11 and it needs gemmi to do so
   - mdanalysis >=2.11.0
