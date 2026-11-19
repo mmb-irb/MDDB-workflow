@@ -1552,8 +1552,7 @@ class Structure:
         parsed_chains = []
         # Keep the residue numbers as they are written in the PDB, for every parsed residue
         parsed_residue_number_texts = []
-        # Save chains and residues also in dictionaries only to find them faster
-        name_chains = {}
+        # Save residues also in a dictionary only to find them faster
         label_residues = {}
         # Keep track of the last issued atom and residue indices
         atom_index = -1
@@ -1581,14 +1580,12 @@ class Structure:
             # DANI: If we always check for an already existing chain there will never be repeated chains
             # DANI: However we may create chains with unconnected atoms silently (they were separated in the PDB)
             # DANI: For this reason we must only consider the last processed chain
-            parsed_chain = name_chains.get(chain_name, None)
-            if parsed_chain and parsed_chain != parsed_chains[-1]:
-                parsed_chain = None
+            if parsed_chains and parsed_chains[-1].name == chain_name:
+                parsed_chain = parsed_chains[-1]
             # If the parsed chain was not yet instantiated then do it now
-            if not parsed_chain:
+            else:
                 parsed_chain = Chain(name=chain_name)
                 parsed_chains.append(parsed_chain)
-                name_chains[chain_name] = parsed_chain
             # Get the parsed residue
             residue_label = (chain_name, residue_number, icode)
             # DANI: If we always check for an already existing residue there will never be repeated residues
