@@ -2753,11 +2753,14 @@ class TaskResolver:
 
     def get_project_overwritables(self) -> set[str]:
         """Get overwritables for project-level tasks."""
-        return set(t for t in self.project_tasks if t in self.overwritables)
+        # Get the overwritables first, since they add overwritten tasks which are not run by default (e.g. memmap)
+        overwritables = self.overwritables
+        return set(t for t in self.project_tasks if t in overwritables)
 
     def get_md_overwritables(self) -> set[str]:
         """Get overwritables for MD-level tasks."""
-        return set(t for t in self.md_tasks if t in self.overwritables)
+        overwritables = self.overwritables
+        return set(t for t in self.md_tasks if t in overwritables)
 
 
 class ErrorHandling:

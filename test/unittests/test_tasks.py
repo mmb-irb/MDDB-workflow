@@ -12,7 +12,7 @@ import pytest
 import numpy as np
 import MDAnalysis as mda
 from unittest.mock import patch, create_autospec
-from mddb_workflow.mwf import Project, MD
+from mddb_workflow.mwf import Project, MD, TaskResolver
 from mddb_workflow.tools.generate_map import generate_protein_mapping
 from mddb_workflow.tools.process_input_files import process_input_files
 import mddb_workflow.tools.process_input_files as process_input_files_module
@@ -223,8 +223,16 @@ def test_more_frames_in_new_input_trajectory(interrupted: bool):
         os.chdir(cwd)
 
 
+def test_overwrite_task_outside_defaults():
+    """Overwriting a task which is not run by default (memmap) must overwrite it, as for a default one (thickness)."""
+    resolver = TaskResolver(exclude=['energies', 'clusters', 'pockets'], overwrite=['memmap', 'thickness'])
+    assert resolver.get_project_overwritables() == {'memmap'}
+    assert resolver.get_md_overwritables() == {'thickness'}
+
+
 if __name__ == "__main__":
     test_task_no_output_file_second_run()
     test_md_task_overwrite_keeps_project_output()
     test_more_frames_in_new_input_trajectory(False)
     test_more_frames_in_new_input_trajectory(True)
+    test_overwrite_task_outside_defaults()
