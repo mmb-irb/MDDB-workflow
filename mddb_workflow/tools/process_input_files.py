@@ -212,6 +212,20 @@ def process_input_files(
                     'the trajectory has not enough frames')
             _commit_incomplete_output(incompleted_skipped_trajectory_file, skipped_trajectory_file)
 
+    # --- COUNTING FRAMES ------------------------------------------------------------
+
+    # Count frames as soon as possible, so the number is reused everywhere further
+    # Next steps (filtering, imaging and correcting) do not change the number of frames
+    # The public snapshots getter can not be used here, since the output trajectory does not exist yet
+    snapshots = None
+    # If we already have a value in the cache then use it, unless the input trajectory has changed
+    same_trajectory = 'input_trajectory_files' not in task.changed_inputs \
+        and 'input_skip_frames' not in task.changed_inputs
+    if same_trajectory: snapshots = self.cache.retrieve(SNAPSHOTS_FLAG)
+    if snapshots is None:
+        snapshots = count_xtc_frames(skipped_trajectory_file)
+        self.cache.update(SNAPSHOTS_FLAG, snapshots)
+
     # --- provisional reference structure ---
 
     # Now that we MUST have a structure file we can set a provisional structure instance
@@ -222,7 +236,7 @@ def process_input_files(
     # This selection is useful to avoid problems with CG atom elements
     # Logs are shown only once, so here only if atoms are not to be filtered
     provisional_cg_selection = self._parse_cg_selection(provisional_structure, skipped_trajectory_file, initial_topology_file,
-        verbose=not filter_selection)
+        snapshots, verbose=not filter_selection)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set also provisional forced class selections and apply them to the provisional structure
@@ -286,7 +300,7 @@ def process_input_files(
     # The selection must be parsed again only if atoms were filtered
     if must_filter:
         provisional_cg_selection = self._parse_cg_selection(provisional_structure, filtered_trajectory_file, filtered_topology_file,
-            verbose=True)
+            snapshots, verbose=True)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
@@ -404,26 +418,11 @@ def process_input_files(
     # There is no possible reason to not correct the structure
     # This is the last step so the output files will be named as the output files of the whole processing
 
-    # WARNING:
-    # For the correcting function we need the number of snapshots and at this point it should not be defined
-    # Snapshots are calculated by default from the already processed structure and trajectory
-    # For this reason we can not rely on the public snapshots getter
-    # We must calculate snapshots here using last step structure and trajectory
-    snapshots = None
-    # If we already have a value in the cache then use it, unless the input trajectory has changed
-    same_trajectory = 'input_trajectory_files' not in task.changed_inputs \
-        and 'input_skip_frames' not in task.changed_inputs
-    if same_trajectory: snapshots = self.cache.retrieve(SNAPSHOTS_FLAG)
-    # Calculate the new value
-    if snapshots is None:
-        snapshots = count_xtc_frames(imaged_trajectory_file)
-    # Update the MD task snapshots value
+    # Update the MD task snapshots value, which was counted after skipping frames
     self.get_snapshots.prefill(self, snapshots, {
         'structure_file': imaged_structure_file,
         'trajectory_file': imaged_trajectory_file
     })
-    # Save the snapshots value in the cache as well
-    self.cache.update(SNAPSHOTS_FLAG, snapshots)
 
     # WARNING:
     # We may need to resort atoms in the structure corrector function
@@ -444,7 +443,7 @@ def process_input_files(
 
     # Set a provisional united atom selection
     # Atoms in united atom residues may have their hydrogens absorbed, so the coherent bonds test expects less bonds
-    provisional_ua_selection = self._parse_ua_selection(provisional_structure, imaged_trajectory_file, provisional_cg_selection)
+    provisional_ua_selection = self._parse_ua_selection(provisional_structure, imaged_trajectory_file, provisional_cg_selection, snapshots)
 
     # Correct the structure
     # This function reads and or modifies the following MD variables:
@@ -556,7 +555,7 @@ def process_input_files(
 
     # Set the final structure
     final_structure = Structure.from_file(output_structure_file.path)
-    final_cg_selection = self._parse_cg_selection(final_structure, output_trajectory_file, output_topology_file)
+    final_cg_selection = self._parse_cg_selection(final_structure, output_trajectory_file, output_topology_file, snapshots)
 
     # Make sure the CG selection is identical to the provisional selection
     if final_cg_selection != provisional_cg_selection:
@@ -575,7 +574,7 @@ def process_input_files(
 
     # The united atom selection only relaxes the coherent bonds test, so a difference is not critical
     # Atoms may be sorted while correcting the structure, so the final selection is the one to keep
-    final_ua_selection = self._parse_ua_selection(final_structure, output_trajectory_file, final_cg_selection, verbose=False)
+    final_ua_selection = self._parse_ua_selection(final_structure, output_trajectory_file, final_cg_selection, snapshots, verbose=False)
     if final_ua_selection != provisional_ua_selection:
         warn(f'United atom selection changed after correcting the structure ({len(provisional_ua_selection)} -> {len(final_ua_selection)} atoms)')
     self._ua_selection = final_ua_selection

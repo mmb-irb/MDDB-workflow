@@ -1096,31 +1096,39 @@ class MD:
     get_pbc_residues = residues_getter('pbc', 'PBC')
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    def _parse_cg_selection(self, reference_structure: 'Structure', trajectory_file: 'File', topology_file: Union['File', Exception], verbose: bool = False) -> 'Selection':
+    def _parse_cg_selection(self, reference_structure: 'Structure', trajectory_file: 'File', topology_file: Union['File', Exception],
+        snapshots: Optional[int] = None, verbose: bool = False) -> 'Selection':
         """Parse the coarse grain selection input.
         Trajectory and topology files must match the reference structure, since they may be used to guess CG atoms.
+        Pass the number of trajectory frames, if known, so they are not counted again.
         """
         def guess() -> 'Selection':
+            # Say what is being guessed, since it reads the topology and the trajectory and it is not a task with its own header
+            if not verbose: print(f'Guessing coarse grain (CG) atoms in {self}')
             return guess_cg_selection(reference_structure, trajectory_file, topology_file,
-                self.project.input_force_fields, verbose=verbose)
+                self.project.input_force_fields, snapshots=snapshots, verbose=verbose)
         return self._parse_input_selection('Coarse Grained (CG)', 'CG', self.input_cg_selection,
             reference_structure, guess, fake_mass=1, verbose=verbose)
 
-    get_cg_selection = selection_getter('cg', lambda self, structure: self._parse_cg_selection(structure, self.trajectory_file, self.topology_file))
+    get_cg_selection = selection_getter('cg', lambda self, structure: self._parse_cg_selection(structure, self.trajectory_file, self.topology_file, self.snapshots))
     cg_selection = property(get_cg_selection, None, None, "Coarse grain atom selection (read only)")
     get_cg_residues = residues_getter('cg', 'CG')
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
-    def _parse_ua_selection(self, reference_structure: 'Structure', trajectory_file: 'File', cg_selection: 'Selection', verbose: bool = True) -> 'Selection':
+    def _parse_ua_selection(self, reference_structure: 'Structure', trajectory_file: 'File', cg_selection: 'Selection',
+        snapshots: Optional[int] = None, verbose: bool = True) -> 'Selection':
         """Parse the united atom selection input.
         The trajectory file must match the reference structure, since it may be used to guess UA atoms.
+        Pass the number of trajectory frames, if known, so they are not counted again.
         """
         def guess() -> 'Selection':
-            return guess_ua_selection(reference_structure, trajectory_file, cg_selection, verbose=verbose)
+            # Say what is being guessed, since it reads the trajectory and it is not a task with its own header
+            if not verbose: print(f'Guessing united atom (UA) atoms in {self}')
+            return guess_ua_selection(reference_structure, trajectory_file, cg_selection, snapshots=snapshots, verbose=verbose)
         return self._parse_input_selection('United Atom (UA)', 'UA', self.input_ua_selection,
             reference_structure, guess, verbose=verbose)
 
-    get_ua_selection = selection_getter('ua', lambda self, structure: self._parse_ua_selection(structure, self.trajectory_file, self.cg_selection))
+    get_ua_selection = selection_getter('ua', lambda self, structure: self._parse_ua_selection(structure, self.trajectory_file, self.cg_selection, self.snapshots))
     ua_selection = property(get_ua_selection, None, None, "United atom selection (read only)")
     get_ua_residues = residues_getter('ua', 'UA')
     ua_residues = property(get_ua_residues, None, None, "Indices of residues in united atom (read only)")

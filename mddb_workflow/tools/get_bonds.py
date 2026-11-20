@@ -10,6 +10,7 @@ from mddb_workflow.utils.type_hints import *
 import pytraj as pt
 from collections import Counter
 from math import ceil
+from os import stat
 
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
 
@@ -275,11 +276,35 @@ def find_bonds_reference_frame(
     return bonds_reference_frame, False, (worst_clash, worst_clash_frames, checked_frames, clash_first_frames[worst_clash])
 
 
+# Bonds mined the last time, together with the file they were mined from
+# Thus bonds are not mined again from the same file (e.g. to guess coarse grain atoms and then in the refbonds task)
+_last_mined_bonds = (None, None)
+
 def mine_topology_bonds(bonds_source_file: Union['File', Exception]) -> list[list[int]]:
-    """Extract bonds from a source file and format them per atom."""
+    """Extract bonds from a source file and format them per atom.
+    If bonds were already mined from the same file then reuse them.
+    """
+    global _last_mined_bonds
     # If there is no topology then return no bonds at all
     if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
+    # The file is identified by its path, last modification time and size, so a rewritten file is mined again
+    file_stat = stat(bonds_source_file.path)
+    file_key = (bonds_source_file.absolute_path, file_stat.st_mtime_ns, file_stat.st_size)
+    last_file_key, last_bonds = _last_mined_bonds
+    if file_key == last_file_key:
+        print(f'Reusing atom bonds already mined from "{bonds_source_file.filename}"')
+        atom_bonds = last_bonds
+    else:
+        atom_bonds = _mine_topology_bonds(bonds_source_file)
+        _last_mined_bonds = (file_key, atom_bonds)
+    if atom_bonds is None: return None
+    # Return a copy, since bonds may be modified further (e.g. coarse grain bonds are discarded)
+    return [ bonds if bonds is MISSING_BONDS else list(bonds) for bonds in atom_bonds ]
+
+
+def _mine_topology_bonds(bonds_source_file: 'File') -> list[list[int]]:
+    """Extract bonds from a source file and format them per atom."""
     print('Mining atom bonds from topology file')
     # If we have the standard topology then get bonds from it
     if is_standard_topology(bonds_source_file):

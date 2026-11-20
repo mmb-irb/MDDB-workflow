@@ -98,12 +98,14 @@ def vote_by_atom_count(residues: list['Residue']) -> Optional[str]:
     return CG if atom_count / expected_atom_count < CG_ATOM_COUNT_RATIO else AA
 
 
-def get_frames_coordinates(structure: 'Structure', trajectory_file: 'File') -> np.ndarray:
-    """Get atom coordinates in a few frames along the trajectory."""
+def get_frames_coordinates(structure: 'Structure', trajectory_file: 'File', snapshots: Optional[int] = None) -> np.ndarray:
+    """Get atom coordinates in a few frames along the trajectory.
+    Frames are counted only if the number of frames is not passed.
+    """
     # Write the structure in a mmCIF file to be used as topology for pytraj
     auxiliar_mmcif_filepath = get_auxiliar_filepath('.cg_guess.cif')
     structure.generate_mmcif_file(auxiliar_mmcif_filepath)
-    snapshots = count_xtc_frames(trajectory_file)
+    if snapshots is None: snapshots = count_xtc_frames(trajectory_file)
     reduced_trajectory, _, _ = get_reduced_pytraj_trajectory(auxiliar_mmcif_filepath, trajectory_file.path, snapshots, FRAMES_LIMIT)
     # Copy every frame, since pytraj may reuse the same coordinates buffer for every frame (e.g. with few frames)
     coordinates = np.array([ frame.xyz.copy() for frame in reduced_trajectory.iterframe() ])
@@ -142,6 +144,7 @@ def guess_cg_selection(
     trajectory_file: 'File',
     topology_file: Union['File', Exception],
     input_force_fields: Optional[list[str] | str],
+    snapshots: Optional[int] = None,
     verbose: bool = False,
 ) -> 'Selection':
     """Guess which atoms are coarse grain beads.
@@ -163,7 +166,7 @@ def guess_cg_selection(
     topology_bonds = mine_topology_bonds(topology_file)
     if topology_bonds and len(topology_bonds) != structure.atom_count:
         raise InputError(f'Topology atom count ({len(topology_bonds)}) does not match the structure atom count ({structure.atom_count})')
-    coordinates = get_frames_coordinates(structure, trajectory_file)
+    coordinates = get_frames_coordinates(structure, trajectory_file, snapshots)
     # Decide every group of residues
     groups = get_residue_groups(structure)
     decisions = {}
@@ -249,6 +252,7 @@ def guess_ua_selection(
     structure: 'Structure',
     trajectory_file: 'File',
     cg_selection: 'Selection',
+    snapshots: Optional[int] = None,
     verbose: bool = False,
 ) -> 'Selection':
     """Guess which atoms are united atoms: carbons with their hydrogens absorbed.
@@ -256,7 +260,7 @@ def guess_ua_selection(
     Groups including coarse grain atoms are skipped.
     Note that the whole group is selected, including atoms which are not united atoms (e.g. oxygens).
     """
-    coordinates = get_frames_coordinates(structure, trajectory_file)
+    coordinates = get_frames_coordinates(structure, trajectory_file, snapshots)
     cg_atom_indices = set(cg_selection.atom_indices)
     atom_indices = []
     for group_name, residues in get_residue_groups(structure).items():
