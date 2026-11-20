@@ -293,7 +293,6 @@ def mine_topology_bonds(bonds_source_file: Union['File', Exception]) -> list[lis
     file_key = (bonds_source_file.absolute_path, file_stat.st_mtime_ns, file_stat.st_size)
     last_file_key, last_bonds = _last_mined_bonds
     if file_key == last_file_key:
-        print(f'Reusing atom bonds already mined from "{bonds_source_file.filename}"')
         atom_bonds = last_bonds
     else:
         atom_bonds = _mine_topology_bonds(bonds_source_file)
