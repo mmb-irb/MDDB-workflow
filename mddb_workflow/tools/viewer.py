@@ -1,7 +1,7 @@
 import re
 import json
 from os import listdir
-from os.path import isabs, isfile, dirname, basename
+from os.path import isabs, isfile, dirname, basename, normpath
 from glob import glob
 from subprocess import call
 from tempfile import TemporaryDirectory
@@ -11,7 +11,7 @@ from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, STRUCTURE_FILENAME,
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, IMAGED_STRUCTURE, FILTERED_STRUCTURE, CONVERTED_STRUCTURE
 from mddb_workflow.utils.constants import CORRECTED_TRAJECTORY, IMAGED_TRAJECTORY, FILTERED_TRAJECTORY, CONVERTED_TRAJECTORY
 from mddb_workflow.utils.constants import MD_INPUT_STRUCTURE_FILEPATH, MD_INPUT_TRAJECTORY_FILEPATHS, MD_INPUT_TOPOLOGY_FILEPATH, MD_REMOVED_FLAG
-from mddb_workflow.utils.constants import ACCEPTED_INPUT_FILENAMES, CACHE_FILENAME
+from mddb_workflow.utils.constants import ACCEPTED_INPUT_FILENAMES, CACHE_FILENAME, MD_NAME, MD_DIRECTORY
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
@@ -173,6 +173,32 @@ def find_in_mds(project: Project, finder: callable) -> File | None:
     return None
 
 
+def get_md_index(project: Project, md: str) -> int:
+    """Get the index of a MD from its directory, its name or its 0-based index.
+
+    The directory is checked first, then the name and finally the index.
+    """
+    md_directories = [normpath(md_inputs[MD_DIRECTORY]) for md_inputs in project.md_config]
+    md_names = [md_inputs.get(MD_NAME) for md_inputs in project.md_config]
+    if normpath(md) in md_directories: md_index = md_directories.index(normpath(md))
+    elif md in md_names: md_index = md_names.index(md)
+    elif md.isdigit(): md_index = int(md)
+    else: raise InputError(f'There is no MD with directory or name "{md}".\n'
+        f'  MD directories: {", ".join(md_directories)}\n'
+        f'  MD names: {", ".join(map(str, md_names))}')
+    md_count = len(project.md_config)
+    if md_index >= md_count:
+        raise InputError(f'MD index is {md_index} but there are only {md_count} MDs. Note that the MD index is 0-based')
+    if project.md_config[md_index].get(MD_REMOVED_FLAG):
+        raise InputError(f'MD {md} was removed')
+    return md_index
+
+
+def find_in_md(project: Project, md_index: int, finder: callable) -> File | None:
+    """Search a file in a specific MD."""
+    return finder(project.mds[md_index], project.md_config[md_index])
+
+
 def get_project(directory: str) -> Project:
     """Set the project in the given directory.
     If there is no inputs file then MD directories are those with a cache file.
@@ -224,6 +250,7 @@ def view_project(
     frames: list[int] = [],
     selection: str | None = None,
     all_frames: bool = False,
+    md: str | None = None,
 ):
     """Open VMD with a structure and some frames of a trajectory.
 
@@ -235,17 +262,28 @@ def view_project(
     If only some of start/end/step are specified then the end is the last frame.
     The end frame is not included, as in the subset command.
     If a selection is passed then the view is focused on it and it is also shown in CPK.
+    If a MD is passed (name or 0-based index) then files are searched only in this MD.
+    Otherwise they are searched in the reference MD first and then in the rest of MDs.
     """
     structure_file, trajectory_file = sort_input_files(input_filepaths)
+    if structure_file and md is not None:
+        raise InputError('Input files and MD can not be passed together')
     # If only the structure is passed then it is loaded alone
     if not structure_file:
         project = get_project(directory)
-        structure_file = find_in_mds(project, find_structure)
+        if md is None:
+            structure_file = find_in_mds(project, find_structure)
+            trajectory_file = find_in_mds(project, find_trajectory)
+            where = 'any MD directory'
+        else:
+            md_index = get_md_index(project, md)
+            structure_file = find_in_md(project, md_index, find_structure)
+            trajectory_file = find_in_md(project, md_index, find_trajectory)
+            where = f'MD directory {project.mds[md_index].directory}'
         if not structure_file:
-            raise InputError('No structure was found in any MD directory')
-        trajectory_file = find_in_mds(project, find_trajectory)
+            raise InputError(f'No structure was found in {where}')
         if not trajectory_file:
-            raise InputError('No trajectory was found in any MD directory')
+            raise InputError(f'No trajectory was found in {where}')
     print(f'Structure: {structure_file.path}')
     if trajectory_file: print(f'Trajectory: {trajectory_file.path}')
     # Temporary files are removed once VMD is closed

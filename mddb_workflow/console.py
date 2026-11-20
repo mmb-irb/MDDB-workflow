@@ -358,7 +358,8 @@ def main():
             step=args.step,
             frames=args.frames,
             selection=args.selection,
-            all_frames=args.all
+            all_frames=args.all,
+            md=args.md
         )
 
     # In case the chainer tool was called
@@ -465,7 +466,8 @@ def main():
                 step=args.step,
                 frames=args.frames,
                 selection=args.selection,
-                all_frames=args.all
+                all_frames=args.all,
+                md=args.md
             )
         elif args.dataset_subcommand == 'show':
             if args.summary:
@@ -958,6 +960,7 @@ view_shared_args = [
     (["-fr", "--frames"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be loaded (0-based). Other arguments are ignored."}),
     (["-a", "--all"], {'action': 'store_true', 'help': "Load all frames. Other frame arguments are ignored."}),
     (["-sel", "--selection"], {'default': None, 'help': "Atom selection (VMD syntax) to focus the view on. It is also shown in CPK over the default representation."}),
+    (["-md", "--md"], {'default': None, 'help': "MD to be loaded, either its directory, its name or its index (0-based). By default the reference MD, or the first MD where files are found"}),
 ]
 for flags, kwargs in view_parser_args + view_shared_args:
     view_parser.add_argument(*flags, **kwargs)
