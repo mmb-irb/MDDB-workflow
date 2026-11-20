@@ -250,6 +250,10 @@ def process_input_files(
     # Find out if we need to filter
     # i.e. check if there is a selection filter and it matches some atoms
     must_filter = bool(filter_selection)
+    # When filtering water and counter ions, skip the filtering if there are none
+    if filter_selection == AUTOMATIC_FLAG or filter_selection == True:
+        must_filter = bool(provisional_structure.select_water_and_counter_ions())
+        if not must_filter: print(' There is no water or counter ions to be filtered')
 
     # Set output filenames for the already filtered structure and trajectory
     if must_filter:
@@ -297,8 +301,9 @@ def process_input_files(
     provisional_structure = Structure.from_file(filtered_structure_file.path)
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
-    # The selection must be parsed again only if atoms were filtered
-    if must_filter:
+    # The selection must be parsed again if atoms were filtered
+    # Also if filtering was asked but skipped, since the first time logs were hidden
+    if filter_selection:
         provisional_cg_selection = self._parse_cg_selection(provisional_structure, filtered_trajectory_file, filtered_topology_file,
             snapshots, verbose=True)
     for atom_index in provisional_cg_selection.atom_indices:

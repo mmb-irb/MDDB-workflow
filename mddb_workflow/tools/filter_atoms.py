@@ -4,7 +4,7 @@ import json
 
 import pytraj as pt
 
-from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
+from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME, AUTOMATIC_FLAG
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import save_json, get_auxiliar_filepath, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS, InputError
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter
@@ -26,8 +26,9 @@ def filter_atoms (
     output_topology_file : Union['File', Exception],
     # Reference structure used to parse the actual selection
     reference_structure : 'Structure',
-    # Filter selection may be a custom selection or true
-    # If true then we run a default filtering of water and counter ions
+    # Filter selection may be a custom selection or 'auto'
+    # If 'auto' then we run a default filtering of water and counter ions
+    # True does the same as 'auto', it is kept for old inputs files
     filter_selection : bool | str,
     filter_selection_syntax : str = 'vmd',
 ):
@@ -42,7 +43,7 @@ def filter_atoms (
     # Parse the selection to be filtered
     # WARNING: Note that the structure is not corrected at this point and there may be limitations
     parsed_filter_selection = None
-    if filter_selection == True: parsed_filter_selection = reference_structure.select_water_and_counter_ions()
+    if filter_selection == AUTOMATIC_FLAG or filter_selection == True: parsed_filter_selection = reference_structure.select_water_and_counter_ions()
     else:
         parsed_filter_selection = reference_structure.select(filter_selection, syntax=filter_selection_syntax)
         if not parsed_filter_selection:

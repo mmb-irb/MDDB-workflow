@@ -617,7 +617,7 @@ dataset_path:
 
 # Set atoms to be filtered (removed) from the topology and trajectory.
 # Use a VMD selection to filter specific atoms.
-# Set 'true' to filter water and counter ions.
+# Set 'auto' to filter water and counter ions.
 # Equivalent to the "-filt" command line argument.
 # It may also be set for a specific MD inside the 'mds' list (e.g. a replica which comes with water while others do not).
 #
@@ -625,7 +625,7 @@ dataset_path:
 #
 # filter_selection: resname SOL or resname NA
 
-filter_selection:
+filter_selection: auto
 
 # Set if the trajectory is to be imaged so atoms stay in the PBC box.
 # See the "pbc_selection" field for more information.
