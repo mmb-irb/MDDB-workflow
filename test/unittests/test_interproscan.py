@@ -291,6 +291,25 @@ def test_chains_task_runs_local_interproscan(installed, monkeypatch, tmp_path, a
         assert 'goXRefs' in matches[0]['signature']['entry']
 
 
+class OldReferenceDatabase:
+    """A database whose reference has no 'interproscan' field at all (e.g. short peptides in version 0.1)."""
+    def get_reference_data(self, reference: str, sequence: str):
+        return {'sequence': sequence, 'version': '0.1'}
+
+
+@pytest.mark.unit_int
+def test_chains_task_runs_database_references_without_interproscan_field(installed, monkeypatch, tmp_path):
+    """References from the database with no 'interproscan' field are run instead of failing."""
+    runs = record_runs(monkeypatch)
+    chains_file = File(str(tmp_path / 'chains.json'))
+    chains.prepare_chain_references(FakeStructure(['RQFGPDFPTI']), chains_file, OldReferenceDatabase(),
+        local_interproscan=True)
+    assert [fasta for _, _, fasta in runs] == ['>chain X\nRQFGPDFPTI\n']
+    saved = load_json(chains_file.path)
+    assert len(saved) == 1
+    assert set(saved[0]['interproscan']) == {'results'}
+
+
 @pytest.mark.unit_int
 def test_chains_task_keeps_finished_chains(installed, monkeypatch, tmp_path):
     """Every chain is saved as soon as it is run, so an interrupted task does not run it again."""

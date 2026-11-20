@@ -192,7 +192,8 @@ def prepare_chain_references(
         # If chain data is missing any analysis then send a job
         # Request the InterProScan service (sequence length must be at least 3)
         # Keep the returned job ids to check the status and get the results later
-        if chain_data['interproscan'] is None and len(chain_data['sequence']) > 2:
+        # Old references from the database (e.g. version 0.1 of short peptides) may have no 'interproscan' field at all
+        if chain_data.get('interproscan') is None and len(chain_data['sequence']) > 2:
             if local_interproscan:
                 local_sequences.append(sequence)
                 continue
