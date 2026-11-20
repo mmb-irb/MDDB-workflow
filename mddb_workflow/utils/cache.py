@@ -1,5 +1,5 @@
 from mddb_workflow.utils.auxiliar import load_json, save_json
-from mddb_workflow.utils.arg_cksum import get_cksum_id
+from mddb_workflow.utils.arg_cksum import get_cksum_id, cksum_matches
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.core.dataclass import InChIKeyData
@@ -106,6 +106,7 @@ def get_cached_function(function: Callable, cache: Cache) -> Callable:
             input_key = f'input_{i}_cksum'
             input_cksum = get_cksum_id(input)
             current_result[input_key] = input_cksum
+        input_values = dict(zip(current_result.keys(), inputs))
         # Find if there is a cached result with identical input keys
         cached_results = cache.retrieve(cache_key, [])
         for cached_result in cached_results:
@@ -113,11 +114,16 @@ def get_cached_function(function: Callable, cache: Cache) -> Callable:
             missmatch = False
             for input_key, new_input_cksum in current_result.items():
                 cached_input_cksum = cached_result[input_key]
-                if cached_input_cksum != new_input_cksum:
+                # Old caches may have legacy file cksums, which are also accepted
+                if not cksum_matches(input_values[input_key], new_input_cksum, cached_input_cksum):
                     missmatch = True
                     break
             if missmatch: continue
             # If we make it this far with no missmatch then it means we have a previous result which matches
+            # Replace legacy cksums by new ones, if any
+            if any(cached_result[key] != cksum for key, cksum in current_result.items()):
+                cached_result.update(current_result)
+                cache.update(cache_key, cached_results)
             # Just return the cached output
             return cached_result['output']
         # Otherwise we must run the function

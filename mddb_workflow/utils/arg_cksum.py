@@ -15,7 +15,10 @@ from MDAnalysis.core.universe import Universe
 
 # Given a value of any type, generate a 'cksum' like code which is reproducible
 # This is used to compare values between different runs without having to store the whole value
-def get_cksum_id (value) -> Optional[int | float | str]:
+def get_cksum_id (value, legacy: bool = False) -> Optional[int | float | str]:
+    """Get a reproducible cksum of any value.
+    Use the legacy argument to get the files cksums as they were before using the quickhash.
+    """
     # Nones remain as they are
     if value == None: return None
     # Ge the value type
@@ -32,14 +35,16 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     if value_type == Exception: return str(value)
     # For objects, stringify them and then do the same that with strings
     if value_type in { list, dict, tuple }:
-        stringifyed = json.dumps(value, default = lambda o: get_cksum_id(o))
-        return get_cksum_id(stringifyed)
+        stringifyed = json.dumps(value, default = lambda o: get_cksum_id(o, legacy))
+        return get_cksum_id(stringifyed, legacy)
     # If we have a set then make a list and sort it alphabetically
     # Thus we make sure the order is coherent between different
     if value_type == set:
-        return get_cksum_id(sorted(value))
+        return get_cksum_id(sorted(value), legacy)
     # For files use file last modification time and size
-    if isinstance(value, File): return value.get_cksum(unsafe=True)
+    if isinstance(value, File):
+        if legacy: return value.get_legacy_cksum(unsafe=True)
+        return value.get_cksum(unsafe=True)
     # For the parsed structure
     if isinstance(value, Structure):
         mmcif_content = value.generate_mmcif()
@@ -70,3 +75,13 @@ def get_cksum_id (value) -> Optional[int | float | str]:
         return get_cksum_id(f'{value.__code__.co_code} {value.__code__.co_consts}')
     # If the value has non of previous types then we complain
     raise TypeError(f'Non supported type "{value_type}" for cksum id: {value}')
+
+
+# LEGACY: Remove this once old caches have been updated to the new file cksums
+def cksum_matches (value, new_cksum, old_cksum) -> bool:
+    """Check if a cached cksum matches a value, either with the new or the legacy file cksums.
+    The legacy cksum is calculated only when the new one does not match.
+    """
+    if new_cksum == old_cksum: return True
+    if old_cksum == None: return False
+    return get_cksum_id(value, legacy=True) == old_cksum

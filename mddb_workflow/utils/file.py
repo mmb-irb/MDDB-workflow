@@ -5,6 +5,8 @@ from shutil import copyfile
 from typing import Optional
 from time import time
 
+import xxhash
+
 from mddb_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
 from mddb_workflow.utils.constants import DATE_STYLE, GLOBALS
 from mddb_workflow.utils.auxiliar import InputError
@@ -54,6 +56,7 @@ class File:
             self.extensionless_filepath = self.path[:-extension_size]
         # Set internal values
         self._cksum = None
+        self._legacy_cksum = None
 
     # We must display the cksum here
     # Note that this is critical for the task args cksum when we handle lists of files
@@ -135,6 +138,27 @@ class File:
             print(f'Got cksum for {self.path} ({self.size} Bytes) in {total_time:.2f} seconds -> {final_xxhash}')
         self._cksum = f'{self.size}-{"(UNSAFE)" if is_unsafe else ""}{final_xxhash}'
         return self._cksum
+
+    # LEGACY: Old cksum, still accepted when it is found in old caches
+    # Remove this once old caches have been updated to the new cksums
+    LEGACY_CKSUM_UNSAFE_SIZE_LIMIT = 1024 * 1024 * 100  # 100 MB
+    def get_legacy_cksum(self, unsafe: bool = False) -> str:
+        """Get the cksum as it was before using the quickhash: the size and the xxhash of the whole file.
+        If unsafe, files larger than 100 MB get the xxhash of their first 100 MB only.
+        """
+        if self._legacy_cksum != None: return self._legacy_cksum
+        if not self.exists: return None
+        is_unsafe = unsafe and self.size > self.LEGACY_CKSUM_UNSAFE_SIZE_LIMIT
+        remaining = self.LEGACY_CKSUM_UNSAFE_SIZE_LIMIT if is_unsafe else self.size
+        hasher = xxhash.xxh64()
+        with open(self.path, 'rb') as file:
+            while remaining:
+                chunk = file.read(min(1024 * 1024, remaining))
+                if not chunk: raise OSError(f'Unexpected end of file {self.path}')
+                hasher.update(chunk)
+                remaining -= len(chunk)
+        self._legacy_cksum = f'{self.size}-{"(UNSAFE)" if is_unsafe else ""}{hasher.hexdigest()}'
+        return self._legacy_cksum
 
     # Set a couple of additional functions according to pytraj format requirements
     def is_pytraj_supported(self) -> bool:

@@ -4,7 +4,7 @@ from shutil import rmtree
 from inspect import getfullargspec
 import time
 
-from mddb_workflow.utils.arg_cksum import get_cksum_id
+from mddb_workflow.utils.arg_cksum import get_cksum_id, cksum_matches
 from mddb_workflow.utils.auxiliar import safe_getattr, check_database_document_size
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.file import File
@@ -420,11 +420,12 @@ class Task:
                 f' old value cksum: {old_cksum}\n' +
                 f' match: {new_cksum == old_cksum}')
             # Compare new and old cksums
-            if new_cksum != old_cksum:
+            # Old caches may have legacy file cksums, which are also accepted
+            if not cksum_matches(arg_value, new_cksum, old_cksum):
                 # If we found a missmatch then add it to the list
                 unmatched_arguments.append(arg_name)
-                # Update the references
-                cache_cksums[arg_name] = new_cksum
+            # Update the references, so legacy cksums are replaced by new ones
+            cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
 
     def has_arg(self, parent: Union['Project', 'MD'], arg_key: str) -> bool:

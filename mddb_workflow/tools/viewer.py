@@ -97,6 +97,8 @@ def find_cached_file(md: MD, cksum: str | None) -> File | None:
             candidate_file = File(f'{directory}/{filename}')
             if not isfile(candidate_file.path) or candidate_file.size != size: continue
             if candidate_file.get_cksum(unsafe=True) == cksum: return candidate_file
+            # Old caches may have legacy file cksums, which are also accepted
+            if candidate_file.get_legacy_cksum(unsafe=True) == cksum: return candidate_file
     return None
 
 
