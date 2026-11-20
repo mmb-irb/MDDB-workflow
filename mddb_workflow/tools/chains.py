@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 
 from mddb_workflow.utils.auxiliar import load_json, save_json, retry_request, warn, get_available_cpus
+from mddb_workflow.utils.auxiliar import set_status_line, clear_status_line
 from mddb_workflow.utils.auxiliar import RemoteServiceError, DatabaseUnavailableError
 from mddb_workflow.utils.interproscan import run_local_interproscan
 from mddb_workflow.utils.interproscan import take_directory_lock, stop_on_termination, raise_on_termination
@@ -233,43 +234,47 @@ def get_interproscan_results(
     # Iterate over the jobids to check the status and get the results
     # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list
     # until there are no more jobids in either list
-    while len(pending_jobids) >= 1:
-        # Stop with an error so the task is not taken as done and the missing chains are requested in the next run
-        # Note that chains already obtained are saved, so they are not requested again
-        if time.time() - start_time > INTERPROSCAN_TIMEOUT:
-            raise RemoteServiceError(f'{len(pending_jobids)} InterProScan jobs did not finish in '
-                f'{INTERPROSCAN_TIMEOUT // 60} minutes. Run the workflow again later, or run InterProScan locally (-lip).')
-        time.sleep(3)  # Wait for 3 seconds
-        print(f' We are still waiting for {len(pending_jobids)} jobs to finish', end='\r')
-        for sequence, interproscan_jobid in interproscan_jobids.items():
-            # If the jobid is already processed then skip it
-            if interproscan_jobid not in pending_jobids:
-                continue
-            status = check_interproscan_status(interproscan_jobid)
-            # We only know four possible status for interproscan jobs, but it could be more
-            if status == 'RUNNING' or status == 'PENDING' or status == 'QUEUED':
-                continue
-            # If the job failed then send it again
-            # The wait time starts again so the new job has the full time to finish
-            if status in ('ERROR', 'FAILURE') and resubmissions.get(sequence, 0) < MAX_RESUBMISSIONS:
-                resubmissions[sequence] = resubmissions.get(sequence, 0) + 1
-                new_jobid = request_interproscan(sequence)
-                print(f' InterProScan job {interproscan_jobid} ended with status {status}.' +
-                    f' Sending it again as {new_jobid} ({resubmissions[sequence]}/{MAX_RESUBMISSIONS})')
-                interproscan_jobids[sequence] = new_jobid
-                pending_jobids[pending_jobids.index(interproscan_jobid)] = new_jobid
-                start_time = time.time()
-                continue
-            if status != 'FINISHED':
-                raise RemoteServiceError(f'InterProScan job {interproscan_jobid} ended with status {status}.' +
-                    f' Check the details in {INTERPROSCAN_URL}/result/{interproscan_jobid}/error')
-            # Retrive the results from InterProScan and add them to the corresponding chain data
-            interproscan_result = check_interproscan_result(interproscan_jobid)
-            save_interproscan_result(sequence, interproscan_result, chains_data, chains_references_file)
-            # Remove the jobid from the queue list
-            pending_jobids.remove(interproscan_jobid)
+    # The status line is removed also when there is an error, so the error is not written on it
+    try:
+        while len(pending_jobids) >= 1:
+            # Stop with an error so the task is not taken as done and the missing chains are requested in the next run
+            # Note that chains already obtained are saved, so they are not requested again
+            if time.time() - start_time > INTERPROSCAN_TIMEOUT:
+                raise RemoteServiceError(f'{len(pending_jobids)} InterProScan jobs did not finish in '
+                    f'{INTERPROSCAN_TIMEOUT // 60} minutes. Run the workflow again later, or run InterProScan locally (-lip).')
+            time.sleep(3)  # Wait for 3 seconds
+            set_status_line(f' We are still waiting for {len(pending_jobids)} jobs to finish')
+            for sequence, interproscan_jobid in interproscan_jobids.items():
+                # If the jobid is already processed then skip it
+                if interproscan_jobid not in pending_jobids:
+                    continue
+                status = check_interproscan_status(interproscan_jobid)
+                # We only know four possible status for interproscan jobs, but it could be more
+                if status == 'RUNNING' or status == 'PENDING' or status == 'QUEUED':
+                    continue
+                # If the job failed then send it again
+                # The wait time starts again so the new job has the full time to finish
+                if status in ('ERROR', 'FAILURE') and resubmissions.get(sequence, 0) < MAX_RESUBMISSIONS:
+                    resubmissions[sequence] = resubmissions.get(sequence, 0) + 1
+                    new_jobid = request_interproscan(sequence)
+                    print(f' InterProScan job {interproscan_jobid} ended with status {status}.' +
+                        f' Sending it again as {new_jobid} ({resubmissions[sequence]}/{MAX_RESUBMISSIONS})')
+                    interproscan_jobids[sequence] = new_jobid
+                    pending_jobids[pending_jobids.index(interproscan_jobid)] = new_jobid
+                    start_time = time.time()
+                    continue
+                if status != 'FINISHED':
+                    raise RemoteServiceError(f'InterProScan job {interproscan_jobid} ended with status {status}.' +
+                        f' Check the details in {INTERPROSCAN_URL}/result/{interproscan_jobid}/error')
+                # Retrive the results from InterProScan and add them to the corresponding chain data
+                interproscan_result = check_interproscan_result(interproscan_jobid)
+                save_interproscan_result(sequence, interproscan_result, chains_data, chains_references_file)
+                # Remove the jobid from the queue list
+                pending_jobids.remove(interproscan_jobid)
 
-    print(' Protein chains data obtained              ')
+    finally:
+        clear_status_line()
+    print(' Protein chains data obtained')
 
 
 # Chain references are remade with the local InterProScan, which takes from 20 seconds to 2 minutes per sequence

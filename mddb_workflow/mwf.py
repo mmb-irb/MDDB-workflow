@@ -17,7 +17,7 @@ from mddb_workflow.core.dataset import Dataset, State
 from mddb_workflow.core.inputs import ProjectInputs, forced_value_wins
 # Import local utils
 from mddb_workflow.utils.auxiliar import InputError, InputsUpdated, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE, MISSING_BONDS
-from mddb_workflow.utils.auxiliar import warn, load_json
+from mddb_workflow.utils.auxiliar import warn, load_json, StatusLineStream
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import get_git_version, download_file
 from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise, safe_getattr
@@ -99,7 +99,8 @@ if not hasattr(sys, 'ps1') and 'pytest' not in sys.modules:
     # Otherwise, output logs are written after the script has fully run
     # Note that this fix affects all modules and built-ins
     unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
-    sys.stdout = unbuffered
+    # Keep status lines (e.g. waiting messages) at the bottom so other logs do not mix with them
+    sys.stdout = StatusLineStream(unbuffered)
 
 # Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')

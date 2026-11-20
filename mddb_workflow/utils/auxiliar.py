@@ -382,6 +382,70 @@ def delete_previous_log():
     print(ERASE_PREVIOUS_LINES)
 
 
+class StatusLineStream:
+    """Output stream which keeps a status line (e.g. 'still waiting for 3 jobs') at the bottom of the terminal.
+    Any other text is written above the status line, so they never mix.
+    When the output is not a terminal (e.g. a log file) the status is written as a normal line, only when it changes.
+    """
+    def __init__(self, stream):
+        self.stream = stream
+        self.is_terminal = stream.isatty()
+        # Current status text, or None when there is no status
+        self.status = None
+        # True when the status line is on screen
+        self.status_shown = False
+        # True when the cursor is at the start of a line
+        self.at_line_start = True
+
+    def write(self, text: str) -> int:
+        if self.status_shown:
+            self.stream.write('\r' + ERASE_LINE)
+            self.status_shown = False
+        written = self.stream.write(text)
+        if text: self.at_line_start = text.endswith('\n')
+        # Draw the status line again below the new text
+        if self.is_terminal and self.status is not None and self.at_line_start:
+            self.stream.write(self.status)
+            self.status_shown = True
+        return written
+
+    def set_status(self, text: str):
+        if text == self.status: return
+        self.status = text
+        if self.status_shown: self.stream.write('\r' + ERASE_LINE)
+        # Something was printed without a line end, so the status starts in a new line
+        elif not self.at_line_start: self.stream.write('\n')
+        if not self.is_terminal:
+            self.stream.write(text + '\n')
+            return
+        self.stream.write(text)
+        self.status_shown = True
+        self.at_line_start = True
+
+    def clear_status(self):
+        if self.status_shown: self.stream.write('\r' + ERASE_LINE)
+        self.status = None
+        self.status_shown = False
+
+    # Anything else (flush, fileno, encoding...) goes to the original stream
+    def __getattr__(self, name: str):
+        return getattr(self.stream, name)
+
+
+def set_status_line(text: str):
+    """Show a status line which is rewritten every time instead of filling the log.
+    Other logs printed meanwhile are written above it.
+    """
+    if isinstance(sys.stdout, StatusLineStream): sys.stdout.set_status(text)
+    # When the output is not ours (e.g. Jupyter or pytest) the status is just printed
+    else: print(text)
+
+
+def clear_status_line():
+    """Remove the status line set with 'set_status_line'."""
+    if isinstance(sys.stdout, StatusLineStream): sys.stdout.clear_status()
+
+
 def reprint(text: str):
     """Reprint text in the same line in the terminal."""
     delete_previous_log()
