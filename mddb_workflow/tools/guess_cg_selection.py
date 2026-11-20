@@ -268,6 +268,7 @@ def guess_ua_selection(
         if any(atom.index in cg_atom_indices for atom in atoms): continue
         is_united_atom = vote_ua_by_hydrogens(atoms, coordinates)
         if is_united_atom is None: continue
-        if verbose: print(f'  {group_name}: {"UA" if is_united_atom else "AA"}')
+        # Do not log protein and nucleic groups, since there is one per chain and they are too many
+        if verbose and not is_polymer(residues): print(f'  {group_name}: {"UA" if is_united_atom else "AA"}')
         if is_united_atom: atom_indices += [ atom.index for atom in atoms ]
     return Selection(sorted(atom_indices))
