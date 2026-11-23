@@ -3,7 +3,7 @@ import pytraj as pt
 import numpy as np
 import math
 import sys
-from os.path import abspath
+from os.path import abspath, relpath, dirname, basename
 
 # Visual output tools
 from tqdm import tqdm
@@ -497,7 +497,7 @@ def check_trajectory_integrity (
         jumping_atoms = find_jumping_atoms(input_trajectory_filename, worst_fragment, worst_pairs, jump_frame)
         write_view_script(view_script_filename, input_structure_filename, input_trajectory_filename,
             shown_frames, focus_frame, worst_fragment, jumping_atoms, notes)
-        view_hint = f'To see the clearest jumps run:\n  vmd -e {view_script_filename}'
+        view_hint = f'To see the clearest jumps run:\n  cd {dirname(abspath(view_script_filename))} && vmd -e {basename(view_script_filename)}'
 
         # Describe the worst fragment and its jumps in the warning
         failed_count = len(fragment_reports) - passed_count
@@ -747,10 +747,10 @@ def write_view_script(
             xyz, _, _, boxes = reader.read(n_frames=1)
             writer.write(xyz, box=boxes)
     commands = [
-        f'mol new {{{abspath(structure_filename)}}} waitfor all',
+        f'mol new {{{relpath(structure_filename, dirname(abspath(script_filename)))}}} waitfor all',
         # The frame from the structure file is removed so only the shown frames remain
         'animate delete all',
-        f'mol addfile {{{abspath(frames_filename)}}} type xtc waitfor all',
+        f'mol addfile {{{relpath(frames_filename, dirname(abspath(script_filename)))}}} type xtc waitfor all',
         'set main [molinfo top]',
         # Fragment
         'mol representation Licorice',

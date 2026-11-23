@@ -1,6 +1,6 @@
 import itertools
 from collections import Counter
-from os.path import abspath
+from os.path import abspath, relpath, dirname, basename
 import numpy as np
 from scipy.spatial import cKDTree
 from tqdm import tqdm
@@ -339,7 +339,7 @@ def check_cross_periodic_contacts(
             example_frame, example_box_vectors, contact_selection, [ (cell_shift, selection_b) ])
     message = '. '.join(titles)
     description = '\n'.join(descriptions)
-    view_hint = f'To see the atoms in contact run:\n  vmd -e {view_script_filename}' if violation_frames else ''
+    view_hint = f'To see the atoms in contact run:\n  cd {dirname(abspath(view_script_filename))} && vmd -e {basename(view_script_filename)}' if violation_frames else ''
     if CROSS_PBC_FLAG in mercy:
         register.add_warning(CROSS_PBC_FLAG, message, description, data)
         if view_hint: print(f' {view_hint}')
@@ -365,10 +365,10 @@ def write_view_script(
     Note that the VMD periodic display is not used since VMD would misplace images and the box if the box is rotated.
     """
     load_commands = [
-        f'mol new {{{abspath(structure_filename)}}} waitfor all',
+        f'mol new {{{relpath(structure_filename, dirname(abspath(script_filename)))}}} waitfor all',
         # Frames from the structure file are removed so frame numbers match the trajectory
         'animate delete all',
-        f'mol addfile {{{abspath(trajectory_filename)}}} type xtc first {frame} last {frame} waitfor all',
+        f'mol addfile {{{relpath(trajectory_filename, dirname(abspath(script_filename)))}}} type xtc first {frame} last {frame} waitfor all',
     ]
     commands = [ f'# Cross-PBC contacts in frame {frame}', *load_commands, 'set main [molinfo top]' ]
     # Box vectors in Angstroms
