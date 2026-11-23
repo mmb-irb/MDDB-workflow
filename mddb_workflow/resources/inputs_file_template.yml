@@ -263,6 +263,19 @@ timestep:
 
 temp:
 
+# Minimum and maximum temperatures in Kelvin (K).
+# Fill these fields only when the temperature is not constant (e.g. simulated annealing).
+# Leave 'temp' empty then, since a constant temperature and a temperature range can not be set together.
+# Both fields must be set together.
+#
+# Example:
+#
+# mintemp: 300 # K
+# maxtemp: 400 # K
+
+mintemp:
+maxtemp:
+
 # Ensemble
 # e.g. NVT, NPT, etc.
 # IMPORTANT: Check already existing values for this field to avoid making duplicates.

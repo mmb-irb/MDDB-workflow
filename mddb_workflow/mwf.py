@@ -2205,6 +2205,8 @@ class Project:
     input_links = inputs_property('links', "Input links (read only)")
     input_timestep = inputs_property('timestep', "Input timestep (read only)")
     input_temperature = inputs_property('temp', "Input temperature (read only)")
+    input_min_temperature = inputs_property('mintemp', "Input minimum temperature, when it is not constant (read only)")
+    input_max_temperature = inputs_property('maxtemp', "Input maximum temperature, when it is not constant (read only)")
     input_ensemble = inputs_property('ensemble', "Input ensemble (read only)")
     input_water = inputs_property('wat', "Input water force field (read only)")
     input_customs = inputs_property('customs', "Input custom representations (read only)")

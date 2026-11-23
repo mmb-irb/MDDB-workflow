@@ -30,6 +30,23 @@ def check_translation_value(value):
     return value
 
 
+def check_temperature_range(temp, mintemp, maxtemp):
+    """Make sure a constant temperature and a temperature range are not set together.
+    The range needs both the minimum and the maximum temperature.
+    """
+    if mintemp is None and maxtemp is None:
+        return
+    if temp is not None:
+        raise ValueError(f'"temp" ({temp}) can not be set together with "mintemp" or "maxtemp". '
+            'Use "temp" when the temperature is constant and "mintemp" and "maxtemp" when it is not. '
+            'Remove the fields which are wrong.')
+    if mintemp is None or maxtemp is None:
+        raise ValueError('"mintemp" and "maxtemp" must be set together.')
+    if mintemp >= maxtemp:
+        raise ValueError(f'"mintemp" ({mintemp}) must be lower than "maxtemp" ({maxtemp}). '
+            'If the temperature is constant then use "temp" instead.')
+
+
 class InputsBaseModel(BaseModel):
     """Base model tolerating (and preserving) unknown fields."""
 
@@ -138,11 +155,27 @@ class MDConfig(InputsBaseModel):
     image: Optional[Union[bool, Literal['auto']]] = None
     fit: Optional[Union[bool, Literal['auto']]] = None
     translation: Optional[Union[str, list[float]]] = None
+    # Temperature fields which may be different for each MD
+    temp: Optional[float] = None
+    mintemp: Optional[float] = None
+    maxtemp: Optional[float] = None
 
     @field_validator('translation')
     @classmethod
     def check_translation(cls, value):
         return check_translation_value(value)
+
+    @field_validator('temp', 'mintemp', 'maxtemp')
+    @classmethod
+    def check_positive(cls, value, info):
+        if value is not None and value <= 0:
+            raise ValueError(f'"{info.field_name}" must be a positive number.')
+        return value
+
+    @model_validator(mode='after')
+    def check_temperatures(self):
+        check_temperature_range(self.temp, self.mintemp, self.maxtemp)
+        return self
 
 
 class WorkflowInputs(InputsBaseModel):
@@ -177,6 +210,8 @@ class WorkflowInputs(InputsBaseModel):
     framestep: Optional[float] = None
     timestep: Optional[float] = None
     temp: Optional[float] = None
+    mintemp: Optional[float] = None
+    maxtemp: Optional[float] = None
     ensemble: Optional[str] = None
     ff: Optional[Union[str, list[str]]] = None
     wat: Optional[str] = None
@@ -232,12 +267,17 @@ class WorkflowInputs(InputsBaseModel):
             raise ValueError(f'Orientation must be a list of 16 numbers, got {len(value)}.')
         return value
 
-    @field_validator('framestep', 'timestep', 'temp')
+    @field_validator('framestep', 'timestep', 'temp', 'mintemp', 'maxtemp')
     @classmethod
     def check_positive(cls, value, info):
         if value is not None and value <= 0:
             raise ValueError(f'"{info.field_name}" must be a positive number.')
         return value
+
+    @model_validator(mode='after')
+    def check_temperatures(self):
+        check_temperature_range(self.temp, self.mintemp, self.maxtemp)
+        return self
 
     @field_validator('translation')
     @classmethod

@@ -8,6 +8,10 @@ from mddb_workflow.utils.auxiliar import InputError, save_json
 from mddb_workflow.utils.constants import MD_DIRECTORY, PROJECT_METADATA_VERSION
 from mddb_workflow.utils.type_hints import *
 
+# Temperature value when the temperature is not constant
+# The temperature range is then written in the MINTEMP and MAXTEMP fields
+DYNAMIC_TEMPERATURE_FLAG = 'dyn'
+
 # Input fields + interaction type
 METADATA_INTERACTION_FIELDS = { "name", "agent_1", "agent_2", "selection_1", "selection_2", "type" }
 
@@ -53,6 +57,8 @@ def prepare_project_metadata (
     input_links : list[dict],
     input_timestep : float,
     input_temperature : float,
+    input_min_temperature : float,
+    input_max_temperature : float,
     input_ensemble : str,
     input_water : str,
     input_pbc_selection : str,
@@ -208,7 +214,7 @@ def prepare_project_metadata (
         'DOMAINS': sequence_metadata['domains'],
         'FRAMESTEP': input_framestep,
         'TIMESTEP': input_timestep,
-        'TEMP': input_temperature,
+        'TEMP': DYNAMIC_TEMPERATURE_FLAG if input_min_temperature else input_temperature,
         'ENSEMBLE': input_ensemble,
         'FF': forcefields,
         'WAT': input_water,
@@ -291,6 +297,11 @@ def prepare_project_metadata (
         if cv19_variant is not None:
             metadata['CV19_VARIANT'] = cv19_variant
 
+    # The temperature range is only written when the temperature is not constant
+    if input_min_temperature:
+        metadata['MINTEMP'] = input_min_temperature
+        metadata['MAXTEMP'] = input_max_temperature
+
     # Write metadata to a file
     save_json(metadata, output_file.path)
 
@@ -298,7 +309,7 @@ def prepare_project_metadata (
 # Note than not all fields are allawed since some fields make no sense if as long as replicas have the same system (e.g. uniprots)
 METADATA_FIELDS = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
     'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
-    'TEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'INTERACTIONS', 'PBC_SELECTION',
+    'TEMP', 'MINTEMP', 'MAXTEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'INTERACTIONS', 'PBC_SELECTION',
     'CHAINNAMES', 'CUSTOMS', 'ORIENTATION', 'PTM', 'METADDITIONS', 'WARNINGS',
     'CV19_UNIT', 'CV19_STARTCONF', 'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
 ])
@@ -373,6 +384,13 @@ def generate_md_metadata (
         field_value = other_md_inputs.get(input_field, None)
         if field_value:
             metadata[field] = field_value
+
+    # A temperature range means the temperature is not constant for this MD
+    if 'MINTEMP' in metadata:
+        metadata['TEMP'] = DYNAMIC_TEMPERATURE_FLAG
+    # A constant temperature removes the project temperature range, if any
+    elif 'TEMP' in metadata:
+        metadata['MINTEMP'] = metadata['MAXTEMP'] = None
 
     # Add the matadata field only if there is at least one value
     if len(metadata) > 0:

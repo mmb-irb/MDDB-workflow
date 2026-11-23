@@ -136,6 +136,24 @@ def test_numeric_fields_must_be_positive():
 
 
 @pytest.mark.unit_int
+def test_temperature_range():
+    """mintemp and maxtemp go together, without temp, and the minimum must be lower."""
+    assert validate_inputs({'mintemp': 300, 'maxtemp': 400})
+    assert validate_inputs({'temp': 300, 'mds': [{'name': 'heated', 'mintemp': 300, 'maxtemp': 400}]})
+    wrong_inputs = [
+        {'temp': 300, 'mintemp': 300, 'maxtemp': 400},
+        {'temp': 300, 'maxtemp': 400},
+        {'mintemp': 300},
+        {'mintemp': 400, 'maxtemp': 300},
+        {'mintemp': -1, 'maxtemp': 300},
+        {'mds': [{'name': 'heated', 'temp': 300, 'mintemp': 300, 'maxtemp': 400}]},
+    ]
+    for inputs in wrong_inputs:
+        with pytest.raises(InputError):
+            validate_inputs(inputs)
+
+
+@pytest.mark.unit_int
 def test_pdb_ids_format_is_validated():
     """PDB ids must match the expected format, as a string or a list."""
     assert validate_inputs({'pdb_ids': '6M0J'})
