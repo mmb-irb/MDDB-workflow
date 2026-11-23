@@ -650,7 +650,7 @@ filter_selection: auto
 #
 # image: true
 
-image:
+image: auto
 
 # Set the translation (x y z in nm) applied to the trajectory before imaging.
 # The goal is that non-PBC molecules are not split by the box boundaries in the first frame.
@@ -673,7 +673,7 @@ translation: auto
 #
 # fit: true
 
-fit:
+fit: auto
 
 # Set chains in the processed structure.
 # Use a dict where keys are chain letters and values are VMD selections.
