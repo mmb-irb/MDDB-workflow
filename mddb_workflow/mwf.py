@@ -2743,7 +2743,8 @@ class TaskResolver:
                 self._overwritables = set(self.tasks)
             # If the overwrite argument is a list of tasks then iterate them
             elif isinstance(self.overwrite, list):
-                for task in self.overwrite:
+                # Group flags (e.g. meta, network) are expanded into their individual tasks
+                for task in self._expand_dependency_flags(self.overwrite):
                     # Make sure the task to be overwriten is among the tasks to be run
                     if task not in self.tasks:
                         self.tasks.append(task)
