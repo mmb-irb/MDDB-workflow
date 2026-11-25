@@ -1,9 +1,10 @@
 """Automatic translation and fragments in the box of the imaging on synthetic systems, in nm."""
 from types import SimpleNamespace
+from typing import Optional
 import mdtraj as mdt
 import numpy as np
 import pytest
-from mddb_workflow.tools.image_and_fit import find_automatic_translation, put_fragments_in_box, XTC_PRECISION
+from mddb_workflow.tools.image_and_fit import find_automatic_translation, find_layer_axis, put_fragments_in_box, XTC_PRECISION
 from mddb_workflow.utils.auxiliar import InputError
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
@@ -13,6 +14,9 @@ RECTANGULAR_BOX = np.diag([4, 4.5, 8]).astype(float)
 TRICLINIC_BOX = np.array([[4, 0, 0], [1.2, 4.2, 0], [-1, 1.5, 7.5]], dtype=float)
 # Heights of the beads of every lipid from the bilayer midplane, so all beads are in contact with their neighbours
 LIPID_HEIGHTS = np.array([0.2, 0.6, 1.0, 1.4, 1.8])
+# Boxes where the leaflets of a bilayer touch their image across a thin water layer (0.3 nm)
+THIN_RECTANGULAR_BOX = np.diag([4, 4.5, 3.9]).astype(float)
+THIN_TRICLINIC_BOX = np.array([[4, 0, 0], [1.2, 4.2, 0], [-1, 1.5, 3.9]], dtype=float)
 
 
 def wrap(positions: np.ndarray, box: np.ndarray) -> np.ndarray:
@@ -44,13 +48,35 @@ def sphere(radius: float, box: np.ndarray, spacing: float = 0.4) -> np.ndarray:
     return grid[np.linalg.norm(grid, axis=1) <= radius] + np.ones(3) @ box / 2
 
 
+def write_frames(filepath: str, frames: list[np.ndarray], box: np.ndarray) -> File:
+    """Write the positions of every frame as a trajectory with the same box in all frames."""
+    with mdt.formats.XTCTrajectoryFile(filepath, 'w') as writer:
+        writer.write(np.array(frames, dtype=np.float32), box=np.repeat(box[np.newaxis], len(frames), axis=0).astype(np.float32))
+    return File(filepath)
+
+
 def translate(tmp_path, positions: np.ndarray, box: np.ndarray, ignore_periodic: bool = False) -> np.ndarray:
     """Write the positions as a single frame trajectory and find its automatic translation."""
-    filepath = str(tmp_path / 'trajectory.xtc')
-    with mdt.formats.XTCTrajectoryFile(filepath, 'w') as writer:
-        writer.write(positions[np.newaxis].astype(np.float32), box=box[np.newaxis].astype(np.float32))
+    trajectory_file = write_frames(str(tmp_path / 'trajectory.xtc'), [positions], box)
     selection = Selection(list(range(len(positions))))
-    return np.array(find_automatic_translation(File(filepath), selection, ignore_periodic=ignore_periodic))
+    return np.array(find_automatic_translation(trajectory_file, selection, ignore_periodic=ignore_periodic))
+
+
+def bilayer_and_water(box: np.ndarray, midplane: float) -> tuple[np.ndarray, np.ndarray, list[list[int]]]:
+    """Get a flat bilayer, a water layer in the middle of the water between its images and the bonds of all atoms.
+    Every lipid is a column of bonded beads and every water molecule is a single bead.
+    """
+    lipids = flat_bilayer(box, midplane)
+    grid_count = len(lipids) // (2 * len(LIPID_HEIGHTS))
+    water = wrap(lipids[:grid_count] + [0, 0, LIPID_HEIGHTS[0]] + box[2] / 2, box)
+    atom_bonds = [[] for _ in range(len(lipids) + len(water))]
+    # Beads of the same lipid are at the same grid point, in consecutive heights of the same leaflet
+    for height in [*range(len(LIPID_HEIGHTS) - 1), *range(len(LIPID_HEIGHTS), 2 * len(LIPID_HEIGHTS) - 1)]:
+        for point in range(grid_count):
+            atom, bonded = height * grid_count + point, (height + 1) * grid_count + point
+            atom_bonds[atom].append(bonded)
+            atom_bonds[bonded].append(atom)
+    return lipids, water, atom_bonds
 
 
 def fractional_spans(positions: np.ndarray, box: np.ndarray) -> np.ndarray:
@@ -159,3 +185,48 @@ def test_fragments_in_box_keep_bonds(tmp_path):
             steps = np.rint(reader.read()[0][0].astype(np.float64) / XTC_PRECISION).astype(int)
         return np.concatenate([steps[oxygens + 1] - steps[oxygens], steps[oxygens + 2] - steps[oxygens]])
     assert np.array_equal(bond_steps(output_file), bond_steps(input_file))
+
+
+LAYER_BOXES = [THIN_RECTANGULAR_BOX, THIN_TRICLINIC_BOX, RECTANGULAR_BOX, TRICLINIC_BOX]
+LAYER_BOX_IDS = ['thin-rectangular', 'thin-triclinic', 'rectangular', 'triclinic']
+
+
+@pytest.mark.parametrize('box', LAYER_BOXES, ids=LAYER_BOX_IDS)
+def test_water_layer_axis(tmp_path, box):
+    """Water between bilayers forms a layer along their normal, whether the bilayer touches its image or not.
+    Water filling the box, in a drop or in a layer covering part of the plane only forms no layer.
+    """
+    _, water, _ = bilayer_and_water(box, 0)
+    drop = sphere(1, box)
+    filling = np.array([(i, j, k) for i in range(10) for j in range(10) for k in range(10)]) / 10 @ box
+    partial = water[(water @ np.linalg.inv(box))[:, 0] < 0.7]
+    for positions, layer_axis in [(water, 2), (drop, None), (filling, None), (partial, None)]:
+        trajectory_file = write_frames(str(tmp_path / 'trajectory.xtc'), [positions], box)
+        assert find_layer_axis(trajectory_file, Selection(list(range(len(positions))))) == layer_axis
+
+
+@pytest.mark.parametrize('box', LAYER_BOXES, ids=LAYER_BOX_IDS)
+def test_water_layer_at_boundary(tmp_path, box):
+    """A bilayer drifting along its normal, from split by the boundary in the first frame, stays whole in the middle of
+    the box in every frame when the water layer is kept at the boundary.
+    Otherwise it is split whenever its midplane is close to the boundary.
+    """
+    frames = []
+    for midplane in np.linspace(0, 1, 8, endpoint=False) * box[2, 2]:
+        lipids, water, atom_bonds = bilayer_and_water(box, midplane)
+        frames.append(np.concatenate([lipids, water]))
+    input_file = write_frames(str(tmp_path / 'input.xtc'), frames, box)
+    structure = SimpleNamespace(atom_count=len(frames[0]))
+    water_selection = Selection(list(range(len(lipids), len(frames[0]))))
+    # The lower leaflet is the first half of the lipid beads, and the distance between leaflets is fixed while whole
+    lower = len(lipids) // 2
+    separation = 2 * LIPID_HEIGHTS.mean() / box[2, 2]
+    def leaflet_separations(boundary_selection: Optional[Selection], boundary_axis: Optional[int]) -> np.ndarray:
+        output_file = File(str(tmp_path / 'output.xtc'))
+        put_fragments_in_box(input_file, output_file, atom_bonds, structure, Selection([]), boundary_selection, boundary_axis)
+        with mdt.formats.XTCTrajectoryFile(output_file.path) as reader:
+            heights = (reader.read()[0][:, :len(lipids)].astype(np.float64) @ np.linalg.inv(box))[:, :, 2]
+        if boundary_axis is not None: assert np.allclose(heights.mean(axis=1), 0.5, atol=1e-2)
+        return heights[:, lower:].mean(axis=1) - heights[:, :lower].mean(axis=1)
+    assert np.allclose(leaflet_separations(water_selection, 2), separation, atol=1e-2)
+    assert np.any(np.abs(leaflet_separations(None, None) - separation) > 0.1)

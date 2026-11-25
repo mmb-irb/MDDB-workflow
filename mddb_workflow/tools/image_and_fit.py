@@ -28,6 +28,11 @@ INDEX_FILEPATH = '.index.ndx'
 # Distance (nm) below which non-PBC atoms are considered part of the same object when finding the automatic translation
 AUTO_TRANSLATION_CUTOFF = 0.5
 
+# The water forms a layer (e.g. between membranes) if it is concentrated along a box vector and spread along the others
+# Concentration is the mean resultant length of the periodic coordinates: 0 when uniform and 1 when all at the same height
+WATER_LAYER_CONCENTRATION = 0.5
+WATER_LAYER_SPREAD = 0.2
+
 # Number of frames read at once in the no-jump step
 NO_JUMP_CHUNK_SIZE = 100
 
@@ -77,6 +82,7 @@ def image_and_fit(
             Set how it must be translated during imaging, in nm.
             Use 'auto' to find a translation which keeps non-PBC atoms away from the box boundaries.
             If all atoms are PBC then lipids are used instead, so membranes are not split along their normal.
+            If all atoms are PBC and the water forms a layer, it is also kept at the boundary in every frame.
         structure:
             The structure of the system. Note that this is an early provisional structure.
         pbc_selection:
@@ -148,6 +154,9 @@ def image_and_fit(
         # If all atoms are PBC then use lipids, so membranes are not split by the box boundaries (e.g. lipid-only systems)
         # Note that lipids are still PBC atoms in the rest of the imaging, so they may be periodic (e.g. membranes)
         # Periodic non-PBC atoms (e.g. a nanoparticle touching its own image) still fail, since they can not be kept whole
+        # If all atoms are PBC and the water forms a layer, it is also kept at the boundary in every frame
+        # This way the rest (e.g. membranes) stays whole in the middle of the box, even if it drifts or touches its image
+        boundary_selection, boundary_axis = None, None
         if translation == AUTOMATIC_FLAG:
             if center_selection:
                 translation = find_automatic_translation(latest_trajectory, center_selection)
@@ -155,6 +164,10 @@ def image_and_fit(
                 lipid_selection = structure.select_lipids()
                 if lipid_selection: print(' There are only PBC atoms, so lipids are used to find the automatic translation')
                 translation = find_automatic_translation(latest_trajectory, lipid_selection, ignore_periodic=True)
+                boundary_selection = structure.select_water()
+                boundary_axis = find_layer_axis(latest_trajectory, boundary_selection)
+                if boundary_axis is not None:
+                    print(f'  The water forms a layer along the box vector {boundary_axis + 1}, so it is kept at the boundary')
 
         # !!! We assume that at this point (after a possible translation) the first frame is "correct"
         # This means that the different molecules are placed as desired
@@ -195,7 +208,8 @@ def image_and_fit(
             frames_count = len(reader)
         atom_bonds = find_bonds(latest_trajectory, frames_count)
         boxed_trajectory_file = output_trajectory_file.get_prefixed_file('boxed.')
-        put_fragments_in_box(latest_trajectory, boxed_trajectory_file, atom_bonds, structure, center_selection)
+        put_fragments_in_box(latest_trajectory, boxed_trajectory_file, atom_bonds, structure, center_selection,
+            boundary_selection, boundary_axis)
         boxed_trajectory_file.rename_to(output_trajectory_file)
         latest_trajectory = output_trajectory_file
 
@@ -453,10 +467,13 @@ def put_fragments_in_box(
     atom_bonds: list[list[int]],
     structure: 'Structure',
     center_selection: 'Selection',
+    boundary_selection: Optional['Selection'] = None,
+    boundary_axis: Optional[int] = None,
 ):
     """In every frame, make every bonded fragment whole, center the selection and put fragments out of the selection in the box.
     Fragments are put in the box as a whole, according to their center.
     Fragments with any atom in the selection are never put in the box, since they are expected to have no jumps already.
+    If a boundary axis is given, the periodic mean of the boundary selection is moved to the boundary along it before.
     """
     for trajectory_file in [input_trajectory_file, output_trajectory_file]:
         if trajectory_file.format != 'xtc':
@@ -502,6 +519,10 @@ def put_fragments_in_box(
                     positions[order] -= np.cumsum(changes[:-1], axis=0) @ box_vectors
                 if len(center_atom_indices) > 0:
                     positions += box_vectors.sum(axis=0) / 2 - positions[center_atom_indices].mean(axis=0)
+                if boundary_axis is not None:
+                    fractional = positions[boundary_selection.atom_indices] @ inverse_box
+                    boundary_center = periodic_mean(fractional, np.zeros(len(fractional), dtype=int), 1)[0, boundary_axis]
+                    positions -= boundary_center * box_vectors[boundary_axis]
                 if len(boxed_atom_indices) > 0:
                     fractional = positions[boxed_atom_indices] @ inverse_box
                     centers = np.stack([ np.bincount(boxed_atom_fragments, weights=fractional[:, axis]) / boxed_fragment_sizes
@@ -723,3 +744,18 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection', 
     translation = translation @ box_vectors
     print(f'  Automatic translation: {translation[0]:.3f} {translation[1]:.3f} {translation[2]:.3f} nm')
     return [round(float(value), 3) for value in translation]
+
+
+def find_layer_axis(trajectory_file: 'File', selection: 'Selection') -> Optional[int]:
+    """Find the box vector along which the selection (e.g. water between membranes) forms a layer in the first frame, or None.
+    It must be concentrated along this box vector and spread along the others, so drops and columns are not layers.
+    """
+    if not selection: return None
+    positions, box_vectors = next(iterate_xtc_frames(trajectory_file.path))
+    fractional = positions[selection.atom_indices].astype(np.float64) @ np.linalg.inv(box_vectors.astype(np.float64))
+    angles = 2 * np.pi * fractional
+    concentrations = np.hypot(np.cos(angles).mean(axis=0), np.sin(angles).mean(axis=0))
+    axis = int(np.argmax(concentrations))
+    if concentrations[axis] < WATER_LAYER_CONCENTRATION: return None
+    if np.any(np.delete(concentrations, axis) >= WATER_LAYER_SPREAD): return None
+    return axis
