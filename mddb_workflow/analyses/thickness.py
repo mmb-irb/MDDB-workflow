@@ -72,8 +72,8 @@ def thickness(
         'std_positive': zpos_stds,
         'std_negative': zneg_stds,
         'thickness': [zpos_mean - zneg_mean for zpos_mean, zneg_mean in zip(zpos_means, zneg_means)],
-        # Sum of standard deviations
-        'std_thickness': np.sqrt([zpos_std**2 for zpos_std in zpos_stds] + [zneg_std**2 for zneg_std in zneg_stds]),
+        # Standard deviations of both leaflets combined in every frame
+        'std_thickness': np.sqrt(np.square(zpos_stds) + np.square(zneg_stds)),
         'midplane_z': midplane_z,
         },
         'version': THICKNESS_ANALYSIS_VERSION,

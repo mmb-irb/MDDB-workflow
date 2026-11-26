@@ -986,6 +986,30 @@ def test_acyl_chains_skip_sugar_rings():
     assert [len(chain) for chain in get_all_acyl_chains(universe.residues[0])] == [8]
 
 
+def test_thickness_standard_deviation(tmp_path):
+    """The thickness standard deviation of every frame combines the standard deviations of both leaflets."""
+    from MDAnalysis.coordinates.memory import MemoryReader
+    from mddb_workflow.analyses.thickness import thickness
+    heads, directions = flat_bilayer(-20, 20)
+    n_leaflet = len(heads) // 2
+    # Head groups 2 A above and below the bottom leaflet plane and 1 A for the top leaflet
+    heads[:n_leaflet, 2] += np.where(np.arange(n_leaflet) % 2, 2, -2)
+    heads[n_leaflet:, 2] += np.where(np.arange(n_leaflet) % 2, 1, -1)
+    lipids, headgroups = build_lipids(heads, directions, [120, 120, 100])
+    membrane_map = find_leaflets(lipids, headgroups)
+    # Water above and below the bilayer, since the analysis sets the box from the atom positions
+    water = mda.Universe.empty(2, n_residues=2, atom_resindex=[0, 1], trajectory=True)
+    water.add_TopologyAttr('names', ['OW'] * 2)
+    water.add_TopologyAttr('resnames', ['SOL'] * 2)
+    water.atoms.positions = [[60, 60, 5], [60, 60, 95]]
+    universe = mda.Merge(lipids.atoms, water.atoms)
+    positions = universe.atoms.positions.copy()
+    universe.load_new(np.array([positions, positions]), format=MemoryReader, dimensions=[120, 120, 100, 90, 90, 90])
+    data = thickness(membrane_map, universe, str(tmp_path), snapshots=2)['data']
+    assert data['thickness'] == pytest.approx([40, 40], abs=0.01)
+    assert data['std_thickness'] == pytest.approx([5 ** 0.5] * 2, abs=0.01)
+
+
 def test_all_atom_order_parameters_of_split_lipids():
     """Lipids split in several residues (e.g. PA, PC and OL in AMBER Lipid14) get the order parameters of every tail
     from its own residues, although the tails share atom names and their ester carbons are in the head residue.
