@@ -74,6 +74,7 @@ def prepare_project_metadata (
     input_cv19_startconf : str,
     input_cv19_abs : bool,
     input_cv19_nanobs : bool,
+    provenance : Optional[dict],
     ):
     """Prepare a JSON file with all project metadata."""
     # Get the box data
@@ -297,6 +298,10 @@ def prepare_project_metadata (
         if cv19_variant is not None:
             metadata['CV19_VARIANT'] = cv19_variant
 
+    # Add the provenance steps common to all MDs
+    if provenance:
+        metadata['PROVENANCE'] = provenance['project']
+
     # The temperature range is only written when the temperature is not constant
     if input_min_temperature:
         metadata['MINTEMP'] = input_min_temperature
@@ -326,6 +331,7 @@ def generate_md_metadata (
     simulation_box_shape : str,
     reference_simulation_box_data : tuple,
     warnings : dict,
+    md_provenance : Optional[dict],
     output_file : 'File'
     ):
     """Produce the MD metadata file to be uploaded to the database."""
@@ -391,6 +397,10 @@ def generate_md_metadata (
     # A constant temperature removes the project temperature range, if any
     elif 'TEMP' in metadata:
         metadata['MINTEMP'] = metadata['MAXTEMP'] = None
+
+    # Add the provenance steps of this MD only, apart from the ones common to all MDs
+    if md_provenance:
+        md_metadata['provenance'] = md_provenance
 
     # Add the matadata field only if there is at least one value
     if len(metadata) > 0:

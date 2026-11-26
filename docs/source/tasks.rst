@@ -11,8 +11,6 @@ Project Tasks
 
 These tasks are executed once per project:
 
-* ``aiidata`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/provenance.py#L8>`__: produce a provenance file containing AiiDA data adapted for our database
-
 * ``chains`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/chains.py#L96>`__: define the main function that will be called from the main script. This function will get the parsed chains from the structure and request the InterProScan service to obtain the data for each chain.
 
 * ``charges`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_charges.py#L14>`__: extract charges from a source file. 
@@ -38,6 +36,8 @@ These tasks are executed once per project:
 * ``populations`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1644>`__: get the MSM equilibrium populations file.
 
 * ``protmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_map.py#L78>`__: map the structure aminoacids sequences against the Uniprot reference sequences.
+
+* ``provenance`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/provenance.py#L39>`__: read the provenance RO-Crates and split the steps into the common ones and the ones of every MD.
 
 * ``refbonds`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_bonds.py#L261>`__: find reference safe bonds in the system. First try to mine bonds from a topology files. If the mining fails then search for the most stable bonds. If we trust in stable bonds then simply return the structure bonds.
 

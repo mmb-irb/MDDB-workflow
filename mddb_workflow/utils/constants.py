@@ -120,6 +120,7 @@ DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'
 # Markov State Model input filenames
 DEFAULT_POPULATIONS_FILENAME = 'populations.json'
 DEFAULT_TRANSITIONS_FILENAME = 'transitions.json'
+DEFAULT_PROVENANCE_DIRECTORY = 'provenance'
 
 # An old system for when original topology is very wrong and charges must be provided manually
 RAW_CHARGES_FILENAME = 'charges.txt'
@@ -237,7 +238,6 @@ OUTPUT_POCKETS_FILENAME = 'mda.pockets.json'
 OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket'  # WARNING: If this is changed then the pockets function must be updated as well
 OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
 OUTPUT_MARKOV_FILENAME = 'mda.markov.json'
-OUTPUT_PROVENANCE_FILENAME = 'mda.provenance.json'
 MEMBRANE_MAPPING_FILENAME = 'mda.mem_map.json'
 OUTPUT_DENSITY_FILENAME = 'mda.density.json'
 OUTPUT_THICKNESS_FILENAME = 'mda.thickness.json'

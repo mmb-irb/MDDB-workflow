@@ -68,14 +68,15 @@ MAPPING_FLAGS = {
     'resmap',
 }
 
-OUTPUT_FLAGS = {'aiidata', 'mdmeta', 'pmeta', 'screenshot', 'stopology'}
+OUTPUT_FLAGS = {'mdmeta', 'pmeta', 'provenance', 'screenshot', 'stopology'}
 
 INPUT_FILE_ARGUMENTS = {
-    'aiida_data_file',
     'input_structure_file',
     'input_topology_file',
     'input_trajectory_files',
     'populations',
+    'provenance_crate_files',
+    'provenance_md_files',
     'resorted_bonds_file',
     'resorted_charges_file',
     'transitions',

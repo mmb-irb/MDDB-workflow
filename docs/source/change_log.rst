@@ -22,6 +22,13 @@ Added
   at once, and with no loader (``-ld``) the references are only made, in a directory shared by all nodes and processes,
   so the work can be split in SLURM array tasks and every sequence is run once
 
+- Read the provenance RO-Crates written by the BioBB from the ``provenance`` directory (``-prov``). Crates are joined
+  through the cksums of their files and the steps are found by walking back from the files of every MD. Steps
+  common to all MDs go to the project metadata (``PROVENANCE``) and the rest to the metadata of every MD. Steps
+  whose outputs are identical to their inputs are marked as ``redundant`` and steps not leading to any MD file as
+  ``branch``, so they can be hidden by default. Every step also keeps who ran it (``user``: the declared person
+  or else the username in the machine) and the machine where it ran (``environment``)
+
 Changed
 -------
 - Run the remote InterProScan of the ``chains`` task with the EBI InterProScan 6 service (``iprscan6``) instead of
@@ -29,6 +36,10 @@ Changed
   (e.g. ``Pfam`` instead of ``PFAM``) and changed a few match fields
 - Stop the ``chains`` task with an error when the remote InterProScan jobs do not finish in 5 minutes. Before, the
   task ended as done and the missing chains were never requested again
+
+Removed
+-------
+- Remove the AiiDA provenance input (``-ad``) and its ``aiidata`` task, replaced by the provenance RO-Crates
 
 [0.1.14] - 2026-11-18
 =====================

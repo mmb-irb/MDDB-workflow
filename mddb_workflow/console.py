@@ -785,7 +785,7 @@ run_parser_input_args = [
     (['-fin', '--forced_inputs'], {'action': 'append', 'nargs': '*', 'default': None, 'help': project_init_help['forced_inputs']}),
     (['-pop', '--populations_filepath'], {'default': DEFAULT_POPULATIONS_FILENAME, 'help': project_init_help['populations_filepath']}),
     (['-tpro', '--transitions_filepath'], {'default': DEFAULT_TRANSITIONS_FILENAME, 'help': project_init_help['transitions_filepath']}),
-    (['-ad', '--aiida_data_filepath'], {'default': None, 'help': project_init_help['aiida_data_filepath']}),
+    (['-prov', '--provenance_directory'], {'default': DEFAULT_PROVENANCE_DIRECTORY, 'help': project_init_help['provenance_directory']}),
 ]
 for flags, kwargs in run_parser_input_args:
     run_parser_input_group.add_argument(*flags, **kwargs)
