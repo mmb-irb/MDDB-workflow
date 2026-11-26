@@ -272,7 +272,14 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
     for residue in lipids:
         residue.atoms.select_atoms('name C*').elements = 'C'  # Override element to Carbon
         tails[residue.resname] = get_acyl_chain_atom_names(residue, removeHs=False)
+    return ua_order_parameters(gorder_data, tails)
 
+
+def ua_order_parameters(gorder_data: dict, tails: dict[str, list[list[str]]]) -> dict:
+    """Get the S_CH order parameters of the tail carbons of every chain from the gorder output of a united-atom analysis.
+
+    gorder gives -S_CH, so the sign is changed to match the all-atom analysis.
+    """
     # Parse YAML: for each resname build a flat map atom_name -> (mean, error)
     order_parameters_dict = {}
     _atom_re = re.compile(r'^(\S+)\s+(\S+)\s+\((\d+)\)$')
@@ -292,7 +299,7 @@ def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids
             total = atom_data.get('total', {})
             value = total.get('mean', float('nan')) if isinstance(total, dict) else float(total)
             error = total.get('error', 0.0) if isinstance(total, dict) else 0.0
-            parsed[atom_name] = (value, error)
+            parsed[atom_name] = (-value, error)
 
         if not parsed:
             continue

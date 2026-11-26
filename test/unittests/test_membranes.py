@@ -949,6 +949,35 @@ def test_coarse_grain_order_parameters_no_tails():
     assert cg_order_parameters(gorder_data, {'DPPC': []}) == {}
 
 
+def test_united_atom_order_parameters(tmp_path):
+    """United-atom order parameters are S_CH as in the all-atom analysis, although gorder gives -S_CH:
+    the implicit hydrogens of straight chains along the membrane normal are perpendicular to it, so S_CH is -0.5.
+    """
+    import gorder
+    import yaml
+    from mddb_workflow.analyses.lipid_order import ua_order_parameters, write_gorder_bonds
+    n_carbons, n_chains = 8, 2
+    names = [f'C{i + 1}' for i in range(n_carbons)]
+    universe = mda.Universe.empty(n_carbons * n_chains, n_residues=n_chains, trajectory=True,
+        atom_resindex=np.repeat(np.arange(n_chains), n_carbons))
+    universe.add_TopologyAttr('names', names * n_chains)
+    universe.add_TopologyAttr('resnames', ['DPPC'] * n_chains)
+    universe.add_TopologyAttr('resids', list(range(1, n_chains + 1)))
+    universe.add_TopologyAttr('bonds', [(c * n_carbons + i, c * n_carbons + i + 1) for c in range(n_chains) for i in range(n_carbons - 1)])
+    # Zigzag chains along z
+    universe.atoms.positions = [[10 + 10 * c + 0.63 * (i % 2), 10, 10 + 1.26 * i] for c in range(n_chains) for i in range(n_carbons)]
+    universe.dimensions = [30, 30, 30, 90, 90, 90]
+    structure_file, bonds_file, yaml_file = [str(tmp_path / name) for name in ('ua.gro', 'ua.bonds', 'ua.yaml')]
+    universe.atoms.write(structure_file)
+    write_gorder_bonds(universe, bonds_file)
+    gorder.Analysis(structure=structure_file, trajectory=structure_file, bonds=bonds_file, output_yaml=yaml_file,
+        analysis_type=gorder.analysis_types.UAOrder('resname DPPC'), handle_pbc=False, silent=True).run().write()
+    with open(yaml_file) as file:
+        order_parameters = ua_order_parameters(yaml.safe_load(file), {'DPPC': [names]})
+    assert order_parameters['DPPC']['0']['atoms'] == names
+    assert order_parameters['DPPC']['0']['avg'][1:-1] == pytest.approx([-0.5] * (n_carbons - 2), abs=1e-3)
+
+
 def test_acyl_chains_skip_sugar_rings():
     """The carbons of pyranose sugars are an open chain closed by the ring oxygen, so they are not an acyl chain."""
     from mddb_workflow.utils.mda_spells import get_all_acyl_chains
