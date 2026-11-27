@@ -9,7 +9,7 @@ from tqdm import tqdm
 from mddb_workflow.utils.auxiliar import ToolError, InputError, reprint
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.gmx_spells import merge_xtc_files
-from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
+from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END, XTC_PRECISION
 from mddb_workflow.utils.type_hints import *
 
 CURSOR_UP_ONE = '\x1b[1A'
@@ -509,6 +509,13 @@ FITTED_REGION_FRACTION = 0.1
 FITTED_REGION_MIN_WIDTH = 1
 # Maximum rotation (degrees) of the region
 FITTED_REGION_MAX_ROTATION = 2
+# The group of atoms a trajectory was fitted (or centered) to has its center fixed in every frame by the fit itself
+# This is useful to find trajectories fitted to a part of the system only (e.g. a few residues), since the rest moves around
+# Maximum movement (nm) of the center of this group: the xtc precision (0.001 nm) with some margin
+# Note that the center of any other group moves much more, even if the trajectory barely moves
+FITTED_GROUP_MAX_TRANSLATION = 10 * XTC_PRECISION
+# Minimum number of atoms of this group to tell if it is fitted in rotation
+FITTED_GROUP_MIN_ATOMS = 3
 
 
 def read_xtc_sample_frames(trajectory_file: 'File') -> list[tuple[np.ndarray, Optional[np.ndarray]]]:
@@ -527,11 +534,58 @@ def read_xtc_sample_frames(trajectory_file: 'File') -> list[tuple[np.ndarray, Op
     return frames
 
 
-def guess_translation_fitted(frames: list[tuple[np.ndarray, Optional[np.ndarray]]], atom_indices: list[int]) -> bool:
+def find_fitted_groups(
+    frames: list[tuple[np.ndarray, Optional[np.ndarray]]],
+    atom_choices: list[tuple[list[list[int]], np.ndarray]],
+) -> list[list[int]]:
+    """Find groups of atoms whose center does not move along the frames, i.e. the groups the trajectory was fitted (or centered) to.
+    Groups are made of consecutive residues, from a single residue to all of them.
+    Fitting tools pick the atoms and weight them differently, so several atom choices are tried.
+    Every atom choice has the atoms picked from every residue (e.g. all atoms, backbone atoms)
+    and the weight of every atom in the structure (e.g. masses, or ones for the geometric center).
+    For every atom choice, the group whose center moves the least is returned if it does not move.
+    Groups are sorted from the one which moves the least.
+    """
+    groups = []
+    for residue_atom_indices, weights in atom_choices:
+        residues_count = len(residue_atom_indices)
+        # Centers of all groups are found with cumulative sums along residues
+        residue_weights = np.array([ weights[indices].sum() for indices in residue_atom_indices ])
+        cumulative_weights = np.concatenate([[0], np.cumsum(residue_weights)])
+        cumulative_sums = [ np.concatenate([ np.zeros((1, 3)),
+            np.cumsum([ weights[indices] @ coordinates[indices] for indices in residue_atom_indices ], axis=0) ])
+            for coordinates, _ in frames ]
+        best_movement, best_group = np.inf, None
+        for start in range(residues_count):
+            # Groups from this residue to every next residue
+            group_weights = cumulative_weights[start + 1:] - cumulative_weights[start]
+            # Groups with no weight (e.g. no atoms) have no center
+            weighted = group_weights > 0
+            divisors = np.where(weighted, group_weights, 1)[:, None]
+            reference_centers = (cumulative_sums[0][start + 1:] - cumulative_sums[0][start]) / divisors
+            movements = np.max([ np.linalg.norm((sums[start + 1:] - sums[start]) / divisors - reference_centers, axis=1)
+                for sums in cumulative_sums[1:] ], axis=0)
+            movements[~weighted] = np.inf
+            end = np.argmin(movements)
+            if movements[end] < best_movement:
+                best_movement, best_group = movements[end], (start, start + end + 1)
+        if best_movement > FITTED_GROUP_MAX_TRANSLATION: continue
+        start, end = best_group
+        groups.append((best_movement, [ index for indices in residue_atom_indices[start:end] for index in indices ]))
+    return [ group for _, group in sorted(groups, key=lambda movement_and_group: movement_and_group[0]) ]
+
+
+def guess_translation_fitted(
+    frames: list[tuple[np.ndarray, Optional[np.ndarray]]],
+    atom_indices: list[int],
+    fitted_groups: list[list[int]],
+) -> bool:
     """Guess if a trajectory is fitted (or centered) in translation, i.e. the center of the selected atoms barely moves.
     The first frame is compared with the rest of frames.
+    It is also fitted if it was fitted to a group of atoms (see find_fitted_groups).
     """
     if len(frames) < 3: return False
+    if len(fitted_groups) > 0: return True
     reference = frames[0][0][atom_indices]
     for coordinates, _ in frames[1:]:
         translation = np.linalg.norm(coordinates[atom_indices].mean(axis=0) - reference.mean(axis=0))
@@ -539,12 +593,19 @@ def guess_translation_fitted(frames: list[tuple[np.ndarray, Optional[np.ndarray]
     return True
 
 
-def guess_rotation_fitted(frames: list[tuple[np.ndarray, Optional[np.ndarray]]], residue_atom_indices: list[list[int]]) -> bool:
+def guess_rotation_fitted(
+    frames: list[tuple[np.ndarray, Optional[np.ndarray]]],
+    residue_atom_indices: list[list[int]],
+    fitted_groups: list[list[int]],
+) -> bool:
     """Guess if a trajectory is fitted in rotation.
     The first frame is compared with the rest of frames, ignoring the translation.
 
     A trajectory is fitted in rotation if rotating the selected atoms barely improves their RMSD.
     Note that the angle of the rotation is not reliable when the conformation changes a lot (e.g. flexible molecules).
+
+    A trajectory is also fitted in rotation if a group it was fitted to (see find_fitted_groups) is not rotated either.
+    This group may be a part of the system only, so the rest of the system may rotate.
 
     A trajectory is also fitted in rotation if the region which moves the least is wide and it barely rotates.
     This is for trajectories which are fitted to a part of the system only (e.g. the base of a spike).
@@ -552,8 +613,10 @@ def guess_rotation_fitted(frames: list[tuple[np.ndarray, Optional[np.ndarray]]],
     if len(frames) < 3: return False
     atom_indices = [ index for residue_indices in residue_atom_indices for index in residue_indices ]
     reference = frames[0][0]
-    if all(get_rotation_gain(reference[atom_indices], coordinates[atom_indices]) < FITTED_MAX_ROTATION_GAIN
-        for coordinates, _ in frames[1:]): return True
+    for group in [ atom_indices, *fitted_groups ]:
+        if len(group) < FITTED_GROUP_MIN_ATOMS: continue
+        if all(get_rotation_gain(reference[group], coordinates[group]) < FITTED_MAX_ROTATION_GAIN
+            for coordinates, _ in frames[1:]): return True
     # Find the region which moves the least
     if len(residue_atom_indices) < 3: return False
     def get_residue_centers(coordinates: np.ndarray) -> np.ndarray:

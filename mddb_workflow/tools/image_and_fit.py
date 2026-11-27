@@ -12,11 +12,11 @@ from tqdm import tqdm
 
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_BONDS, InputError, warn
-from mddb_workflow.utils.constants import AUTOMATIC_FLAG, XTC_PRECISION
+from mddb_workflow.utils.constants import AUTOMATIC_FLAG, XTC_PRECISION, CG_ATOM_ELEMENT, DUMMY_ATOM_ELEMENT
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.mdt_spells import rotate_boxes, iterate_xtc_frames
 from mddb_workflow.utils.mdt_spells import read_xtc_sample_frames, is_box_rotated, has_box
-from mddb_workflow.utils.mdt_spells import guess_translation_fitted, guess_rotation_fitted
+from mddb_workflow.utils.mdt_spells import guess_translation_fitted, guess_rotation_fitted, find_fitted_groups
 from mddb_workflow.analyses.mindist import find_frame_cross_contacts
 from mddb_workflow.utils.type_hints import *
 
@@ -532,6 +532,39 @@ def put_fragments_in_box(
             writer.write(output_xyz, time=time, step=step, box=boxes)
 
 
+# Atom names which fitting tools usually pick from every residue
+# Backbone atoms as the workflow fits them, backbone atoms with oxygens (e.g. VMD backbone) and alpha carbons or phosphorus
+FIT_BACKBONE_ATOM_NAMES = { 'N', 'CA', 'C', 'P', "O5'", "O3'", "C5'", "C4'", "C3'" }
+FIT_BACKBONE_OXYGEN_ATOM_NAMES = FIT_BACKBONE_ATOM_NAMES | { 'O', 'OP1', 'OP2', 'O1P', 'O2P' }
+FIT_ALPHA_ATOM_NAMES = { 'CA', 'P' }
+
+
+def get_fit_atom_choices(structure: 'Structure', residue_atom_indices: list[list[int]]) -> list[tuple[list[list[int]], np.ndarray]]:
+    """Get the ways fitting tools pick atoms from residues and weight them, to find the group a trajectory was fitted to.
+    Atoms are all atoms, heavy atoms, backbone atoms (with or without oxygens) or alpha carbons (or phosphorus).
+    Weights are the masses or ones, for the geometric center.
+    Masses are not used in coarse grain structures, since beads have no element mass.
+    """
+    atoms = structure.atoms
+    atom_filters = [
+        lambda atom: True,
+        lambda atom: atom.element != 'H',
+        lambda atom: atom.name in FIT_BACKBONE_ATOM_NAMES,
+        lambda atom: atom.name in FIT_BACKBONE_OXYGEN_ATOM_NAMES,
+        lambda atom: atom.name in FIT_ALPHA_ATOM_NAMES,
+    ]
+    weightings = [ np.ones(len(atoms)) ]
+    if not any(atom.element == CG_ATOM_ELEMENT for atom in atoms):
+        # Dummy atoms (e.g. virtual sites) have no mass
+        weightings.append(np.array([ 0 if atom.element == DUMMY_ATOM_ELEMENT else mdt.element.get_by_symbol(atom.element).mass
+            for atom in atoms ]))
+    choices = []
+    for atom_filter in atom_filters:
+        picked_atom_indices = [ [ index for index in indices if atom_filter(atoms[index]) ] for indices in residue_atom_indices ]
+        choices += [ (picked_atom_indices, weights) for weights in weightings ]
+    return choices
+
+
 def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', selection: 'Selection') -> tuple[bool, bool]:
     """Check if the trajectory seems to be fitted already, both in translation and rotation.
     Check also if it is fitted in rotation and periodic boundary conditions are thus broken.
@@ -539,14 +572,21 @@ def check_fitted_trajectory(trajectory_file: 'File', structure: 'Structure', sel
     Periodic boundary conditions are kept only if boxes were rotated along with the coordinates.
     Note that some tools (e.g. Gromacs) do not rotate boxes when fitting.
     Note that a translation (e.g. centering) does not break periodic boundary conditions.
+    Note that the trajectory may be fitted to a part of the system only (e.g. a few residues).
     Only a few frames are checked so this is just a guess.
     """
     frames = read_xtc_sample_frames(trajectory_file)
     selected_atom_indices = set(selection.atom_indices)
     residue_atom_indices = [ [ index for index in residue.atom_indices if index in selected_atom_indices ] for residue in structure.residues ]
     residue_atom_indices = [ atom_indices for atom_indices in residue_atom_indices if atom_indices ]
-    translation_fitted = guess_translation_fitted(frames, selection.atom_indices)
-    rotation_fitted = guess_rotation_fitted(frames, residue_atom_indices)
+    # Find if the trajectory was fitted to a group of atoms, which may be a part of the system only
+    fitted_groups = find_fitted_groups(frames, get_fit_atom_choices(structure, residue_atom_indices))
+    if fitted_groups:
+        group = fitted_groups[0]
+        first_residue, last_residue = structure.atoms[group[0]].residue, structure.atoms[group[-1]].residue
+        print(f' The trajectory seems to be fitted to {len(group)} atoms from residue {first_residue.label} to {last_residue.label}')
+    translation_fitted = guess_translation_fitted(frames, selection.atom_indices, fitted_groups)
+    rotation_fitted = guess_rotation_fitted(frames, residue_atom_indices, fitted_groups)
     if translation_fitted and rotation_fitted:
         print(' The trajectory seems to be fitted in translation and rotation')
     elif translation_fitted:
