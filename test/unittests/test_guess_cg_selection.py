@@ -1,5 +1,6 @@
 """Tests for the coordinates used to guess coarse grain and united atom residues."""
 import pathlib
+import shutil
 import numpy as np
 import pytest
 import pytraj as pt
@@ -7,6 +8,7 @@ import pytraj as pt
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.tools.guess_cg_selection import get_frames_coordinates, FRAMES_LIMIT
+from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
 dummy_dir = pathlib.Path(__file__).parent.parent/'data/input/dummy'
 
@@ -21,3 +23,16 @@ def test_frames_coordinates_with_few_frames():
     assert 1 < len(expected) <= FRAMES_LIMIT
     coordinates = get_frames_coordinates(structure, File(trajectory_path))
     assert np.allclose(coordinates, expected, atol=0.01)
+
+
+@pytest.mark.unit_int
+def test_frames_coordinates_along_the_trajectory(tmp_path):
+    """With more frames than the limit, frames are taken along the trajectory with the reduced trajectory step."""
+    structure = Structure.from_file(str(dummy_dir/'ala_ala.pdb'))
+    # Copy the trajectory, since MDAnalysis saves its frame offsets next to it
+    trajectory_path = shutil.copy(dummy_dir/'gromacs/rmsd_jump.xtc', tmp_path)
+    expected = pt.load(trajectory_path, top=str(dummy_dir/'ala_ala.pdb')).xyz
+    frame_step, frames_count = calculate_frame_step(len(expected), FRAMES_LIMIT)
+    assert frames_count <= FRAMES_LIMIT < len(expected)
+    coordinates = get_frames_coordinates(structure, File(trajectory_path), len(expected))
+    assert np.allclose(coordinates, expected[::frame_step], atol=1e-5)

@@ -5,9 +5,12 @@ import pickle
 
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
-from mddb_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
+from mddb_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS, InputError
+from itertools import islice
 
 import MDAnalysis
+from MDAnalysis.coordinates.XTC import XTCReader
+from MDAnalysis.lib.formats.libmdaxdr import XTCFile
 from MDAnalysis.topology.TPRParser import TPRParser
 # from MDAnalysis.topology.PDBParser import PDBParser # for class reference
 from MDAnalysis.core.universe import Universe
@@ -156,6 +159,27 @@ def get_mda_universe_cksum(universe) -> str:
     """Get a cksum from a MDA universe for equality comparison."""
     pickled = pickle.dumps(universe.atoms)
     return sum(pickled)
+
+
+def get_xtc_coordinates(trajectory_filepath: str, n_atoms: int, frames: slice) -> Generator[np.ndarray, None, None]:
+    """Yield the coordinates (Å) of a slice of frames of a XTC trajectory.
+    Pytraj reads every frame header when it opens a trajectory, which takes minutes on a busy shared disk.
+    Here frames from the start are read in order, and other frames are found with the offsets MDAnalysis caches.
+    """
+    if not frames.start and frames.step in (None, 1):
+        xtc = XTCFile(trajectory_filepath)
+        nm_coordinates = (frame.x for frame in islice(xtc, frames.stop))
+    else:
+        xtc = XTCReader(trajectory_filepath, convert_units=False)
+        nm_coordinates = (timestep.positions for timestep in xtc[frames])
+    try:
+        if xtc.n_atoms != n_atoms:
+            raise InputError(f'Trajectory {trajectory_filepath} has {xtc.n_atoms} atoms but the structure has {n_atoms}')
+        # Convert to Å in double precision, as pytraj does
+        for coordinates in nm_coordinates:
+            yield coordinates.astype(float) * 10
+    finally:
+        xtc.close()
 
 
 # DANI: si miras los topology.bonds.values estos enlaces falsos van al final

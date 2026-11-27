@@ -1,15 +1,15 @@
-import os
 import numpy as np
 from collections import Counter
 from scipy.spatial import cKDTree
 
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
-from mddb_workflow.utils.auxiliar import InputError, MISSING_BONDS, get_auxiliar_filepath
+from mddb_workflow.utils.auxiliar import InputError, MISSING_BONDS
 from mddb_workflow.utils.constants import CG_ATOM_ELEMENT, STANDARD_SOLVENT_RESIDUE_NAMES
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.gmx_spells import count_xtc_frames
-from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
+from mddb_workflow.utils.mda_spells import get_xtc_coordinates
+from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.type_hints import *
 
 # Words in the force field names which tell us it is a coarse grain force field
@@ -102,15 +102,10 @@ def get_frames_coordinates(structure: 'Structure', trajectory_file: 'File', snap
     """Get atom coordinates in a few frames along the trajectory.
     Frames are counted only if the number of frames is not passed.
     """
-    # Write the structure in a mmCIF file to be used as topology for pytraj
-    auxiliar_mmcif_filepath = get_auxiliar_filepath('.cg_guess.cif')
-    structure.generate_mmcif_file(auxiliar_mmcif_filepath)
     if snapshots is None: snapshots = count_xtc_frames(trajectory_file)
-    reduced_trajectory, _, _ = get_reduced_pytraj_trajectory(auxiliar_mmcif_filepath, trajectory_file.path, snapshots, FRAMES_LIMIT)
-    # Copy every frame, since pytraj may reuse the same coordinates buffer for every frame (e.g. with few frames)
-    coordinates = np.array([ frame.xyz.copy() for frame in reduced_trajectory.iterframe() ])
-    os.remove(auxiliar_mmcif_filepath)
-    return coordinates
+    frame_step = calculate_frame_step(snapshots, FRAMES_LIMIT)[0] if snapshots > FRAMES_LIMIT else 1
+    frames = slice(0, snapshots, frame_step)
+    return np.array(list(get_xtc_coordinates(trajectory_file.path, len(structure.atoms), frames)))
 
 
 def vote_by_topology_bonds(residues: list['Residue'], coordinates: np.ndarray, topology_bonds: Optional[list]) -> Optional[str]:

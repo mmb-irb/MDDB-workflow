@@ -1,8 +1,8 @@
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import reprint, get_auxiliar_filepath
+from mddb_workflow.utils.mda_spells import get_xtc_coordinates
 from mddb_workflow.utils.type_hints import *
 from tqdm import tqdm
-from itertools import islice
 import os
 
 import pytraj as pt
@@ -120,15 +120,8 @@ def get_starting_pdb_frames (
     # Make a copy of the structure to be used as a template, so we do not modify the original coordinates
     reference_structure = structure.copy()
 
-    # Generate an auxiliar structure file to be used to reduce the trajectory
-    reference_structure_sample = get_auxiliar_filepath('.reference.cif')
-    reference_structure.generate_mmcif_file(reference_structure_sample)
-
-    # Load the trajectory using pytraj
-    trajectory = get_pytraj_trajectory(reference_structure_sample, trajectory_filepath)
-
-    # Delete the auxiliar structure file sine it is not needed anymore
-    os.remove(reference_structure_sample)
+    # Read exactly the requested number of consecutive frames
+    coordinates = get_xtc_coordinates(trajectory_filepath, len(structure.atoms), slice(0, frames_limit))
 
     def frames_generator():
         # Create a progress bar
@@ -138,8 +131,7 @@ def get_starting_pdb_frames (
             print()
         try:
             # Extract each frame in pdb format
-            # islice checks exactly the requested number of consecutive frames.
-            for frame_number, frame in enumerate(islice(trajectory.iterframe(), frames_limit), 1):
+            for frame_number, frame_coordinates in enumerate(coordinates, 1):
                 # Update the current frame log
                 if pbar is not None:
                     pbar.update(1)
@@ -147,7 +139,7 @@ def get_starting_pdb_frames (
                 else:
                     reprint(f'Frame {frame_number} ({frame_number} / {frames_limit})')
                 current_frame_filepath = get_auxiliar_filepath(f'{output_frames_prefix}{frame_number}.pdb')
-                reference_structure.set_new_coordinates(frame.xyz)
+                reference_structure.set_new_coordinates(frame_coordinates)
                 try:
                     # Note that frames are used by tools which do not care about chains
                     reference_structure.generate_pdb_file(current_frame_filepath, show_warnings=False, accept_limitations=True)
@@ -158,6 +150,7 @@ def get_starting_pdb_frames (
                     if os.path.exists(current_frame_filepath):
                         os.remove(current_frame_filepath)
         finally:
+            coordinates.close()
             if pbar is not None:
                 pbar.close()
 
