@@ -8,6 +8,7 @@ from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME, AUTOMATIC_FLAG
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import save_json, get_auxiliar_filepath, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS, InputError
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter
+from mddb_workflow.utils.gmx_top import get_gromacs_topology_atom_count, filter_gromacs_topology
 from mddb_workflow.utils.vmd_spells import vmd_converter
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_charges import get_raw_charges
@@ -107,6 +108,26 @@ def filter_atoms (
             # Double check the amout of atoms in the topology after filtering
             pt_topology = pt.load_topology(filename=output_topology_file.path)
             filtered_topology_atoms_count = pt_topology.n_atoms
+        # Gromacs topology
+        # Pytraj reads it but can not write it, so we filter it ourselves
+        elif input_topology_file.format == 'top':
+            # Molecules whose definition is missing (e.g. water when the force field is not given) are
+            # matched to the structure residues, so we need the residue of every atom
+            atom_residues = [ atom.residue_index for atom in reference_structure.atoms ]
+            topology_atoms_count = get_gromacs_topology_atom_count(input_topology_file.path, atom_residues)
+            print(f'Topology atoms count: {topology_atoms_count}')
+            if filtered_structure_atoms_count < topology_atoms_count:
+                # WARNING: If the output topology is a symlink it will try to overwrite the origin
+                # Remove it to avoid overwriting input data
+                if output_topology_file.is_symlink(): output_topology_file.remove()
+                filtered_topology_atoms_count = filter_gromacs_topology(
+                    input_topology_file.path,
+                    output_topology_file.path,
+                    keep_selection.atom_indices,
+                    atom_residues,
+                )
+            else:
+                filtered_topology_atoms_count = topology_atoms_count
         # The rest of Pytraj supported formats
         elif input_topology_file.is_pytraj_supported():
             # Load the topology and count its atoms
